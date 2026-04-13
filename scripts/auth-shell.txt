@@ -1,0 +1,5 @@
+npm run auth:apple-secret -- \
+  --team-id XA6B7T4Q78 \
+  --key-id 23LM23L978 \
+  --client-id com.talkpilot.app.auth \
+  --private-key-path /Users/bytedance/Documents/important/AuthKey_23LM23L978.p8

@@ -3,11 +3,19 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSessionStore } from '@/features/live/store/sessionStore';
 
 export const getTabBarHeight = (bottomInset: number) => 58 + Math.max(bottomInset - 8, 8);
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const sessionStatus = useSessionStore((s) => s.status);
+  const isImmersiveLive =
+    sessionStatus === 'active' || sessionStatus === 'paused' || sessionStatus === 'calibrating';
+
+  if (isImmersiveLive) {
+    return null;
+  }
 
   return (
     <View style={styles.container} pointerEvents="box-none">

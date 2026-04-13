@@ -28,9 +28,15 @@ const SCORE_COLORS: Record<string, string> = {
 };
 
 const SCORE_LABELS: Record<string, string> = {
-  green: 'Great',
-  yellow: 'Okay',
-  red: 'Needs Work',
+  green: 'Pass',
+  yellow: 'Warn',
+  red: 'Error',
+};
+
+const SCORE_HELP_TEXT: Record<string, string> = {
+  green: 'This sentence is okay.',
+  yellow: 'A small fix or cleaner phrasing will sound better.',
+  red: 'There is a clear issue worth fixing.',
 };
 
 export default function ReviewDetailCard({ review, onClose }: Props) {
@@ -40,7 +46,10 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <View style={[styles.scoreDot, { backgroundColor: SCORE_COLORS[review.overallScore] }]} />
-            <Text style={styles.headerTitle}>{SCORE_LABELS[review.overallScore]}</Text>
+            <View>
+              <Text style={styles.headerTitle}>{SCORE_LABELS[review.overallScore]}</Text>
+              <Text style={styles.headerSubtitle}>{SCORE_HELP_TEXT[review.overallScore]}</Text>
+            </View>
           </View>
           <Pressable onPress={onClose} hitSlop={8}>
             <Feather name="x" size={18} color="#1A1A1A" />
@@ -50,17 +59,21 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
           {review.issues.length > 0 && (
             <View style={styles.section}>
-              {review.issues.map((issue, index) => (
+              <Text style={styles.sectionTitle}>Main issue</Text>
+              {review.issues.slice(0, 2).map((issue, index) => (
                 <View key={index} style={styles.issueItem}>
                   <View style={styles.issueTypeBadge}>
                     <Text style={styles.issueTypeText}>{issue.type}</Text>
                   </View>
+                  <Text style={styles.microLabel}>You said</Text>
+                  <View style={styles.sourceBox}>
+                    <Text style={styles.sourceText}>{issue.original}</Text>
+                  </View>
+                  <Text style={styles.microLabel}>Say instead</Text>
                   <View style={styles.correctionRow}>
-                    <Text style={styles.original}>{issue.original}</Text>
-                    <Feather name="arrow-right" size={14} color="rgba(26,26,26,0.4)" />
                     <Text style={styles.corrected}>{issue.corrected}</Text>
                   </View>
-                  <Text style={styles.explanation}>{issue.explanation}</Text>
+                  <Text style={styles.explanation} numberOfLines={2}>{issue.explanation}</Text>
                 </View>
               ))}
             </View>
@@ -68,17 +81,23 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
 
           {review.betterExpression !== null && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Better Expression</Text>
+              <Text style={styles.sectionTitle}>Recommended wording</Text>
               <View style={styles.expressionBox}>
                 <Text style={styles.expressionText}>{review.betterExpression}</Text>
               </View>
             </View>
           )}
 
-          {review.praise !== null && (
+          {review.praise !== null && review.issues.length === 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Praise</Text>
+              <Text style={styles.sectionTitle}>Good part</Text>
               <Text style={styles.praiseText}>{review.praise}</Text>
+            </View>
+          )}
+
+          {review.issues.length === 0 && review.betterExpression === null && review.praise === null && (
+            <View style={styles.section}>
+              <Text style={styles.emptyStateText}>No detailed issue was returned for this sentence.</Text>
             </View>
           )}
         </ScrollView>
@@ -111,8 +130,9 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
+    flex: 1,
   },
   scoreDot: {
     width: 10,
@@ -123,6 +143,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#1A1A1A',
+  },
+  headerSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(26,26,26,0.56)',
   },
   body: {
     padding: 20,
@@ -154,21 +180,35 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  correctionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+  microLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(26,26,26,0.42)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
-  original: {
-    fontSize: 15,
-    color: '#FF3B30',
-    textDecorationLine: 'line-through',
+  sourceBox: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FAF7F3',
+  },
+  sourceText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#7C2D12',
+  },
+  correctionRow: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#EEF9F0',
   },
   corrected: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#34C759',
+    lineHeight: 21,
+    color: '#1F7A36',
   },
   explanation: {
     fontSize: 13,
@@ -189,5 +229,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: '#1A1A1A',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(26,26,26,0.58)',
   },
 });

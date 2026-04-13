@@ -10,6 +10,7 @@ type TabScrollScreenProps = {
   title?: string;
   subtitle?: string;
   actionIcon?: keyof typeof Feather.glyphMap;
+  actionLabel?: string;
   onActionPress?: () => void;
   actionAccessibilityLabel?: string;
   contentContainerStyle?: StyleProp<ViewStyle>;
@@ -20,6 +21,7 @@ export function TabScrollScreen({
   title,
   subtitle,
   actionIcon,
+  actionLabel,
   onActionPress,
   actionAccessibilityLabel,
   contentContainerStyle,
@@ -33,6 +35,7 @@ export function TabScrollScreen({
         title={title}
         subtitle={subtitle}
         actionIcon={actionIcon}
+        actionLabel={actionLabel}
         onActionPress={onActionPress}
         actionAccessibilityLabel={actionAccessibilityLabel}
       />

@@ -73,6 +73,7 @@
 - `src/storage/`：只放本地缓存、SQLite、AsyncStorage 持久化适配
 - 工程化脚本统一优先放到 `scripts/`
 - 大体积原始数据与脚本生成产物优先放到 `data/`
+- 实时音频流的通用 WebSocket 传输层位于 `src/features/live/services/StreamingWebSocketClient.ts`，负责连接、状态同步、发送、暂停保活与断开；具体协议解析与业务副作用继续留在各 provider service 中
 
 ### LLM 约定
 
@@ -80,6 +81,49 @@
 - 两个函数共享 `supabase/functions/_shared/llm.ts` 的 provider 配置，默认 provider 为 `minimax`，默认模型为 `minimax-2.5`
 - 当前支持 `openai`、`deepseek`、`minimax` 三类 OpenAI-compatible provider，通过 `LLM_PROVIDER` 与 `LLM_MODEL` 环境变量切换
 - `review` / `suggest` 的请求体兼容 camelCase 与 snake_case 字段，避免客户端与 Edge Function 命名不一致导致调用失败
+- `supabase/functions/` 目录按 Deno Edge Functions 维护：工作区通过 `.vscode/settings.json` 的 `deno.enablePaths` 和 `supabase/functions/deno.json` 提供编辑器配置，根 `tsconfig.json` 需排除该目录，避免 Expo/RN 的 TS 工程把远程 `https://` import 与 `Deno` 全局误判为错误
+- 如需在当前工作区里清理 Supabase Edge Function 的单文件 TS 诊断，可复用 `supabase/functions/_shared/editor-shims.d.ts`，并在入口文件顶部加 `/// <reference path="../_shared/editor-shims.d.ts" />`；这仅用于编辑器类型提示，不影响 Deno 运行时行为
+
+### Auth 约定
+
+- 客户端认证统一使用 `Supabase Auth`
+- 当前认证策略是“游客态优先”：
+  - App 冷启动无 session 时自动走匿名登录
+  - 用户可在 `Profile` 页或独立 `app/login.tsx` 页面升级为正式账号
+- 首期正式登录只接：
+  - `Apple Sign-In`（iOS，`expo-apple-authentication`）
+  - `Google Sign-In`（iOS，`@react-native-google-signin/google-signin`）
+- `Profile` 页当前只用于 auth 信息回显与会话入口，不再承载通用设置占位内容
+- `app/login.tsx` 当前采用透明 modal + 底部弹层交互，作为聚合登录入口：
+  - 从 `Profile` 点击登录进入
+  - 弹层内聚合 Apple / Google 登录按钮
+  - 关闭或登录成功后回到 `Profile`
+- `Profile` 页的主操作约定：
+  - `guest` 态页内固定显示 `Log in` 主按钮
+  - 已登录态右上角固定显示 `Log out` 文字按钮
+  - `Log out` 必须带二次确认，确认后再清理本地登录态并回落游客态
+- `src/shared/api/supabase.ts` 是认证单一入口，负责：
+  - session 恢复
+  - 匿名登录兜底
+  - Apple / Google 登录
+  - 退出后回落游客态
+- `src/shared/store/authStore.ts` 用 `authMode` 区分：
+  - `anonymous`
+  - `authenticated`
+- 本期游客升级正式账号采用“新账号独立登录”策略，不做匿名账号与正式账号绑定或数据迁移
+- 正式账号退出后，应立即恢复匿名游客 session，避免把 App 锁死在未登录状态
+
+### 实时转写约定
+
+- 实时转写目前是“双 WS”结构：
+  - 英语主链路由 `DeepgramStreamingService` 承载
+  - 母语救场链路由 `AssistStreamingService` 承载
+  - 两者都复用 `StreamingWebSocketClient` 作为通用传输层
+- `conversationStore` 中的连接状态已拆分为 `mainWsStatus` 与 `assistWsStatus`，不要再把两条链路混用同一个 `wsStatus`
+- 母语救场流程已经不再走本地录音文件上传转写；音频通过母语救场独立 WS 实时识别，`assist-reply` 只负责“文本翻译 + 可选 TTS”
+- 母语救场的 debug 步骤当前按 `assist-ws`、`assist-transcript`、`assist-translate`、`assist-tts` 拆分；如果后续继续优化耗时，请优先沿这四段做观测
+- `AssistStreamingService` 的母语救场 WS 在“正常完成一次录音”后可以短暂保活复用
+- 但如果用户是“取消救场录音”，必须清空本地 capture 状态并主动断开 assist WS，不能直接保活复用；否则上一轮未结算的 transcript / 服务端缓冲可能污染下一次录音
 
 ### 原生壳约定
 
@@ -93,3 +137,4 @@
 - 任何会长期影响后续会话的信息，都应该写进本文件
 - 新增页面结构、依赖升级、架构变更、验证方式变化，都应更新本文件
 - 后续 AI 在结束任务前，应自查“这次是否产生了值得长期保留的上下文”
+- **自我迭代要求**：当在排查 Bug 过程中发现了新的环境限制（如特定系统/框架的隐蔽表现）、或是在沟通中纠正了认知盲区（如因错误推断被用户指正），**必须自觉主动**地将经验总结并写入 `.trae/rules/experience.md` 文件中，避免未来的会话重复踩坑。

@@ -5,7 +5,6 @@ serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY")!;
-  const dgProjectId = Deno.env.get("DG_PROJECT_ID")!;
 
   const authorization = req.headers.get("Authorization") ?? "";
 
@@ -47,24 +46,26 @@ serve(async (req: Request) => {
     );
   }
 
-  const dgResponse = await fetch(
-    `https://api.deepgram.com/v1/keys/${dgProjectId}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${deepgramApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        scopes: ["usage:write"],
-        time_to_live_in_seconds: 600,
-      }),
+  // Use Deepgram Token-Based Authentication to mint a short-lived JWT for client WS auth.
+  // Docs: https://developers.deepgram.com/reference/auth/tokens/grant
+  const ttlSeconds = 600; // 10 minutes; must be valid at connection time only.
+  const dgResponse = await fetch("https://api.deepgram.com/v1/auth/grant", {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${deepgramApiKey}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({ ttl_seconds: ttlSeconds }),
+  });
 
   if (!dgResponse.ok) {
+    const text = await dgResponse.text().catch(() => "");
     return new Response(
-      JSON.stringify({ error: "Failed to create Deepgram token" }),
+      JSON.stringify({
+        error: "Failed to create Deepgram token",
+        status: dgResponse.status,
+        body: text,
+      }),
       {
         status: 502,
         headers: { "Content-Type": "application/json" },
@@ -76,8 +77,8 @@ serve(async (req: Request) => {
 
   return new Response(
     JSON.stringify({
-      deepgram_token: dgData.key,
-      expires_in: 600,
+      deepgram_token: dgData.access_token,
+      expires_in: dgData.expires_in ?? ttlSeconds,
     }),
     {
       status: 200,

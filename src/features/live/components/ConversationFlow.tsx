@@ -14,26 +14,31 @@ export function ConversationFlow() {
     flatListRef.current?.scrollToEnd({ animated: true });
   }, []);
 
-  const renderItem = useCallback(({ item }: { item: Turn }) => (
-    <TranscriptBubble
-      speaker={item.speaker}
-      text={item.text}
-      isFinal={item.isFinal}
-      reviewScore={item.reviewScore}
-    />
-  ), []);
-
   const keyExtractor = useCallback((item: Turn) => item.id, []);
 
   const hasInterim = currentInterimText.length > 0 && currentInterimSpeaker !== null;
   const showListening = isListening && !hasInterim;
-
   return (
     <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={turns}
-        renderItem={renderItem}
+        renderItem={({ item }) => (
+          <TranscriptBubble
+            speaker={item.speaker}
+            text={item.text}
+            isFinal={item.isFinal}
+            reviewScore={item.reviewScore}
+            review={item.review}
+            showReviewIndicator={
+              item.speaker === "self" &&
+              !!item.review &&
+              item.reviewScore !== "green"
+            }
+            isAssist={item.isAssist}
+            assistSourceText={item.assistSourceText}
+          />
+        )}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -46,6 +51,7 @@ export function ConversationFlow() {
             speaker={currentInterimSpeaker!}
             text={currentInterimText}
             isFinal={false}
+            showReviewIndicator={false}
           />
         </View>
       )}

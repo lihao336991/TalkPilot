@@ -6,6 +6,7 @@ type TabScreenHeaderProps = {
   title?: string;
   subtitle?: string;
   actionIcon?: keyof typeof Feather.glyphMap;
+  actionLabel?: string;
   onActionPress?: () => void;
   actionAccessibilityLabel?: string;
 };
@@ -14,6 +15,7 @@ export function TabScreenHeader({
   title = 'TalkPilot',
   subtitle = 'Real-Time English Copilot',
   actionIcon,
+  actionLabel,
   onActionPress,
   actionAccessibilityLabel,
 }: TabScreenHeaderProps) {
@@ -25,13 +27,21 @@ export function TabScreenHeader({
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
-      {actionIcon ? (
+      {actionIcon || actionLabel ? (
         <ActionContainer
           accessibilityLabel={actionAccessibilityLabel}
           accessibilityRole={onActionPress ? 'button' : undefined}
           onPress={onActionPress}
-          style={styles.actionButton}>
-          <Feather name={actionIcon} size={20} color="#1A1A1A" />
+          style={[
+            styles.actionButton,
+            actionLabel ? styles.actionPill : null,
+          ]}>
+          {actionIcon ? (
+            <Feather name={actionIcon} size={20} color="#1A1A1A" />
+          ) : null}
+          {actionLabel ? (
+            <Text style={styles.actionLabel}>{actionLabel}</Text>
+          ) : null}
         </ActionContainer>
       ) : null}
     </View>
@@ -70,5 +80,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(26,26,26,0.05)',
+  },
+  actionPill: {
+    width: 'auto',
+    minWidth: 88,
+    paddingHorizontal: 16,
+    gap: 6,
+    flexDirection: 'row',
+  },
+  actionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A1A',
   },
 });

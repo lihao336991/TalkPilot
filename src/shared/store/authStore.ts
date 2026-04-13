@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 
-export type SubscriptionTier = 'free' | 'pro' | 'pro_plus';
+export type SubscriptionTier = 'free' | 'pro' | 'unlimited';
+export type AuthMode = 'anonymous' | 'authenticated';
+export type AuthProviderName = 'anonymous' | 'apple' | 'google' | null;
+
+type SessionPayload = {
+  userId: string;
+  accessToken: string;
+  authMode: AuthMode;
+  provider: AuthProviderName;
+  userEmail?: string | null;
+  displayName?: string | null;
+};
 
 interface AuthState {
   userId: string | null;
@@ -8,8 +19,12 @@ interface AuthState {
   isLoading: boolean;
   subscriptionTier: SubscriptionTier;
   accessToken: string | null;
+  authMode: AuthMode | null;
+  provider: AuthProviderName;
+  userEmail: string | null;
+  displayName: string | null;
 
-  setUser: (userId: string, accessToken: string) => void;
+  setSession: (payload: SessionPayload) => void;
   setSubscriptionTier: (tier: SubscriptionTier) => void;
   setLoading: (loading: boolean) => void;
   signOut: () => void;
@@ -22,13 +37,32 @@ const initialState = {
   isLoading: false,
   subscriptionTier: 'free' as SubscriptionTier,
   accessToken: null as string | null,
+  authMode: null as AuthMode | null,
+  provider: null as AuthProviderName,
+  userEmail: null as string | null,
+  displayName: null as string | null,
 };
 
 export const useAuthStore = create<AuthState>()((set) => ({
   ...initialState,
 
-  setUser: (userId, accessToken) =>
-    set({ userId, accessToken, isAuthenticated: true }),
+  setSession: ({
+    userId,
+    accessToken,
+    authMode,
+    provider,
+    userEmail = null,
+    displayName = null,
+  }) =>
+    set({
+      userId,
+      accessToken,
+      authMode,
+      provider,
+      userEmail,
+      displayName,
+      isAuthenticated: authMode === 'authenticated',
+    }),
 
   setSubscriptionTier: (subscriptionTier) => set({ subscriptionTier }),
 
@@ -38,6 +72,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
     set({
       userId: null,
       accessToken: null,
+      authMode: null,
+      provider: null,
+      userEmail: null,
+      displayName: null,
       isAuthenticated: false,
       subscriptionTier: 'free',
     }),

@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.talkpilot.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
         "UIBackgroundModes": ["audio"],
         "NSSpeechRecognitionUsageDescription": "TalkPilot uses speech recognition to transcribe conversations.",
         "NSLocalNetworkUsageDescription": "允许应用访问局域网内的开发服务器",
@@ -30,6 +32,10 @@
               "NSExceptionAllowsInsecureHTTPLoads": true
             },
             "192.168.2.9": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "192.168.31.61": {
               "NSIncludesSubdomains": true,
               "NSExceptionAllowsInsecureHTTPLoads": true
             }
@@ -54,6 +60,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
+      "expo-secure-store",
       [
         "expo-build-properties",
         {
@@ -62,6 +70,13 @@
           }
         }
       ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld"
+        }
+      ],
+      "./plugins/with-ios-voice-chat",
       "@kesha-antonov/react-native-background-downloader"
     ],
     "experiments": {

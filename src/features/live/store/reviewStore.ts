@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type ReviewIssue = {
-  type: 'grammar' | 'vocabulary';
+  type: 'grammar' | 'vocabulary' | 'naturalness';
   original: string;
   corrected: string;
   explanation: string;

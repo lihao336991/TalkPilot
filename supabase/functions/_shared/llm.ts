@@ -1,19 +1,22 @@
 import OpenAI from "https://esm.sh/openai@4";
 
-export type SupportedLlmProvider = "openai" | "deepseek" | "minimax";
+export type SupportedLlmProvider = "openai" | "deepseek" | "minimax" | "gemini" | "groq";
 
 type LlmRuntime = {
   provider: SupportedLlmProvider;
   model: string;
   client: OpenAI;
+  apiKeyPrefix: string;
 };
 
-const DEFAULT_PROVIDER: SupportedLlmProvider = "minimax";
+const DEFAULT_PROVIDER: SupportedLlmProvider = "gemini";
 
 const DEFAULT_MODELS: Record<SupportedLlmProvider, string> = {
   openai: "gpt-4o-mini",
   deepseek: "deepseek-chat",
-  minimax: "MiniMax-M2.5",
+  minimax: "MiniMax-M2.5-highspeed",
+  gemini: "gemini-2.5-flash",
+  groq: "llama-3.3-70b-versatile",
 };
 
 const MINIMAX_MODEL_ALIASES: Record<string, string> = {
@@ -23,6 +26,19 @@ const MINIMAX_MODEL_ALIASES: Record<string, string> = {
   "minimax-m2.5-highspeed": "MiniMax-M2.5-highspeed",
   "minimax-m2.7": "MiniMax-M2.7",
   "minimax-m2.7-highspeed": "MiniMax-M2.7-highspeed",
+};
+
+const GEMINI_MODEL_ALIASES: Record<string, string> = {
+  "gemini-2.5-flash": "gemini-2.5-flash",
+  "gemini-2.5-flash-latest": "gemini-2.5-flash",
+  "2.5-flash": "gemini-2.5-flash",
+};
+
+const GROQ_MODEL_ALIASES: Record<string, string> = {
+  "llama-3.3-70b": "llama-3.3-70b-versatile",
+  "llama-3.3-70b-versatile": "llama-3.3-70b-versatile",
+  "llama3.3-70b": "llama-3.3-70b-versatile",
+  "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
 };
 
 function getRequiredEnv(name: string): string {
@@ -35,10 +51,20 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+function getApiKeyPrefix(apiKey: string): string {
+  return apiKey.slice(0, 8);
+}
+
 function normalizeProvider(rawProvider: string | undefined): SupportedLlmProvider {
   const normalized = rawProvider?.trim().toLowerCase();
 
-  if (normalized === "openai" || normalized === "deepseek" || normalized === "minimax") {
+  if (
+    normalized === "openai" ||
+    normalized === "deepseek" ||
+    normalized === "minimax" ||
+    normalized === "gemini" ||
+    normalized === "groq"
+  ) {
     return normalized;
   }
 
@@ -53,6 +79,12 @@ function resolveModel(provider: SupportedLlmProvider, rawModel: string | undefin
   }
 
   if (provider !== "minimax") {
+    if (provider === "gemini") {
+      return GEMINI_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+    }
+    if (provider === "groq") {
+      return GROQ_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+    }
     return normalizedModel;
   }
 
@@ -63,49 +95,75 @@ export function createLlmRuntime(): LlmRuntime {
   const provider = normalizeProvider(Deno.env.get("LLM_PROVIDER"));
 
   if (provider === "deepseek") {
+    const apiKey = getRequiredEnv("DEEPSEEK_API_KEY");
     return {
       provider,
       model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
       client: new OpenAI({
-        apiKey: getRequiredEnv("DEEPSEEK_API_KEY"),
+        apiKey,
         baseURL: Deno.env.get("DEEPSEEK_BASE_URL")?.trim() || "https://api.deepseek.com/v1",
       }),
+      apiKeyPrefix: getApiKeyPrefix(apiKey),
     };
   }
 
   if (provider === "minimax") {
+    const apiKey = getRequiredEnv("MINIMAX_API_KEY");
     return {
       provider,
       model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
       client: new OpenAI({
-        apiKey: getRequiredEnv("MINIMAX_API_KEY"),
-        baseURL: Deno.env.get("MINIMAX_BASE_URL")?.trim() || "https://api.minimax.io/v1",
+        apiKey,
+        baseURL: Deno.env.get("MINIMAX_BASE_URL")?.trim() || "https://api.minimax.chat/v1",
       }),
+      apiKeyPrefix: getApiKeyPrefix(apiKey),
     };
   }
 
+  if (provider === "gemini") {
+    const apiKey = getRequiredEnv("GEMINI_API_KEY");
+    return {
+      provider,
+      model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
+      client: new OpenAI({
+        apiKey,
+        baseURL:
+          Deno.env.get("GEMINI_BASE_URL")?.trim() ||
+          "https://generativelanguage.googleapis.com/v1beta/openai/",
+      }),
+      apiKeyPrefix: getApiKeyPrefix(apiKey),
+    };
+  }
+
+  if (provider === "groq") {
+    const apiKey = getRequiredEnv("GROQ_API_KEY");
+    return {
+      provider,
+      model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
+      client: new OpenAI({
+        apiKey,
+        baseURL: Deno.env.get("GROQ_BASE_URL")?.trim() || "https://api.groq.com/openai/v1",
+      }),
+      apiKeyPrefix: getApiKeyPrefix(apiKey),
+    };
+  }
+
+  const apiKey = getRequiredEnv("OPENAI_API_KEY");
   return {
     provider,
     model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
     client: new OpenAI({
-      apiKey: getRequiredEnv("OPENAI_API_KEY"),
+      apiKey,
       baseURL: Deno.env.get("OPENAI_BASE_URL")?.trim() || undefined,
     }),
+    apiKeyPrefix: getApiKeyPrefix(apiKey),
   };
 }
 
 export function withLlmDefaults<T extends Record<string, unknown>>(
   runtime: LlmRuntime,
   payload: T,
-): T & { model: string; extra_body?: { reasoning_split: true } } {
-  if (runtime.provider === "minimax") {
-    return {
-      ...payload,
-      model: runtime.model,
-      extra_body: { reasoning_split: true },
-    };
-  }
-
+): T & { model: string } {
   return {
     ...payload,
     model: runtime.model,
@@ -132,4 +190,23 @@ export function extractJsonObject(content: string): string {
   }
 
   return trimmed;
+}
+
+export function buildLlmResponseHeaders(
+  runtime: LlmRuntime,
+  overrides: Record<string, string> = {},
+): Headers {
+  const headers = new Headers({
+    "X-LLM-Provider": runtime.provider,
+    "X-LLM-Model": runtime.model,
+    "X-LLM-Key-Prefix": runtime.apiKeyPrefix,
+    "Access-Control-Expose-Headers":
+      "X-LLM-Provider, X-LLM-Model, X-LLM-Key-Prefix",
+  });
+
+  for (const [key, value] of Object.entries(overrides)) {
+    headers.set(key, value);
+  }
+
+  return headers;
 }

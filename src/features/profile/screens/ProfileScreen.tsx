@@ -1,114 +1,352 @@
-import React from 'react';
-import { Feather } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
-import { TabScrollScreen } from '@/features/navigation/components/TabScrollScreen';
-
-const metrics = [
-  { label: 'Weekly practice', value: '4.2h' },
-  { label: 'Helpful replies', value: '128' },
-  { label: 'Saved phrases', value: '37' },
-];
+import { TabScrollScreen } from "@/features/navigation/components/TabScrollScreen";
+import { signOut } from "@/shared/api/supabase";
+import { useAuthStore } from "@/shared/store/authStore";
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Easing, StyleSheet, Text, View } from "react-native";
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const authMode = useAuthStore((state) => state.authMode);
+  const displayName = useAuthStore((state) => state.displayName);
+  const provider = useAuthStore((state) => state.provider);
+  const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
+  const userEmail = useAuthStore((state) => state.userEmail);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentTranslateY = useRef(new Animated.Value(0)).current;
+
+  const isAuthenticated = authMode === "authenticated";
+
+  useEffect(() => {
+    contentOpacity.setValue(0.92);
+    contentTranslateY.setValue(8);
+
+    Animated.parallel([
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentTranslateY, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [authMode, contentOpacity, contentTranslateY]);
+
+  async function performSignOut() {
+    if (isSigningOut) {
+      return;
+    }
+
+    setSignOutError(null);
+    setIsSigningOut(true);
+
+    try {
+      await new Promise<void>((resolve) => {
+        Animated.parallel([
+          Animated.timing(contentOpacity, {
+            toValue: 0.58,
+            duration: 140,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(contentTranslateY, {
+            toValue: 10,
+            duration: 140,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start(() => resolve());
+      });
+
+      await signOut();
+    } catch (error) {
+      setSignOutError(
+        error instanceof Error ? error.message : "Sign out failed.",
+      );
+      Animated.parallel([
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 180,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(contentTranslateY, {
+          toValue: 0,
+          duration: 180,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
+  function handleSignOut() {
+    if (!isAuthenticated || isSigningOut) {
+      return;
+    }
+
+    Alert.alert(
+      "Log out?",
+      "You will return to guest mode on this device. You can sign in again anytime.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Log out",
+          style: "destructive",
+          onPress: () => {
+            void performSignOut();
+          },
+        },
+      ],
+    );
+  }
+
+  const displayTitle = isAuthenticated
+    ? displayName || userEmail || "TalkPilot Member"
+    : "Guest account";
+  const displaySubtitle = isAuthenticated
+    ? `${userEmail || "Email unavailable"}`
+    : "Sign in to keep your account synced across sessions on this device.";
+  const providerLabel = isAuthenticated ? provider || "account" : "guest";
+
+  const headerActionLabel = isAuthenticated
+    ? isSigningOut
+      ? "Signing out..."
+      : "Log out"
+    : "Log in";
+
+  function handleHeaderAction() {
+    if (isSigningOut) return;
+    if (isAuthenticated) {
+      handleSignOut();
+    } else {
+      router.push("/login");
+    }
+  }
+
   return (
-    <TabScrollScreen title="Profile" subtitle="Preferences and learning signal" actionIcon="settings">
-      <View style={styles.heroCard}>
-        <View style={styles.avatar}>
-          <Feather name="user" size={26} color="#1A1A1A" />
-        </View>
-        <Text style={styles.name}>TalkPilot Workspace</Text>
-        <Text style={styles.email}>Ready for account, subscription, and preference settings.</Text>
-      </View>
-
-      <View style={styles.metricsRow}>
-        {metrics.map((item) => (
-          <View key={item.label} style={styles.metricCard}>
-            <Text style={styles.metricValue}>{item.value}</Text>
-            <Text style={styles.metricLabel}>{item.label}</Text>
+    <TabScrollScreen
+      title="Account"
+      subtitle="Authentication"
+      actionLabel={headerActionLabel}
+      onActionPress={handleHeaderAction}
+      actionAccessibilityLabel={
+        isAuthenticated ? "Sign out of your account" : "Open login sheet"
+      }
+      contentContainerStyle={styles.contentContainer}
+    >
+      <Animated.View
+        style={[
+          styles.motionContainer,
+          {
+            opacity: contentOpacity,
+            transform: [{ translateY: contentTranslateY }],
+          },
+        ]}
+      >
+        <View style={styles.accountCard}>
+          <View style={styles.accountHeader}>
+            <View style={styles.avatar}>
+              <Feather name="user" size={24} color="#1A1A1A" />
+            </View>
+            <View style={styles.identityBlock}>
+              <Text style={styles.name}>{displayTitle}</Text>
+              <Text style={styles.email}>{displaySubtitle}</Text>
+            </View>
           </View>
-        ))}
-      </View>
 
-      <View style={styles.preferenceCard}>
-        <Text style={styles.preferenceTitle}>Suggested next settings</Text>
-        <Text style={styles.preferenceItem}>Microphone permission onboarding</Text>
-        <Text style={styles.preferenceItem}>Target accent and response tone presets</Text>
-        <Text style={styles.preferenceItem}>Conversation history sync and export</Text>
-      </View>
+          <View style={styles.metaList}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Status</Text>
+              <Text style={styles.metaValue}>
+                {isAuthenticated ? "Signed in" : "Guest"}
+              </Text>
+            </View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Provider</Text>
+              <Text style={styles.metaValue}>
+                {isAuthenticated ? provider || "account" : "Guest session"}
+              </Text>
+            </View>
+            {isAuthenticated ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Plan</Text>
+                <Text style={styles.metaValue}>{subscriptionTier}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={styles.actionCard}>
+          <Text style={styles.actionTitle}>
+            {isAuthenticated ? "Session details" : "Continue with your account"}
+          </Text>
+          <Text style={styles.actionBody}>
+            {isAuthenticated
+              ? "Your current authentication state is active on this device."
+              : "Open the login sheet to continue with Apple or Google."}
+          </Text>
+
+          <View style={styles.detailList}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status</Text>
+              <Text style={styles.detailValue}>
+                {isSigningOut
+                  ? "Signing out..."
+                  : isAuthenticated
+                    ? "Active"
+                    : "Guest"}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Provider</Text>
+              <Text style={styles.detailValue}>{providerLabel}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Email</Text>
+              <Text style={styles.detailValue}>
+                {userEmail ||
+                  (isAuthenticated ? "Unavailable" : "Not connected")}
+              </Text>
+            </View>
+            {isAuthenticated ? (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Plan</Text>
+                <Text style={styles.detailValue}>{subscriptionTier}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {signOutError ? (
+            <Text style={styles.errorText}>{signOutError}</Text>
+          ) : null}
+        </View>
+      </Animated.View>
     </TabScrollScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  heroCard: {
-    alignItems: 'center',
+  contentContainer: {
+    gap: 16,
+  },
+  motionContainer: {
+    gap: 16,
+  },
+  accountCard: {
     borderRadius: 28,
-    padding: 24,
-    backgroundColor: '#FFFFFF',
+    padding: 22,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 24,
+    borderColor: "rgba(21,22,25,0.08)",
+  },
+  accountHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 20,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F5F2ED',
-    marginBottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5F2ED",
+  },
+  identityBlock: {
+    flex: 1,
   },
   name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 4,
   },
   email: {
     fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center',
-    color: 'rgba(26,26,26,0.68)',
+    lineHeight: 20,
+    color: "rgba(26,26,26,0.68)",
   },
-  metricsRow: {
-    flexDirection: 'row',
+  metaList: {
     gap: 12,
-    marginBottom: 24,
   },
-  metricCard: {
-    flex: 1,
-    borderRadius: 22,
-    padding: 16,
-    backgroundColor: '#151619',
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
   },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  metaLabel: {
+    fontSize: 13,
+    color: "rgba(26,26,26,0.52)",
   },
-  metricLabel: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 18,
-    color: 'rgba(255,255,255,0.64)',
+  metaValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#151619",
+    textTransform: "capitalize",
   },
-  preferenceCard: {
-    borderRadius: 24,
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
+  actionCard: {
+    borderRadius: 28,
+    padding: 22,
+    backgroundColor: "#050505",
+    gap: 12,
   },
-  preferenceTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 14,
+  actionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  preferenceItem: {
+  actionBody: {
     fontSize: 14,
-    lineHeight: 22,
-    color: 'rgba(26,26,26,0.72)',
-    marginBottom: 10,
+    lineHeight: 21,
+    color: "rgba(255,255,255,0.66)",
+  },
+  detailList: {
+    marginTop: 6,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    gap: 12,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.48)",
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "right",
+    color: "#FFFFFF",
+    textTransform: "capitalize",
+  },
+  errorText: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#FF9B88",
   },
 });
