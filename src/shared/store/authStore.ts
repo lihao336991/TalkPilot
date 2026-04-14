@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 
 export type SubscriptionTier = 'free' | 'pro' | 'unlimited';
+export type SubscriptionStatus =
+  | 'inactive'
+  | 'active'
+  | 'trialing'
+  | 'canceled'
+  | 'billing_issue'
+  | 'expired';
 export type AuthMode = 'anonymous' | 'authenticated';
 export type AuthProviderName = 'anonymous' | 'apple' | 'google' | null;
 
@@ -18,6 +25,11 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   subscriptionTier: SubscriptionTier;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionExpiresAt: string | null;
+  subscriptionProvider: string | null;
+  revenuecatAppUserId: string | null;
+  canManageSubscription: boolean;
   accessToken: string | null;
   authMode: AuthMode | null;
   provider: AuthProviderName;
@@ -25,7 +37,13 @@ interface AuthState {
   displayName: string | null;
 
   setSession: (payload: SessionPayload) => void;
-  setSubscriptionTier: (tier: SubscriptionTier) => void;
+  setSubscriptionSummary: (payload: {
+    tier: SubscriptionTier;
+    status?: SubscriptionStatus;
+    expiresAt?: string | null;
+    subscriptionProvider?: string | null;
+    revenuecatAppUserId?: string | null;
+  }) => void;
   setLoading: (loading: boolean) => void;
   signOut: () => void;
   reset: () => void;
@@ -36,6 +54,11 @@ const initialState = {
   isAuthenticated: false,
   isLoading: false,
   subscriptionTier: 'free' as SubscriptionTier,
+  subscriptionStatus: 'inactive' as SubscriptionStatus,
+  subscriptionExpiresAt: null as string | null,
+  subscriptionProvider: null as string | null,
+  revenuecatAppUserId: null as string | null,
+  canManageSubscription: false,
   accessToken: null as string | null,
   authMode: null as AuthMode | null,
   provider: null as AuthProviderName,
@@ -62,9 +85,23 @@ export const useAuthStore = create<AuthState>()((set) => ({
       userEmail,
       displayName,
       isAuthenticated: authMode === 'authenticated',
+      canManageSubscription: authMode === 'authenticated',
     }),
 
-  setSubscriptionTier: (subscriptionTier) => set({ subscriptionTier }),
+  setSubscriptionSummary: ({
+    tier,
+    status = 'inactive',
+    expiresAt = null,
+    subscriptionProvider = null,
+    revenuecatAppUserId = null,
+  }) =>
+    set({
+      subscriptionTier: tier,
+      subscriptionStatus: status,
+      subscriptionExpiresAt: expiresAt,
+      subscriptionProvider,
+      revenuecatAppUserId,
+    }),
 
   setLoading: (isLoading) => set({ isLoading }),
 
@@ -78,6 +115,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
       displayName: null,
       isAuthenticated: false,
       subscriptionTier: 'free',
+      subscriptionStatus: 'inactive',
+      subscriptionExpiresAt: null,
+      subscriptionProvider: null,
+      revenuecatAppUserId: null,
+      canManageSubscription: false,
     }),
 
   reset: () => set(initialState),

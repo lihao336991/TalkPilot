@@ -2,15 +2,33 @@ import { TabScrollScreen } from "@/features/navigation/components/TabScrollScree
 import { signOut } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Easing, StyleSheet, Text, View } from "react-native";
+import {
+    Alert,
+    Animated,
+    Easing,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const authMode = useAuthStore((state) => state.authMode);
+  const canManageSubscription = useAuthStore(
+    (state) => state.canManageSubscription,
+  );
   const displayName = useAuthStore((state) => state.displayName);
   const provider = useAuthStore((state) => state.provider);
+  const subscriptionExpiresAt = useAuthStore(
+    (state) => state.subscriptionExpiresAt,
+  );
+  const subscriptionProvider = useAuthStore(
+    (state) => state.subscriptionProvider,
+  );
+  const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
   const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
   const userEmail = useAuthStore((state) => state.userEmail);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -121,6 +139,13 @@ export default function ProfileScreen() {
     ? `${userEmail || "Email unavailable"}`
     : "Sign in to keep your account synced across sessions on this device.";
   const providerLabel = isAuthenticated ? provider || "account" : "guest";
+  const membershipStatusLabel = isAuthenticated
+    ? subscriptionStatus.replace("_", " ")
+    : "login required";
+  const membershipProviderLabel = subscriptionProvider || "app";
+  const membershipExpiresLabel = subscriptionExpiresAt
+    ? new Date(subscriptionExpiresAt).toLocaleDateString()
+    : "Not set";
 
   const headerActionLabel = isAuthenticated
     ? isSigningOut
@@ -135,6 +160,24 @@ export default function ProfileScreen() {
     } else {
       router.push("/login");
     }
+  }
+
+  function handleUpgradePress() {
+    if (isAuthenticated) {
+      router.push("/paywall" as Href);
+      return;
+    }
+
+    router.push("/login");
+  }
+
+  function handleManageSubscriptionPress() {
+    if (!canManageSubscription) {
+      router.push("/login");
+      return;
+    }
+
+    router.push("/customer-center" as Href);
   }
 
   return (
@@ -187,32 +230,42 @@ export default function ProfileScreen() {
                 <Text style={styles.metaValue}>{subscriptionTier}</Text>
               </View>
             ) : null}
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Membership</Text>
+              <Text style={styles.metaValue}>{membershipStatusLabel}</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.actionCard}>
-          <Text style={styles.actionTitle}>
-            {isAuthenticated ? "Session details" : "Continue with your account"}
-          </Text>
+          <Text style={styles.actionTitle}>Membership</Text>
           <Text style={styles.actionBody}>
             {isAuthenticated
-              ? "Your current authentication state is active on this device."
-              : "Open the login sheet to continue with Apple or Google."}
+              ? "Subscription state is synced from Supabase and will later be driven by RevenueCat webhook events."
+              : "Log in before purchase so your subscription can stay synced across devices."}
           </Text>
 
           <View style={styles.detailList}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status</Text>
+              <Text style={styles.detailLabel}>Plan</Text>
               <Text style={styles.detailValue}>
-                {isSigningOut
-                  ? "Signing out..."
-                  : isAuthenticated
-                    ? "Active"
-                    : "Guest"}
+                {isAuthenticated ? subscriptionTier : "Free preview"}
               </Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Provider</Text>
+              <Text style={styles.detailLabel}>Membership</Text>
+              <Text style={styles.detailValue}>{membershipStatusLabel}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Billing source</Text>
+              <Text style={styles.detailValue}>{membershipProviderLabel}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Expires</Text>
+              <Text style={styles.detailValue}>{membershipExpiresLabel}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Account</Text>
               <Text style={styles.detailValue}>{providerLabel}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -222,17 +275,36 @@ export default function ProfileScreen() {
                   (isAuthenticated ? "Unavailable" : "Not connected")}
               </Text>
             </View>
-            {isAuthenticated ? (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Plan</Text>
-                <Text style={styles.detailValue}>{subscriptionTier}</Text>
-              </View>
-            ) : null}
           </View>
 
           {signOutError ? (
             <Text style={styles.errorText}>{signOutError}</Text>
           ) : null}
+
+          <View style={styles.membershipActions}>
+            <Pressable
+              onPress={handleUpgradePress}
+              style={[
+                styles.membershipActionButton,
+                styles.membershipPrimaryButton,
+              ]}
+            >
+              <Text style={styles.membershipPrimaryButtonText}>
+                {subscriptionTier === "pro" ? "View paywall" : "Upgrade to Pro"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleManageSubscriptionPress}
+              style={[
+                styles.membershipActionButton,
+                styles.membershipSecondaryButton,
+              ]}
+            >
+              <Text style={styles.membershipSecondaryButtonText}>
+                {isAuthenticated ? "Manage billing" : "Log in first"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </Animated.View>
     </TabScrollScreen>
@@ -348,5 +420,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: "#FF9B88",
+  },
+  membershipActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  membershipActionButton: {
+    flex: 1,
+    minHeight: 48,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  membershipPrimaryButton: {
+    backgroundColor: "#FFFFFF",
+  },
+  membershipSecondaryButton: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  membershipPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#050505",
+  },
+  membershipSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

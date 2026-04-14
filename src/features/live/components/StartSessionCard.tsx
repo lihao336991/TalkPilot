@@ -13,6 +13,7 @@ type StartSessionCardProps = {
   onStart: () => void;
   dailyMinutesUsed: number;
   dailyMinutesLimit: number;
+  isLimitReached: boolean;
   selectedScene: string;
 };
 
@@ -20,6 +21,7 @@ export function StartSessionCard({
   onStart,
   dailyMinutesUsed,
   dailyMinutesLimit,
+  isLimitReached,
   selectedScene,
 }: StartSessionCardProps) {
   const scale = useSharedValue(1);
@@ -48,7 +50,11 @@ export function StartSessionCard({
         </Animated.View>
       </Pressable>
 
-      <Text style={styles.remaining}>{remaining} min remaining today</Text>
+      <Text style={styles.remaining}>
+        {isLimitReached
+          ? "Today's free minutes are used up. Upgrade to continue."
+          : `${remaining} min remaining today`}
+      </Text>
       <View style={styles.sceneRow}>
         <Feather name="compass" size={14} color="rgba(26,26,26,0.68)" />
         <Text style={styles.sceneText}>{selectedScene}</Text>

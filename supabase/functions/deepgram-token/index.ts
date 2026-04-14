@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -20,7 +22,7 @@ serve(async (req: Request) => {
   if (authError || !user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -32,16 +34,33 @@ serve(async (req: Request) => {
   if (usageError) {
     return new Response(JSON.stringify({ error: "Usage check failed" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
-  if (usage?.[0]?.is_limit_reached) {
+  const usageSummary = usage?.[0] ?? {
+    minutes_used: 0,
+    minutes_remaining: 0,
+    is_limit_reached: false,
+  };
+  const dailyMinutesLimit =
+    Number(usageSummary.minutes_used ?? 0) +
+    Number(usageSummary.minutes_remaining ?? 0);
+
+  if (usageSummary.is_limit_reached) {
     return new Response(
-      JSON.stringify({ error: "Daily usage limit reached" }),
+      JSON.stringify({
+        error: "Daily usage limit reached",
+        code: "DAILY_USAGE_LIMIT_REACHED",
+        tier: dailyMinutesLimit > 10 ? "pro" : "free",
+        minutes_used: usageSummary.minutes_used ?? 0,
+        minutes_remaining: usageSummary.minutes_remaining ?? 0,
+        daily_minutes_limit: dailyMinutesLimit,
+        upgrade_required: true,
+      }),
       {
         status: 429,
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
       },
     );
   }
@@ -63,12 +82,13 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         error: "Failed to create Deepgram token",
+        code: "DEEPGRAM_TOKEN_GRANT_FAILED",
         status: dgResponse.status,
         body: text,
       }),
       {
         status: 502,
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
       },
     );
   }
@@ -79,10 +99,16 @@ serve(async (req: Request) => {
     JSON.stringify({
       deepgram_token: dgData.access_token,
       expires_in: dgData.expires_in ?? ttlSeconds,
+      usage: {
+        tier: dailyMinutesLimit > 10 ? "pro" : "free",
+        minutes_used: usageSummary.minutes_used ?? 0,
+        minutes_remaining: usageSummary.minutes_remaining ?? 0,
+        daily_minutes_limit: dailyMinutesLimit,
+      },
     }),
     {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     },
   );
 });

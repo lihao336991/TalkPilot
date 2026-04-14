@@ -12,13 +12,15 @@ type SessionState = {
   startedAt: number | null;
   dailyMinutesUsed: number;
   dailyMinutesLimit: number;
+  isDailyLimitReached: boolean;
 
   startSession: (sessionId: string) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   endSession: () => void;
   setScene: (preset: ScenePreset, description?: string) => void;
-  updateUsage: (minutes: number) => void;
+  setUsageSummary: (payload: { minutesUsed: number; minutesLimit: number }) => void;
+  setUsageLimit: (limit: number) => void;
   reset: () => void;
 };
 
@@ -29,7 +31,8 @@ const initialState = {
   sceneDescription: '',
   startedAt: null as number | null,
   dailyMinutesUsed: 0,
-  dailyMinutesLimit: 30,
+  dailyMinutesLimit: 10,
+  isDailyLimitReached: false,
 };
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -50,8 +53,18 @@ export const useSessionStore = create<SessionState>((set) => ({
   setScene: (preset, description) =>
     set({ scenePreset: preset, sceneDescription: description ?? '' }),
 
-  updateUsage: (minutes) =>
-    set({ dailyMinutesUsed: minutes }),
+  setUsageSummary: ({ minutesUsed, minutesLimit }) =>
+    set({
+      dailyMinutesUsed: minutesUsed,
+      dailyMinutesLimit: minutesLimit,
+      isDailyLimitReached: minutesUsed >= minutesLimit,
+    }),
+
+  setUsageLimit: (dailyMinutesLimit) =>
+    set((state) => ({
+      dailyMinutesLimit,
+      isDailyLimitReached: state.dailyMinutesUsed >= dailyMinutesLimit,
+    })),
 
   reset: () =>
     set(initialState),

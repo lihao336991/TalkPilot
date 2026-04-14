@@ -1,4 +1,5 @@
 import { getValidAccessToken } from '@/shared/api/supabase';
+import { useSessionStore } from '../store/sessionStore';
 
 class DeepgramTokenService {
   private cachedToken: string | null = null;
@@ -43,9 +44,22 @@ class DeepgramTokenService {
     // #endregion
 
     if (!response.ok) {
+      if (body?.daily_minutes_limit != null) {
+        useSessionStore.getState().setUsageSummary({
+          minutesUsed: Number(body.minutes_used ?? 0),
+          minutesLimit: Number(body.daily_minutes_limit),
+        });
+      }
       const detail = body?.error ?? body?.message ?? `status ${response.status}`;
       console.error('[DeepgramToken] Function error:', response.status, body);
       throw new Error(`Failed to get Deepgram token: ${detail}`);
+    }
+
+    if (body?.usage?.daily_minutes_limit != null) {
+      useSessionStore.getState().setUsageSummary({
+        minutesUsed: Number(body.usage.minutes_used ?? 0),
+        minutesLimit: Number(body.usage.daily_minutes_limit),
+      });
     }
 
     this.cachedToken = body.deepgram_token;

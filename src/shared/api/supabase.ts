@@ -1,16 +1,17 @@
-import { createClient, type Session } from '@supabase/supabase-js';
 import { getAppleSignInCredentials } from '@/shared/auth/providers/appleAuth';
 import {
-  clearGoogleSignInSession,
-  configureGoogleSignIn,
-  getGoogleSignInCredentials,
+    clearGoogleSignInSession,
+    configureGoogleSignIn,
+    getGoogleSignInCredentials,
 } from '@/shared/auth/providers/googleAuth';
 import { supabaseStorage } from '@/shared/auth/supabaseStorage';
+import { createClient, type Session } from '@supabase/supabase-js';
+import { syncSubscriptionTierToUsageLimit } from '../repositories/billingRepository';
 import {
-  type AuthMode,
-  type AuthProviderName,
-  type SubscriptionTier,
-  useAuthStore,
+    type AuthMode,
+    type AuthProviderName,
+    type SubscriptionTier,
+    useAuthStore,
 } from '../store/authStore';
 
 export const supabase = createClient(
@@ -42,32 +43,69 @@ function normalizeSubscriptionTier(
   return 'free';
 }
 
+function normalizeSubscriptionStatus(status: string | null | undefined) {
+  if (
+    status === 'active' ||
+    status === 'trialing' ||
+    status === 'canceled' ||
+    status === 'billing_issue' ||
+    status === 'expired'
+  ) {
+    return status;
+  }
+
+  return 'inactive';
+}
+
 async function syncProfile(session: Session) {
   const displayName = getDisplayNameFromSession(session);
 
-  await supabase.from('profiles').upsert(
-    {
-      id: session.user.id,
-      display_name: displayName,
-      subscription_tier: 'free',
-    },
-    {
-      onConflict: 'id',
-      ignoreDuplicates: false,
-    },
-  );
-
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('subscription_tier')
+    .select(
+      'display_name, subscription_tier, subscription_status, subscription_expires_at, subscription_provider, revenuecat_app_user_id',
+    )
     .eq('id', session.user.id)
     .maybeSingle();
 
-  useAuthStore
-    .getState()
-    .setSubscriptionTier(
-      normalizeSubscriptionTier(profile?.subscription_tier),
-    );
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (!profile) {
+    await supabase.from('profiles').insert({
+      id: session.user.id,
+      display_name: displayName,
+      subscription_tier: 'free',
+    });
+  } else if (!profile.display_name && displayName) {
+    // Avoid clobbering any name the user might set later; only backfill if missing.
+    await supabase
+      .from('profiles')
+      .update({ display_name: displayName })
+      .eq('id', session.user.id);
+  }
+
+  const { data: refreshedProfile } = await supabase
+    .from('profiles')
+    .select(
+      'subscription_tier, subscription_status, subscription_expires_at, subscription_provider, revenuecat_app_user_id',
+    )
+    .eq('id', session.user.id)
+    .maybeSingle();
+
+  const subscriptionTier = normalizeSubscriptionTier(
+    refreshedProfile?.subscription_tier,
+  );
+
+  useAuthStore.getState().setSubscriptionSummary({
+    tier: subscriptionTier,
+    status: normalizeSubscriptionStatus(refreshedProfile?.subscription_status),
+    expiresAt: refreshedProfile?.subscription_expires_at ?? null,
+    subscriptionProvider: refreshedProfile?.subscription_provider ?? null,
+    revenuecatAppUserId: refreshedProfile?.revenuecat_app_user_id ?? null,
+  });
+  syncSubscriptionTierToUsageLimit(subscriptionTier);
 }
 
 function getDisplayNameFromSession(session: Session): string | null {

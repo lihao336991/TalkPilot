@@ -25,6 +25,7 @@ import { StartSessionCard } from "../components/StartSessionCard";
 import SuggestionPanel from "../components/SuggestionPanel";
 
 import { DebugOverlay } from "../components/DebugOverlay";
+import { assistReplyService } from "../services/AssistReplyService";
 import { assistStreamingService } from "../services/AssistStreamingService";
 import { AudioEngine, audioEngine } from "../services/AudioEngine";
 import { deepgramService } from "../services/DeepgramStreamingService";
@@ -37,6 +38,7 @@ import { useDebugStore } from "../store/debugStore";
 import { useSuggestionStore } from "../store/suggestionStore";
 
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
+import { type Href, useRouter } from "expo-router";
 
 function getWsStatusMeta(
   status: StreamingConnectionStatus,
@@ -59,6 +61,7 @@ function getWsStatusMeta(
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 
 export default function LiveScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const status = useSessionStore((s) => s.status);
@@ -66,6 +69,7 @@ export default function LiveScreen() {
   const sceneDescription = useSessionStore((s) => s.sceneDescription);
   const dailyMinutesUsed = useSessionStore((s) => s.dailyMinutesUsed);
   const dailyMinutesLimit = useSessionStore((s) => s.dailyMinutesLimit);
+  const isDailyLimitReached = useSessionStore((s) => s.isDailyLimitReached);
   const startSession = useSessionStore((s) => s.startSession);
   const pauseSession = useSessionStore((s) => s.pauseSession);
   const resumeSession = useSessionStore((s) => s.resumeSession);
@@ -182,7 +186,7 @@ export default function LiveScreen() {
     console.log("[LiveScreen] Connecting Deepgram...");
     await deepgramService.connect(token, handleUtteranceEnd);
     debug.completeStep("ws");
-  }, [handleUtteranceEnd]);
+  }, [handleUtteranceEnd, isDailyLimitReached, router]);
 
   const startAudioCapture = useCallback(async () => {
     const debug = useDebugStore.getState();
@@ -241,6 +245,23 @@ export default function LiveScreen() {
   );
 
   const handleStartSession = useCallback(async () => {
+    if (isDailyLimitReached) {
+      Alert.alert(
+        "Upgrade required",
+        "Today's free minutes are used up. Upgrade to Pro to keep practicing.",
+        [
+          { text: "Later", style: "cancel" },
+          {
+            text: "View plans",
+            onPress: () => {
+              router.push("/paywall" as Href);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     const debug = useDebugStore.getState();
     debug.reset();
     debug.startStep("mic", "🎤 Requesting mic permission...");
@@ -632,6 +653,7 @@ export default function LiveScreen() {
           onStart={handleStartSession}
           dailyMinutesUsed={dailyMinutesUsed}
           dailyMinutesLimit={dailyMinutesLimit}
+          isLimitReached={isDailyLimitReached}
           selectedScene={scenePreset}
         />
       )}

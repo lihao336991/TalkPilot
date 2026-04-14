@@ -13,7 +13,9 @@ import "../global.css";
 
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
+import { useAuthStore } from "@/shared/store/authStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -72,6 +74,18 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const authMode = useAuthStore((state) => state.authMode);
+  const userId = useAuthStore((state) => state.userId);
+
+  useEffect(() => {
+    if (authMode !== "authenticated" || !userId) {
+      return;
+    }
+
+    void revenueCatService.configureForAuthenticatedUser(userId).catch((error) => {
+      console.error("[RevenueCat] Failed to configure purchases:", error);
+    });
+  }, [authMode, userId]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
@@ -84,6 +98,22 @@ function RootLayoutNav() {
             presentation: "transparentModal",
             animation: "fade",
             contentStyle: { backgroundColor: "transparent" },
+          }}
+        />
+        <Stack.Screen
+          name="paywall"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="customer-center"
+          options={{
+            headerShown: false,
+            presentation: "modal",
+            animation: "slide_from_right",
           }}
         />
         <Stack.Screen name="(dev)/test" options={{ title: "TalkPilot Dev" }} />
