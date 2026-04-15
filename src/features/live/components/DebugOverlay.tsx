@@ -85,11 +85,11 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
       </Text>
 
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>录音 -> ASR</Text>
+        <Text style={styles.metricLabel}>录音 -&gt; ASR</Text>
         <Text style={styles.metricValue}>{formatDurationMs(asrLatency)}</Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>ASR -> UtteranceEnd</Text>
+        <Text style={styles.metricLabel}>ASR -&gt; UtteranceEnd</Text>
         <Text style={styles.metricValue}>{formatDurationMs(utteranceGap)}</Text>
       </View>
       <View style={styles.metricRow}>
@@ -210,6 +210,7 @@ function DebugOverlayContent() {
             ))}
           </View>
         ) : null}
+
       </ScrollView>
     </View>
   );

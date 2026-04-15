@@ -1,3 +1,4 @@
+import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { useSessionStore } from '../store/sessionStore';
 
@@ -19,41 +20,40 @@ class DeepgramTokenService {
 
     console.log('[DeepgramToken] Fetching token...');
 
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
-    const url = `${supabaseUrl}/functions/v1/deepgram-token`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: supabaseAnonKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({}),
-    });
-
     let body: any = null;
     try {
-      body = await response.json();
-    } catch {
-      body = null;
+      const result = await invokeEdgeFunction<any>({
+        functionName: 'deepgram-token',
+        accessToken,
+        body: {},
+      });
+      body = result.data;
+    } catch (error) {
+      const requestError = error as {
+        status?: number;
+        body?: unknown;
+        message?: string;
+      };
+      body = requestError.body ?? null;
+      if (body && typeof body === 'object') {
+        const errorBody = body as Record<string, unknown>;
+        if (errorBody.daily_minutes_limit != null) {
+          useSessionStore.getState().setUsageSummary({
+            minutesUsed: Number(errorBody.minutes_used ?? 0),
+            minutesLimit: Number(errorBody.daily_minutes_limit),
+          });
+        }
+      }
+      console.error('[DeepgramToken] Function error detail:', requestError);
+      throw new Error(
+        `Failed to get Deepgram token: ${
+          requestError.message ?? 'Unknown request failure'
+        }`,
+      );
     }
     // #region debug-point D:function-response-shape
-    void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'D', location: 'DeepgramTokenService.ts:39', msg: '[DEBUG] deepgram token function responded', data: { ok: response.ok, status: response.status, hasBody: Boolean(body), bodyKeys: body ? Object.keys(body) : [], tokenLength: typeof body?.deepgram_token === 'string' ? body.deepgram_token.length : null, tokenHasDot: typeof body?.deepgram_token === 'string' ? body.deepgram_token.includes('.') : null, tokenPrefix: typeof body?.deepgram_token === 'string' ? body.deepgram_token.slice(0, 12) : null, expiresIn: body?.expires_in ?? null }, ts: Date.now() }) }).catch(() => {});
+    void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'D', location: 'DeepgramTokenService.ts:39', msg: '[DEBUG] deepgram token function responded', data: { ok: true, status: 200, hasBody: Boolean(body), bodyKeys: body ? Object.keys(body) : [], tokenLength: typeof body?.deepgram_token === 'string' ? body.deepgram_token.length : null, tokenHasDot: typeof body?.deepgram_token === 'string' ? body.deepgram_token.includes('.') : null, tokenPrefix: typeof body?.deepgram_token === 'string' ? body.deepgram_token.slice(0, 12) : null, expiresIn: body?.expires_in ?? null }, ts: Date.now() }) }).catch(() => {});
     // #endregion
-
-    if (!response.ok) {
-      if (body?.daily_minutes_limit != null) {
-        useSessionStore.getState().setUsageSummary({
-          minutesUsed: Number(body.minutes_used ?? 0),
-          minutesLimit: Number(body.daily_minutes_limit),
-        });
-      }
-      const detail = body?.error ?? body?.message ?? `status ${response.status}`;
-      console.error('[DeepgramToken] Function error:', response.status, body);
-      throw new Error(`Failed to get Deepgram token: ${detail}`);
-    }
 
     if (body?.usage?.daily_minutes_limit != null) {
       useSessionStore.getState().setUsageSummary({

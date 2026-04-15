@@ -1,9 +1,8 @@
 import { useConversationStore } from '@/features/live/store/conversationStore';
 import { useDebugStore } from '@/features/live/store/debugStore';
 import { useReviewStore, type ReviewResult } from '@/features/live/store/reviewStore';
+import { invokeEdgeFunction } from '@/shared/api/request';
 import { useAuthStore } from '@/shared/store/authStore';
-
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 
 function getLlmMetaDetail(headers: Headers): string {
   const provider = headers.get('x-llm-provider');
@@ -40,31 +39,12 @@ export class ReviewService {
 
     try {
       console.log('[Review] Fetching for turn', turnId);
-      const response = await fetch(`${supabaseUrl}/functions/v1/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ sessionId, userUtterance, scene, turnId }),
+      const { data: rawResult, headers } = await invokeEdgeFunction<ReviewApiResponse>({
+        functionName: 'review',
+        accessToken,
+        body: { sessionId, userUtterance, scene, turnId },
       });
-
-      if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
-        try {
-          const errorData = await response.json();
-          console.error('[Review] Error from server:', errorData);
-          detail = errorData?.error ?? errorData?.message ?? detail;
-        } catch {
-          console.error('[Review] Error from server: HTTP', response.status);
-        }
-        useDebugStore.getState().failTurnLlm(turnId, detail);
-        store.setLoading(false);
-        return;
-      }
-
-      const llmMeta = getLlmMetaDetail(response.headers);
-      const rawResult: ReviewApiResponse = await response.json();
+      const llmMeta = getLlmMetaDetail(headers);
       const result = mapReviewResponse(rawResult);
 
       console.log('[Review] Score:', result.overallScore);

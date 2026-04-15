@@ -16,6 +16,31 @@ import {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+function logWebhook(stage: string, payload: Record<string, unknown>) {
+  console.log(
+    JSON.stringify({
+      scope: "revenuecat-webhook",
+      stage,
+      ...payload,
+    }),
+  );
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    return error;
+  }
+
+  return { message: String(error) };
+}
+
 serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -26,6 +51,9 @@ serve(async (req: Request) => {
 
   try {
     if (!requireWebhookAuthorization(req)) {
+      logWebhook("auth_failed", {
+        hasAuthorizationHeader: Boolean(req.headers.get("Authorization")),
+      });
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: JSON_HEADERS,
@@ -36,6 +64,16 @@ serve(async (req: Request) => {
     const event = getRevenueCatEvent(payload);
     const eventId = getRevenueCatEventId(event);
     const appUserId = normalizeRevenueCatAppUserId(event.app_user_id);
+
+    logWebhook("received", {
+      eventId,
+      eventType: event.type ?? null,
+      appUserId,
+      originalAppUserId: event.original_app_user_id ?? null,
+      entitlementIds: Array.isArray(event.entitlement_ids) ? event.entitlement_ids : [],
+      productId: event.product_id ?? null,
+      store: event.store ?? null,
+    });
 
     if (!appUserId) {
       return new Response(JSON.stringify({ error: "Missing app_user_id" }), {
@@ -61,6 +99,10 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (existingEvent) {
+      logWebhook("duplicate", {
+        eventId,
+        existingStatus: existingEvent.status,
+      });
       return new Response(
         JSON.stringify({ ok: true, duplicate: true, event_id: eventId }),
         {
@@ -80,6 +122,10 @@ serve(async (req: Request) => {
       });
 
     if (insertEventError) {
+      logWebhook("insert_event_failed", {
+        eventId,
+        error: insertEventError,
+      });
       throw insertEventError;
     }
 
@@ -92,6 +138,15 @@ serve(async (req: Request) => {
     const userId = customer?.user_id ?? appUserId;
     const entitlementId = getPrimaryEntitlementId(event);
     const billingState = mapEventToBillingState(event, entitlementId);
+
+    logWebhook("resolved_identity", {
+      eventId,
+      appUserId,
+      resolvedUserId: userId,
+      customerRowFound: Boolean(customer),
+      entitlementId,
+      billingState,
+    });
 
     const { error: applyError } = await supabase.rpc("apply_billing_entitlement", {
       p_user_id: userId,
@@ -116,6 +171,14 @@ serve(async (req: Request) => {
     });
 
     if (applyError) {
+      logWebhook("apply_billing_entitlement_failed", {
+        eventId,
+        resolvedUserId: userId,
+        appUserId,
+        entitlementId,
+        billingState,
+        error: applyError,
+      });
       await supabase
         .from("billing_webhook_events")
         .update({
@@ -137,8 +200,20 @@ serve(async (req: Request) => {
       .eq("event_id", eventId);
 
     if (processedError) {
+      logWebhook("mark_processed_failed", {
+        eventId,
+        error: processedError,
+      });
       throw processedError;
     }
+
+    logWebhook("processed", {
+      eventId,
+      appUserId,
+      resolvedUserId: userId,
+      entitlementId,
+      billingState,
+    });
 
     return new Response(
       JSON.stringify({
@@ -154,6 +229,9 @@ serve(async (req: Request) => {
       },
     );
   } catch (error) {
+    logWebhook("unhandled_error", {
+      error: serializeError(error),
+    });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Webhook handling failed",

@@ -28,6 +28,7 @@ export function TabScrollScreen({
 }: TabScrollScreenProps) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = getTabBarHeight(insets.bottom);
+  const bottomContentInset = tabBarHeight + 76;
 
   return (
     <SafeAreaView className="flex-1 bg-paper">
@@ -45,7 +46,7 @@ export function TabScrollScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.contentContainer,
-          { paddingBottom: tabBarHeight + 32 },
+          { paddingBottom: bottomContentInset },
           contentContainerStyle,
         ]}>
         {children}
@@ -56,6 +57,7 @@ export function TabScrollScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 24,
   },

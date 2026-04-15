@@ -1,9 +1,8 @@
+import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const ASSIST_TTS_MODE: 'local' | 'cloud' = 'local';
 const LOCAL_TTS_LANGUAGE = 'en-US';
 const SpeechModule = (() => {
@@ -54,26 +53,21 @@ class AssistReplyService {
     const shouldUseCloudTts = ASSIST_TTS_MODE === 'cloud' || !SpeechModule?.speak;
     const accessToken = await getValidAccessToken();
 
-    const response = await fetch(`${supabaseUrl}/functions/v1/assist-reply`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        apikey: supabaseAnonKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data: payload } = await invokeEdgeFunction<{
+      source_text?: string;
+      english_reply?: string;
+      hint?: string | null;
+      audio_base64?: string | null;
+      audio_mime_type?: string | null;
+    }>({
+      functionName: 'assist-reply',
+      accessToken,
+      body: {
         transcript: sourceText,
         scene_hint: sceneHint,
         tts_mode: shouldUseCloudTts ? 'cloud' : 'none',
-      }),
+      },
     });
-
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || !payload) {
-      console.error('[AssistReply] Function error response:', payload);
-      const detail = payload?.error ?? payload?.message ?? `status ${response.status}`;
-      throw new Error(`Assist reply failed: ${detail}`);
-    }
 
     return {
       sourceText: payload.source_text ?? sourceText,

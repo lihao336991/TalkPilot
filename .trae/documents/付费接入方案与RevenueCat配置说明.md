@@ -298,6 +298,8 @@
 
   * `REVENUECAT_WEBHOOK_AUTH`
 
+  * `REVENUECAT_SECRET_API_KEY`（用于服务端主动向 RevenueCat 拉当前 customer 做 reconcile）
+
   * `REVENUECAT_PROJECT_ID`（可选，用于日志或后续 API 查询）
 
   * `REVENUECAT_PUBLIC_SDK_KEY_IOS`（后续客户端用）
@@ -607,6 +609,7 @@ https://<your-project-ref>.supabase.co/functions/v1/revenuecat-webhook
 ```bash
 supabase secrets set \
   REVENUECAT_WEBHOOK_AUTH=your_secret \
+  REVENUECAT_SECRET_API_KEY=your_revenuecat_secret_key \
   REVENUECAT_PUBLIC_SDK_KEY_IOS=your_ios_sdk_key \
   REVENUECAT_PUBLIC_SDK_KEY_ANDROID=your_android_sdk_key
 ```
@@ -621,12 +624,13 @@ EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS=your_ios_sdk_key
 EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID=your_android_sdk_key
 ```
 
-#### 3. 部署 webhook function
+#### 3. 部署 billing functions
 
 * 需要部署：
 
 ```bash
 supabase functions deploy revenuecat-webhook
+supabase functions deploy revenuecat-sync-customer
 ```
 
 ### 四、客户端接入时的关键规则

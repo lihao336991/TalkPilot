@@ -4,7 +4,7 @@
 # Automatically applies --no-verify-jwt and project reference
 
 PROJECT_REF="joweqhgtueqfeasweigh"
-KNOWN_FUNCTIONS=("deepgram-token" "review" "suggest" "assist-reply" "revenuecat-webhook")
+KNOWN_FUNCTIONS=("deepgram-token" "review" "suggest" "assist-reply" "revenuecat-webhook" "revenuecat-sync-customer")
 
 function show_usage() {
     echo "Usage: ./deploy.sh [function_name | all]"

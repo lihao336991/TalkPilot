@@ -14,6 +14,10 @@ import {
     View,
 } from "react-native";
 
+function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
+  return subscriptionTier === "pro" || subscriptionTier === "unlimited";
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const authMode = useAuthStore((state) => state.authMode);
@@ -28,6 +32,9 @@ export default function ProfileScreen() {
   const subscriptionProvider = useAuthStore(
     (state) => state.subscriptionProvider,
   );
+  const subscriptionSyncState = useAuthStore(
+    (state) => state.subscriptionSyncState,
+  );
   const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
   const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
   const userEmail = useAuthStore((state) => state.userEmail);
@@ -37,6 +44,7 @@ export default function ProfileScreen() {
   const contentTranslateY = useRef(new Animated.Value(0)).current;
 
   const isAuthenticated = authMode === "authenticated";
+  const isPaidUser = hasPaidAccess(subscriptionTier);
 
   useEffect(() => {
     contentOpacity.setValue(0.92);
@@ -140,12 +148,19 @@ export default function ProfileScreen() {
     : "Sign in to keep your account synced across sessions on this device.";
   const providerLabel = isAuthenticated ? provider || "account" : "guest";
   const membershipStatusLabel = isAuthenticated
-    ? subscriptionStatus.replace("_", " ")
+    ? subscriptionStatus === "syncing"
+      ? "syncing"
+      : subscriptionStatus.replace("_", " ")
     : "login required";
   const membershipProviderLabel = subscriptionProvider || "app";
   const membershipExpiresLabel = subscriptionExpiresAt
     ? new Date(subscriptionExpiresAt).toLocaleDateString()
     : "Not set";
+  const membershipSyncLabel = isAuthenticated
+    ? subscriptionSyncState === "syncing"
+      ? "RevenueCat active, syncing cache"
+      : "Supabase cache synced"
+    : "login required";
 
   const headerActionLabel = isAuthenticated
     ? isSigningOut
@@ -241,7 +256,9 @@ export default function ProfileScreen() {
           <Text style={styles.actionTitle}>Membership</Text>
           <Text style={styles.actionBody}>
             {isAuthenticated
-              ? "Subscription state is synced from Supabase and will later be driven by RevenueCat webhook events."
+              ? subscriptionSyncState === "syncing"
+                ? "RevenueCat has already confirmed Pro access. Supabase cache is still syncing in the background."
+                : "Subscription state is synced from RevenueCat and cached in Supabase for faster restore."
               : "Log in before purchase so your subscription can stay synced across devices."}
           </Text>
 
@@ -255,6 +272,10 @@ export default function ProfileScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Membership</Text>
               <Text style={styles.detailValue}>{membershipStatusLabel}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Sync state</Text>
+              <Text style={styles.detailValue}>{membershipSyncLabel}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Billing source</Text>
@@ -290,7 +311,7 @@ export default function ProfileScreen() {
               ]}
             >
               <Text style={styles.membershipPrimaryButtonText}>
-                {subscriptionTier === "pro" ? "View paywall" : "Upgrade to Pro"}
+                {isPaidUser ? "View paywall" : "Upgrade to Pro"}
               </Text>
             </Pressable>
             <Pressable

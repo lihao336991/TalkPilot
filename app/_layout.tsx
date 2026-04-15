@@ -11,11 +11,11 @@ import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import "../global.css";
 
+import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
 import { useAuthStore } from "@/shared/store/authStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -82,9 +82,11 @@ function RootLayoutNav() {
       return;
     }
 
-    void revenueCatService.configureForAuthenticatedUser(userId).catch((error) => {
-      console.error("[RevenueCat] Failed to configure purchases:", error);
-    });
+    void revenueCatService
+      .configureForAuthenticatedUser(userId)
+      .catch((error) => {
+        console.error("[RevenueCat] Failed to configure purchases:", error);
+      });
   }, [authMode, userId]);
 
   return (
@@ -104,16 +106,36 @@ function RootLayoutNav() {
           name="paywall"
           options={{
             headerShown: false,
-            presentation: "modal",
-            animation: "slide_from_bottom",
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
           }}
         />
         <Stack.Screen
           name="customer-center"
           options={{
             headerShown: false,
-            presentation: "modal",
+            presentation: "card",
             animation: "slide_from_right",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="terms"
+          options={{
+            headerShown: false,
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="privacy"
+          options={{
+            headerShown: false,
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
           }}
         />
         <Stack.Screen name="(dev)/test" options={{ title: "TalkPilot Dev" }} />

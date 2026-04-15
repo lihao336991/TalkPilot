@@ -1,4 +1,5 @@
 import { getAppleSignInCredentials } from '@/shared/auth/providers/appleAuth';
+import { invokeEdgeFunction } from '@/shared/api/request';
 import {
     clearGoogleSignInSession,
     configureGoogleSignIn,
@@ -238,6 +239,30 @@ export async function getValidAccessToken(): Promise<string> {
 export async function refreshProfileFromSession() {
   const session = await recoverValidSession();
   await applySession(session);
+}
+
+export async function reconcileRevenueCatCustomer() {
+  const session = await recoverValidSession();
+
+  if (!session || session.user.is_anonymous) {
+    return null;
+  }
+
+  const { data } = await invokeEdgeFunction<{
+    ok: boolean;
+    status: string;
+    is_active: boolean;
+    entitlement_id: string;
+    product_id: string | null;
+    expires_at: string | null;
+  }>({
+    functionName: 'revenuecat-sync-customer',
+    accessToken: session.access_token,
+    body: {},
+  });
+
+  await refreshProfileFromSession();
+  return data;
 }
 
 async function signInWithIdTokenSession(args: {

@@ -55,8 +55,9 @@ export default function CustomerCenterScreen() {
       <Stack.Screen
         options={{
           headerShown: false,
-          presentation: 'modal',
+          presentation: 'card',
           animation: 'slide_from_right',
+          gestureEnabled: true,
         }}
       />
       <View style={styles.container}>
