@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import {
-  SafeAreaView,
-  useSafeAreaInsets,
+    SafeAreaView,
+    useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import { useAccessStore } from "@/features/live/store/accessStore";
 import { useConversationStore } from "@/features/live/store/conversationStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
 
@@ -38,6 +39,11 @@ import { useDebugStore } from "../store/debugStore";
 import { useSuggestionStore } from "../store/suggestionStore";
 
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
+import {
+    isFeatureAccessError,
+    shouldRedirectToLogin,
+    shouldRedirectToPaywall,
+} from "@/shared/billing/access";
 import { type Href, useRouter } from "expo-router";
 
 function getWsStatusMeta(
@@ -123,6 +129,27 @@ export default function LiveScreen() {
     return () => clearInterval(interval);
   }, [assistState]);
 
+  const handleFeatureAccessDenied = useCallback(
+    (error: unknown) => {
+      if (!isFeatureAccessError(error)) {
+        return false;
+      }
+
+      if (shouldRedirectToLogin(error.access)) {
+        router.push("/login");
+        return true;
+      }
+
+      if (shouldRedirectToPaywall(error.access)) {
+        router.push("/paywall" as Href);
+        return true;
+      }
+
+      return false;
+    },
+    [router],
+  );
+
   const handleUtteranceEnd = useCallback(
     ({
       speaker,
@@ -148,26 +175,34 @@ export default function LiveScreen() {
 
         if (speaker === "other") {
           debug.startTurnLlm(turnId, "suggest");
-          await suggestionService.fetchSuggestions(
-            sessionIdRef.current,
-            text,
-            scene,
-            turnId,
-          );
+          try {
+            await suggestionService.fetchSuggestions(
+              sessionIdRef.current,
+              text,
+              scene,
+              turnId,
+            );
+          } catch (error) {
+            handleFeatureAccessDenied(error);
+          }
         }
 
         if (speaker === "self") {
           suggestionStore.clear();
           debug.startTurnLlm(turnId, "review");
-          await reviewService.fetchReview(
-            sessionIdRef.current,
-            text,
-            scene,
-            turnId,
-          );
+          try {
+            await reviewService.fetchReview(
+              sessionIdRef.current,
+              text,
+              scene,
+              turnId,
+            );
+          } catch (error) {
+            handleFeatureAccessDenied(error);
+          }
         }
       })(),
-    [scenePreset, sceneDescription],
+    [handleFeatureAccessDenied, scenePreset, sceneDescription],
   );
 
   const sendAudioRef = useRef((base64: string) => {
@@ -230,6 +265,7 @@ export default function LiveScreen() {
         deepgramService.disconnect();
         await audioEngine.stop();
         setListening(false);
+        handleFeatureAccessDenied(error);
         console.error("[LiveScreen] Failed to start streaming:", error);
       }
     },
@@ -263,6 +299,7 @@ export default function LiveScreen() {
     }
 
     const debug = useDebugStore.getState();
+    useAccessStore.getState().clear();
     debug.reset();
     debug.startStep("mic", "🎤 Requesting mic permission...");
     console.log("[LiveScreen] Requesting mic permission...");
@@ -326,10 +363,12 @@ export default function LiveScreen() {
     } catch (error) {
       pauseSession();
       setListening(false);
+      handleFeatureAccessDenied(error);
       console.error("[LiveScreen] Failed to resume streaming:", error);
     }
   }, [
     connectStreamingSocket,
+    handleFeatureAccessDenied,
     pauseSession,
     resumeSession,
     setListening,
@@ -545,9 +584,16 @@ export default function LiveScreen() {
       assistShouldResumeRef.current = false;
       setAssistPreviewText("");
       setAssistState("idle");
+      handleFeatureAccessDenied(error);
       console.error("[NativeAssist] Failed to prepare assist:", error);
     }
-  }, [assistState, isListening, restoreMainConversationCapture, setListening]);
+  }, [
+    assistState,
+    handleFeatureAccessDenied,
+    isListening,
+    restoreMainConversationCapture,
+    setListening,
+  ]);
 
   const handleNativeAssistPressOut = useCallback(
     async (action: PressAndSlideAction) => {
@@ -630,6 +676,7 @@ export default function LiveScreen() {
     setDuration(0);
     sessionIdRef.current = null;
     setForcedSpeaker(null);
+    useAccessStore.getState().clear();
     console.log("[LiveScreen] Session ended");
     useDebugStore.getState().reset();
   }, [duration, endSession, setForcedSpeaker, setListening]);

@@ -1,5 +1,8 @@
+/// <reference path="../_shared/editor-shims.d.ts" />
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { JSON_HEADERS, mapFeatureAccessRow } from "../_shared/access.ts";
 import {
   buildLlmResponseHeaders,
   createLlmRuntime,
@@ -32,9 +35,22 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    return new Response(JSON.stringify({
+      error: "Unauthorized",
+      code: "auth_required",
+      access: {
+        feature: "suggestion",
+        allowed: false,
+        reason: "auth_required",
+        tier: "unknown",
+        used: null,
+        remaining: null,
+        limit: null,
+        resetAt: null,
+      },
+    }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -46,8 +62,74 @@ serve(async (req: Request) => {
   if (typeof sessionId !== "string" || typeof lastUtterance !== "string") {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
+  }
+
+  const { data: accessCheck, error: accessCheckError } = await supabase.rpc(
+    "check_feature_access",
+    {
+      p_user_id: user.id,
+      p_feature_key: "suggestion",
+    },
+  );
+
+  if (accessCheckError) {
+    return new Response(
+      JSON.stringify({ error: "Suggestion access check failed" }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      },
+    );
+  }
+
+  const accessBeforeConsume = mapFeatureAccessRow("suggestion", accessCheck?.[0]);
+  if (!accessBeforeConsume.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Suggestion daily limit reached",
+        code: "feature_limit_reached",
+        access: accessBeforeConsume,
+      }),
+      {
+        status: 429,
+        headers: JSON_HEADERS,
+      },
+    );
+  }
+
+  const { data: consumedAccess, error: consumeError } = await supabase.rpc(
+    "consume_feature_access",
+    {
+      p_user_id: user.id,
+      p_feature_key: "suggestion",
+    },
+  );
+
+  if (consumeError) {
+    return new Response(
+      JSON.stringify({ error: "Suggestion access consume failed" }),
+      {
+        status: 500,
+        headers: JSON_HEADERS,
+      },
+    );
+  }
+
+  const access = mapFeatureAccessRow("suggestion", consumedAccess?.[0]);
+  if (!access.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Suggestion daily limit reached",
+        code: "feature_limit_reached",
+        access,
+      }),
+      {
+        status: 429,
+        headers: JSON_HEADERS,
+      },
+    );
   }
 
   const { data: turns } = await supabase
@@ -100,7 +182,7 @@ Last utterance from the other person: "${lastUtterance}"`;
     const cleanText = sanitizeSuggestionText(rawContent);
     const suggestions = cleanText ? [{ style: "simple", text: cleanText }] : [];
 
-    return new Response(JSON.stringify({ suggestions }), {
+    return new Response(JSON.stringify({ suggestions, access }), {
       status: 200,
       headers: responseHeaders,
     });

@@ -1,7 +1,8 @@
+import { refreshProfileFromSession } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
-import { type Href, Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -137,14 +138,29 @@ function getPurchaseSummaryMessage(args: {
   webhookSynced: boolean;
 }) {
   if (args.unlocked && args.webhookSynced) {
-    return "Purchase completed and Pro access is now synced.";
+    return "You're all set. Pro is active on this account now.";
   }
 
   if (args.unlocked) {
-    return "Purchase succeeded. RevenueCat is active, and Supabase entitlement sync is still catching up.";
+    return "Purchase confirmed. Pro is already active, and we're finishing account sync in the background.";
   }
 
-  return "Purchase flow completed, but Pro entitlement is not active yet.";
+  return "Purchase completed, but activation is taking a little longer than expected.";
+}
+
+function getRestoreSummaryMessage(args: {
+  unlocked: boolean;
+  webhookSynced: boolean;
+}) {
+  if (args.unlocked && args.webhookSynced) {
+    return "Your subscription has been restored and is ready to use.";
+  }
+
+  if (args.unlocked) {
+    return "Restore succeeded. Pro is available now, and account sync is still finishing.";
+  }
+
+  return "No active subscription was found to restore for this account.";
 }
 
 function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
@@ -169,22 +185,41 @@ export default function PaywallScreen() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const hasFocusedOnceRef = useRef(false);
+
+  const goToProfile = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.navigate("/(tabs)/profile");
+  }, [router]);
 
   const closeScreen = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/(tabs)/profile");
+      goToProfile();
     }
-  }, [router]);
+  }, [goToProfile, router]);
 
   const packages = useMemo(() => {
     const availablePackages = offering?.availablePackages ?? [];
     return [...availablePackages].sort((left, right) => {
+      const leftMonths = getPackageMonths(left);
+      const rightMonths = getPackageMonths(right);
+
+      if (
+        leftMonths !== null &&
+        rightMonths !== null &&
+        leftMonths !== rightMonths
+      ) {
+        return leftMonths - rightMonths;
+      }
+
       const leftId = `${left.packageType}:${left.identifier}`.toLowerCase();
       const rightId = `${right.packageType}:${right.identifier}`.toLowerCase();
-      if (leftId.includes("annual") || leftId.includes("year")) return -1;
-      if (rightId.includes("annual") || rightId.includes("year")) return 1;
       return leftId.localeCompare(rightId);
     });
   }, [offering]);
@@ -199,52 +234,82 @@ export default function PaywallScreen() {
     : "Choose a plan";
   const isPaidUser = hasPaidAccess(subscriptionTier);
 
-  useEffect(() => {
-    if (authMode !== "authenticated" || !userId) {
-      router.replace("/login");
-      return;
-    }
+  const loadPaywall = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (authMode !== "authenticated" || !userId) {
+        router.replace("/login");
+        return;
+      }
 
-    let cancelled = false;
-
-    void (async () => {
-      setIsLoading(true);
+      const silent = options?.silent ?? false;
+      if (!silent) {
+        setIsLoading(true);
+      }
       setErrorMessage(null);
+
       try {
         await revenueCatService.configureForAuthenticatedUser(userId);
+        await refreshProfileFromSession();
         const currentOffering = await revenueCatService.getCurrentOffering();
-        if (!cancelled) {
-          setOffering(currentOffering);
-          setSelectedPackageId(
-            currentOffering?.availablePackages?.[0]?.identifier ?? null,
-          );
-        }
+        setOffering(currentOffering);
+        setSelectedPackageId((currentSelectedPackageId) => {
+          if (
+            currentSelectedPackageId &&
+            currentOffering?.availablePackages.some(
+              (pkg) => pkg.identifier === currentSelectedPackageId,
+            )
+          ) {
+            return currentSelectedPackageId;
+          }
+
+          return currentOffering?.availablePackages?.[0]?.identifier ?? null;
+        });
       } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof Error ? error.message : "Failed to load paywall.",
-          );
-        }
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to load paywall.",
+        );
       } finally {
-        if (!cancelled) {
+        if (!silent) {
           setIsLoading(false);
         }
       }
-    })();
+    },
+    [authMode, router, userId],
+  );
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    if (authMode !== "authenticated" || !userId) {
+      router.replace("/login");
+    }
   }, [authMode, router, userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (authMode !== "authenticated" || !userId) {
+        return;
+      }
+
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        void loadPaywall();
+        return;
+      }
+
+      void loadPaywall({ silent: true });
+    }, [authMode, loadPaywall, userId]),
+  );
 
   useEffect(() => {
     if (isPaidUser) {
       setStatusMessage(
         subscriptionSyncState === "syncing"
-          ? "Pro access is active. Supabase cache is syncing..."
-          : "Your account already has Pro access.",
+          ? "Pro is already active. We're just finishing the account sync."
+          : "This account already has Pro access.",
       );
+      return;
     }
+
+    setStatusMessage(null);
   }, [isPaidUser, subscriptionSyncState]);
 
   async function handleRestorePress() {
@@ -255,14 +320,33 @@ export default function PaywallScreen() {
 
     try {
       setIsRestoring(true);
-      setStatusMessage("Restoring purchases...");
+      setStatusMessage("Checking this account for existing purchases...");
       await revenueCatService.configureForAuthenticatedUser(userId);
       const restoreResult = await revenueCatService.restorePurchases();
-      setStatusMessage(getPurchaseSummaryMessage(restoreResult.summary));
+      const message = getRestoreSummaryMessage(restoreResult.summary);
+      setStatusMessage(message);
+
+      if (restoreResult.summary.unlocked) {
+        Alert.alert("Restore complete", message, [
+          {
+            text: "Go to Profile",
+            onPress: goToProfile,
+          },
+          {
+            text: "Stay here",
+            style: "cancel",
+          },
+        ]);
+        return;
+      }
+
+      Alert.alert("Nothing to restore", message);
     } catch (error) {
       Alert.alert(
         "Restore failed",
-        error instanceof Error ? error.message : "Please try again later.",
+        error instanceof Error
+          ? error.message
+          : "We couldn't restore purchases right now. Please try again later.",
       );
       setStatusMessage(null);
     } finally {
@@ -275,13 +359,16 @@ export default function PaywallScreen() {
     setStatusMessage(message);
 
     if (summary.unlocked) {
-      Alert.alert("Pro unlocked", message, [
+      Alert.alert("Purchase complete", message, [
         {
-          text: "Continue",
-          onPress: closeScreen,
+          text: "Go to Profile",
+          onPress: goToProfile,
         },
       ]);
+      return;
     }
+
+    Alert.alert("Purchase received", message);
   }
 
   function getPackageTitle(pkg: PurchasesPackage) {
@@ -324,7 +411,7 @@ export default function PaywallScreen() {
 
     try {
       setIsPurchasing(true);
-      setStatusMessage(`Purchasing ${getPackageTitle(selectedPackage)}...`);
+      setStatusMessage(`Finishing ${getPackageTitle(selectedPackage)}...`);
       await revenueCatService.configureForAuthenticatedUser(userId!);
       const purchaseResult =
         await revenueCatService.purchasePackage(selectedPackage);
@@ -335,7 +422,7 @@ export default function PaywallScreen() {
         message?: string;
       };
       if (maybePurchaseError?.userCancelled) {
-        setStatusMessage("Purchase cancelled.");
+        setStatusMessage("Purchase cancelled. No changes were made.");
         return;
       }
 
@@ -396,7 +483,9 @@ export default function PaywallScreen() {
           </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>TalkPilot Pro</Text>
-            <Text style={styles.title}>Choose your plan</Text>
+            <Text style={styles.title}>
+              {isPaidUser ? "You're already Pro" : "Choose your plan"}
+            </Text>
           </View>
         </View>
 
@@ -422,26 +511,7 @@ export default function PaywallScreen() {
                   setErrorMessage(null);
                   setOffering(null);
                   setSelectedPackageId(null);
-                  void revenueCatService
-                    .configureForAuthenticatedUser(userId!)
-                    .then(() => revenueCatService.getCurrentOffering())
-                    .then((currentOffering) => {
-                      setOffering(currentOffering);
-                      setSelectedPackageId(
-                        currentOffering?.availablePackages?.[0]?.identifier ??
-                          null,
-                      );
-                    })
-                    .catch((error) => {
-                      setErrorMessage(
-                        error instanceof Error
-                          ? error.message
-                          : "Failed to refresh paywall.",
-                      );
-                    })
-                    .finally(() => {
-                      setIsLoading(false);
-                    });
+                  void loadPaywall();
                 }}
                 style={styles.retryButton}
               >
@@ -450,8 +520,25 @@ export default function PaywallScreen() {
             </View>
           ) : offering && packages.length > 0 ? (
             <>
+              {isPaidUser ? (
+                <View style={styles.statusCard}>
+                  <Text style={styles.statusCardTitle}>
+                    {subscriptionSyncState === "syncing"
+                      ? "Pro is active and still syncing"
+                      : "Pro is already active"}
+                  </Text>
+                  <Text style={styles.statusCardBody}>
+                    {subscriptionSyncState === "syncing"
+                      ? "Your purchase has already gone through. You can keep using Pro while we finish syncing this account."
+                      : "This account already has Pro. You can manage billing below or review other plans if you want to switch later."}
+                  </Text>
+                </View>
+              ) : null}
+
               <View style={styles.plansSection}>
-                <Text style={styles.sectionTitle}>Plans</Text>
+                <Text style={styles.sectionTitle}>
+                  {isPaidUser ? "Available plans" : "Plans"}
+                </Text>
                 <View style={styles.packageList}>
                   {packages.map((pkg) => {
                     const selected =
@@ -459,6 +546,8 @@ export default function PaywallScreen() {
                     const badge = getPackageBadge(pkg);
                     const pkgMonthlyEquivalent = getMonthlyEquivalentPrice(pkg);
                     const pkgSavings = getSavingsSummary(packages, pkg);
+                    const packageMonths = getPackageMonths(pkg);
+                    const isMonthlyPlan = packageMonths === 1;
 
                     return (
                       <Pressable
@@ -467,7 +556,14 @@ export default function PaywallScreen() {
                         onPress={() => setSelectedPackageId(pkg.identifier)}
                         style={[
                           styles.packageCard,
+                          isMonthlyPlan
+                            ? styles.packageCardMonthly
+                            : styles.packageCardAnnual,
                           selected && styles.packageCardSelected,
+                          selected &&
+                            (isMonthlyPlan
+                              ? styles.packageCardMonthlySelected
+                              : styles.packageCardAnnualSelected),
                         ]}
                       >
                         <View style={styles.packageHeader}>
@@ -479,13 +575,13 @@ export default function PaywallScreen() {
                               {getPackageCaption(pkg)}
                             </Text>
                           </View>
-                          {pkgSavings ? (
+                          {selected && pkgSavings ? (
                             <View style={styles.packageBadge}>
                               <Text style={styles.packageBadgeText}>
                                 Save {pkgSavings.percent}%
                               </Text>
                             </View>
-                          ) : badge ? (
+                          ) : selected && badge ? (
                             <View style={styles.packageBadge}>
                               <Text style={styles.packageBadgeText}>
                                 {badge}
@@ -537,8 +633,9 @@ export default function PaywallScreen() {
               <View style={styles.benefitsCard}>
                 <Text style={styles.sectionTitle}>Pro details</Text>
                 {[
-                  "More speaking minutes every day",
-                  "Deeper AI review and coaching feedback",
+                  "120 live speaking minutes every day instead of 10",
+                  "Unlimited AI review instead of the free 100/day cap",
+                  "Unlimited AI reply suggestions instead of the free 100/day cap",
                   "Purchase restore and account sync",
                 ].map((item) => (
                   <View key={item} style={styles.benefitRow}>
@@ -592,21 +689,27 @@ export default function PaywallScreen() {
           ) : null}
 
           <Pressable
-            disabled={!selectedPackage || isPurchasing || isPaidUser}
+            disabled={!isPaidUser && (!selectedPackage || isPurchasing)}
             onPress={() => {
+              if (isPaidUser) {
+                router.push("/customer-center" as Href);
+                return;
+              }
+
               void handlePurchasePress();
             }}
             style={[
               styles.primaryButton,
-              (!selectedPackage || isPurchasing || isPaidUser) &&
+              !isPaidUser &&
+                (!selectedPackage || isPurchasing) &&
                 styles.primaryButtonDisabled,
             ]}
           >
             <Text style={styles.primaryButtonText}>
               {isPaidUser
                 ? subscriptionSyncState === "syncing"
-                  ? "Pro active, syncing..."
-                  : "You already have Pro"
+                  ? "Pro active, manage billing"
+                  : "Manage subscription"
                 : isPurchasing
                   ? "Processing purchase..."
                   : selectedCtaLabel}
@@ -625,14 +728,16 @@ export default function PaywallScreen() {
                 {isRestoring ? "Restoring..." : "Restore Purchases"}
               </Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.push("/customer-center" as Href)}
-              style={styles.footerTextButton}
-            >
-              <Text style={styles.footerTextButtonLabel}>
-                Manage Subscription
-              </Text>
-            </Pressable>
+            {!isPaidUser ? (
+              <Pressable
+                onPress={() => router.push("/customer-center" as Href)}
+                style={styles.footerTextButton}
+              >
+                <Text style={styles.footerTextButtonLabel}>
+                  Manage Subscription
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </View>
@@ -721,6 +826,24 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: "rgba(255,255,255,0.72)",
   },
+  statusCard: {
+    borderRadius: 24,
+    padding: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(210,244,92,0.28)",
+    backgroundColor: "rgba(210,244,92,0.1)",
+  },
+  statusCardTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#F3FFD2",
+  },
+  statusCardBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: "rgba(255,255,255,0.82)",
+  },
   retryButton: {
     marginTop: 6,
     minHeight: 46,
@@ -772,14 +895,40 @@ const styles = StyleSheet.create({
   packageCard: {
     borderRadius: 24,
     padding: 18,
-    backgroundColor: "rgba(255,255,255,0.05)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
     gap: 16,
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  packageCardMonthly: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  packageCardAnnual: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255,255,255,0.08)",
   },
   packageCardSelected: {
+    transform: [{ scale: 1.01 }],
     borderColor: "#D2F45C",
-    backgroundColor: "rgba(210,244,92,0.12)",
+    backgroundColor: "rgba(210,244,92,0.14)",
+    shadowColor: "#D2F45C",
+    shadowOpacity: 0.22,
+  },
+  packageCardMonthlySelected: {
+    borderColor: "#D2F45C",
+    backgroundColor: "rgba(210,244,92,0.14)",
+    shadowColor: "#D2F45C",
+    shadowOpacity: 0.22,
+  },
+  packageCardAnnualSelected: {
+    borderColor: "#D2F45C",
+    backgroundColor: "rgba(210,244,92,0.14)",
+    shadowColor: "#D2F45C",
+    shadowOpacity: 0.22,
   },
   packageHeader: {
     flexDirection: "row",

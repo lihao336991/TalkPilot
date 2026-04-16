@@ -1,9 +1,10 @@
+import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { TabScrollScreen } from "@/features/navigation/components/TabScrollScreen";
-import { signOut } from "@/shared/api/supabase";
+import { refreshProfileFromSession, signOut } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
-import { type Href, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
     Animated,
@@ -37,6 +38,7 @@ export default function ProfileScreen() {
   );
   const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
   const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
+  const userId = useAuthStore((state) => state.userId);
   const userEmail = useAuthStore((state) => state.userEmail);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -45,6 +47,21 @@ export default function ProfileScreen() {
 
   const isAuthenticated = authMode === "authenticated";
   const isPaidUser = hasPaidAccess(subscriptionTier);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated || !userId) {
+        return;
+      }
+
+      void revenueCatService
+        .configureForAuthenticatedUser(userId)
+        .then(() => refreshProfileFromSession())
+        .catch((error) => {
+          console.error("[Profile] Failed to refresh membership state:", error);
+        });
+    }, [isAuthenticated, userId]),
+  );
 
   useEffect(() => {
     contentOpacity.setValue(0.92);
@@ -158,8 +175,8 @@ export default function ProfileScreen() {
     : "Not set";
   const membershipSyncLabel = isAuthenticated
     ? subscriptionSyncState === "syncing"
-      ? "RevenueCat active, syncing cache"
-      : "Supabase cache synced"
+      ? "Purchase confirmed, syncing account"
+      : "Account fully synced"
     : "login required";
 
   const headerActionLabel = isAuthenticated
@@ -257,8 +274,10 @@ export default function ProfileScreen() {
           <Text style={styles.actionBody}>
             {isAuthenticated
               ? subscriptionSyncState === "syncing"
-                ? "RevenueCat has already confirmed Pro access. Supabase cache is still syncing in the background."
-                : "Subscription state is synced from RevenueCat and cached in Supabase for faster restore."
+                ? "Your purchase is already confirmed. We're still syncing the account details, but Pro access is already available."
+                : isPaidUser
+                  ? "This account already has Pro. You can manage billing anytime, and restores should stay linked to this signed-in account."
+                  : "Free includes 10 live minutes, 100 reviews, and 100 suggestions per day. Upgrade when you want more room for daily practice."
               : "Log in before purchase so your subscription can stay synced across devices."}
           </Text>
 
@@ -267,6 +286,24 @@ export default function ProfileScreen() {
               <Text style={styles.detailLabel}>Plan</Text>
               <Text style={styles.detailValue}>
                 {isAuthenticated ? subscriptionTier : "Free preview"}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Live access</Text>
+              <Text style={styles.detailValue}>
+                {isPaidUser ? "120 min / day" : "10 min / day"}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>AI review</Text>
+              <Text style={styles.detailValue}>
+                {isPaidUser ? "Unlimited" : "100 / day"}
+              </Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>AI suggestion</Text>
+              <Text style={styles.detailValue}>
+                {isPaidUser ? "Unlimited" : "100 / day"}
               </Text>
             </View>
             <View style={styles.detailRow}>
@@ -311,7 +348,7 @@ export default function ProfileScreen() {
               ]}
             >
               <Text style={styles.membershipPrimaryButtonText}>
-                {isPaidUser ? "View paywall" : "Upgrade to Pro"}
+                {isPaidUser ? "View plans" : "Upgrade to Pro"}
               </Text>
             </Pressable>
             <Pressable

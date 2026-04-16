@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logBillingEvent } from '@/shared/billing/logger';
 
 export type SubscriptionTier = 'free' | 'pro' | 'unlimited';
 export type SubscriptionStatus =
@@ -64,6 +65,35 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   signOut: () => void;
   reset: () => void;
+}
+
+type BillingStateSnapshot = Pick<
+  AuthState,
+  | 'profileSubscriptionTier'
+  | 'profileSubscriptionStatus'
+  | 'profileSubscriptionExpiresAt'
+  | 'hasLocalProEntitlement'
+  | 'subscriptionTier'
+  | 'subscriptionStatus'
+  | 'subscriptionSyncState'
+  | 'subscriptionExpiresAt'
+  | 'subscriptionProvider'
+  | 'revenuecatAppUserId'
+>;
+
+export function getBillingStateSnapshot(state: BillingStateSnapshot) {
+  return {
+    profileSubscriptionTier: state.profileSubscriptionTier,
+    profileSubscriptionStatus: state.profileSubscriptionStatus,
+    profileSubscriptionExpiresAt: state.profileSubscriptionExpiresAt,
+    hasLocalProEntitlement: state.hasLocalProEntitlement,
+    subscriptionTier: state.subscriptionTier,
+    subscriptionStatus: state.subscriptionStatus,
+    subscriptionSyncState: state.subscriptionSyncState,
+    subscriptionExpiresAt: state.subscriptionExpiresAt,
+    subscriptionProvider: state.subscriptionProvider,
+    revenuecatAppUserId: state.revenuecatAppUserId,
+  };
 }
 
 function deriveSubscriptionState(args: {
@@ -167,7 +197,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
         profileRevenuecatAppUserId: revenuecatAppUserId,
       };
 
-      return {
+      const nextState = {
         ...profileState,
         ...deriveSubscriptionState({
           ...profileState,
@@ -176,6 +206,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
           localSubscriptionExpiresAt: state.localSubscriptionExpiresAt,
         }),
       };
+
+      logBillingEvent('subscription_summary_updated', {
+        source: 'supabase-profile',
+        ...getBillingStateSnapshot({
+          ...state,
+          ...nextState,
+        }),
+      });
+
+      return nextState;
     }),
 
   setRevenueCatEntitlement: ({
@@ -190,7 +230,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
         localRevenuecatAppUserId: hasPro ? revenuecatAppUserId : null,
       };
 
-      return {
+      const nextState = {
         ...localState,
         ...deriveSubscriptionState({
           profileSubscriptionTier: state.profileSubscriptionTier,
@@ -201,6 +241,16 @@ export const useAuthStore = create<AuthState>()((set) => ({
           ...localState,
         }),
       };
+
+      logBillingEvent('local_entitlement_updated', {
+        source: 'revenuecat-customer-info',
+        ...getBillingStateSnapshot({
+          ...state,
+          ...nextState,
+        }),
+      });
+
+      return nextState;
     }),
 
   setLoading: (isLoading) => set({ isLoading }),

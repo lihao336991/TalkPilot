@@ -7,11 +7,16 @@ import Purchases, {
 import RevenueCatUI from 'react-native-purchases-ui';
 
 import {
-  reconcileRevenueCatCustomer,
-  refreshProfileFromSession,
+    reconcileRevenueCatCustomer,
+    refreshProfileFromSession,
 } from '@/shared/api/supabase';
+import { logBillingEvent } from '@/shared/billing/logger';
 import { syncSubscriptionTierToUsageLimit } from '@/shared/repositories/billingRepository';
-import { useAuthStore, type SubscriptionTier } from '@/shared/store/authStore';
+import {
+    getBillingStateSnapshot,
+    useAuthStore,
+    type SubscriptionTier,
+} from '@/shared/store/authStore';
 
 const PRO_ENTITLEMENT_ID = 'pro';
 const MAX_PROFILE_SYNC_ATTEMPTS = 6;
@@ -19,6 +24,25 @@ const PROFILE_SYNC_INTERVAL_MS = 1200;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isPurchaseCancelledError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    userCancelled?: boolean;
+    message?: string;
+  };
+
+  if (candidate.userCancelled) {
+    return true;
+  }
+
+  return typeof candidate.message === 'string'
+    ? candidate.message.toLowerCase().includes('cancel')
+    : false;
 }
 
 function isSupportedPlatform() {
@@ -69,12 +93,25 @@ export type BillingSyncSummary = {
   webhookSynced: boolean;
 };
 
+function getCustomerInfoSummary(customerInfo: CustomerInfo) {
+  return {
+    activeEntitlementIds: Object.keys(customerInfo.entitlements.active),
+    activeSubscriptions: [...customerInfo.activeSubscriptions],
+    latestExpirationDate: getProEntitlementExpiration(customerInfo),
+    hasActiveProEntitlement: hasActiveProEntitlement(customerInfo),
+  };
+}
+
 class RevenueCatService {
   private configuredAppUserId: string | null = null;
   private customerInfoListenerAttached = false;
 
   async configureForAuthenticatedUser(appUserId: string) {
     if (!isSupportedPlatform()) {
+      logBillingEvent('revenuecat_configure_skipped', {
+        reason: 'unsupported_platform',
+        platform: Platform.OS,
+      });
       return;
     }
 
@@ -85,11 +122,17 @@ class RevenueCatService {
       );
     }
 
+    logBillingEvent('revenuecat_configure_started', {
+      appUserId,
+      platform: Platform.OS,
+      alreadyConfiguredAppUserId: this.configuredAppUserId,
+    });
+
     const isConfigured = await Purchases.isConfigured();
 
     if (!isConfigured) {
       if (__DEV__) {
-        await Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+        await Purchases.setLogLevel(LOG_LEVEL.WARN);
       }
 
       Purchases.configure({
@@ -100,6 +143,12 @@ class RevenueCatService {
       this.attachCustomerInfoListener();
       const customerInfo = await this.refreshCustomerInfoState();
       await this.reconcileIfNeeded(customerInfo);
+      logBillingEvent('revenuecat_configure_completed', {
+        appUserId,
+        mode: 'initial_configure',
+        customerInfo: getCustomerInfoSummary(customerInfo),
+        ...getBillingStateSnapshot(useAuthStore.getState()),
+      });
       return;
     }
 
@@ -110,6 +159,12 @@ class RevenueCatService {
     if (this.configuredAppUserId === appUserId) {
       const customerInfo = await this.refreshCustomerInfoState();
       await this.reconcileIfNeeded(customerInfo);
+      logBillingEvent('revenuecat_configure_completed', {
+        appUserId,
+        mode: 'reuse_existing_user',
+        customerInfo: getCustomerInfoSummary(customerInfo),
+        ...getBillingStateSnapshot(useAuthStore.getState()),
+      });
       return;
     }
 
@@ -117,6 +172,12 @@ class RevenueCatService {
     this.configuredAppUserId = appUserId;
     const customerInfo = await this.refreshCustomerInfoState();
     await this.reconcileIfNeeded(customerInfo);
+    logBillingEvent('revenuecat_configure_completed', {
+      appUserId,
+      mode: 'login_switch_user',
+      customerInfo: getCustomerInfoSummary(customerInfo),
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
   }
 
   async getCurrentOffering() {
@@ -133,12 +194,51 @@ class RevenueCatService {
       throw new Error('RevenueCat purchase is only supported on iOS and Android.');
     }
 
-    const result = await Purchases.purchasePackage(selectedPackage);
-    const summary = await this.syncProfileAfterPurchase(result.customerInfo);
-    return {
-      customerInfo: result.customerInfo,
-      summary,
-    };
+    logBillingEvent('purchase_started', {
+      packageIdentifier: selectedPackage.identifier,
+      productIdentifier: selectedPackage.product.identifier,
+      priceString: selectedPackage.product.priceString,
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
+
+    try {
+      const result = await Purchases.purchasePackage(selectedPackage);
+      const summary = await this.syncProfileAfterPurchase(result.customerInfo);
+      logBillingEvent('purchase_succeeded', {
+        packageIdentifier: selectedPackage.identifier,
+        productIdentifier: selectedPackage.product.identifier,
+        summary,
+        customerInfo: getCustomerInfoSummary(result.customerInfo),
+        ...getBillingStateSnapshot(useAuthStore.getState()),
+      });
+      return {
+        customerInfo: result.customerInfo,
+        summary,
+      };
+    } catch (error) {
+      if (isPurchaseCancelledError(error)) {
+        logBillingEvent('purchase_cancelled', {
+          packageIdentifier: selectedPackage.identifier,
+          productIdentifier: selectedPackage.product.identifier,
+          ...getBillingStateSnapshot(useAuthStore.getState()),
+        });
+        throw error;
+      }
+      logBillingEvent(
+        'purchase_failed',
+        {
+          packageIdentifier: selectedPackage.identifier,
+          productIdentifier: selectedPackage.product.identifier,
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          ...getBillingStateSnapshot(useAuthStore.getState()),
+        },
+        'error',
+      );
+      throw error;
+    }
   }
 
   async presentPaywallIfNeeded() {
@@ -155,6 +255,11 @@ class RevenueCatService {
   async syncProfileAfterPurchase(customerInfo?: CustomerInfo): Promise<BillingSyncSummary> {
     const resolvedCustomerInfo = customerInfo ?? (await Purchases.getCustomerInfo());
     const hasUnlockedPro = this.applyCustomerInfoToStore(resolvedCustomerInfo);
+    logBillingEvent('post_purchase_sync_started', {
+      customerInfo: getCustomerInfoSummary(resolvedCustomerInfo),
+      hasUnlockedPro,
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
 
     if (hasUnlockedPro) {
       try {
@@ -171,6 +276,11 @@ class RevenueCatService {
         hasPaidAccess(authState.subscriptionTier) &&
         authState.subscriptionSyncState === 'synced'
       ) {
+        logBillingEvent('post_purchase_sync_completed', {
+          attempts: attempt + 1,
+          result: { unlocked: true, webhookSynced: true },
+          ...getBillingStateSnapshot(authState),
+        });
         return { unlocked: true, webhookSynced: true };
       }
 
@@ -181,10 +291,17 @@ class RevenueCatService {
       await sleep(PROFILE_SYNC_INTERVAL_MS);
     }
 
-    return {
+    const finalSummary = {
       unlocked: hasPaidAccess(useAuthStore.getState().subscriptionTier),
       webhookSynced: useAuthStore.getState().subscriptionSyncState === 'synced',
     };
+    logBillingEvent('post_purchase_sync_completed', {
+      attempts: MAX_PROFILE_SYNC_ATTEMPTS,
+      result: finalSummary,
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
+
+    return finalSummary;
   }
 
   async restorePurchases() {
@@ -192,12 +309,42 @@ class RevenueCatService {
       throw new Error('RevenueCat restore is only supported on iOS and Android.');
     }
 
-    const customerInfo = await Purchases.restorePurchases();
-    const summary = await this.syncProfileAfterPurchase(customerInfo);
-    return {
-      customerInfo,
-      summary,
-    };
+    logBillingEvent('restore_started', {
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
+
+    try {
+      const customerInfo = await Purchases.restorePurchases();
+      const summary = await this.syncProfileAfterPurchase(customerInfo);
+      logBillingEvent('restore_succeeded', {
+        summary,
+        customerInfo: getCustomerInfoSummary(customerInfo),
+        ...getBillingStateSnapshot(useAuthStore.getState()),
+      });
+      return {
+        customerInfo,
+        summary,
+      };
+    } catch (error) {
+      if (isPurchaseCancelledError(error)) {
+        logBillingEvent('restore_cancelled', {
+          ...getBillingStateSnapshot(useAuthStore.getState()),
+        });
+        throw error;
+      }
+      logBillingEvent(
+        'restore_failed',
+        {
+          error:
+            error instanceof Error
+              ? { name: error.name, message: error.message }
+              : String(error),
+          ...getBillingStateSnapshot(useAuthStore.getState()),
+        },
+        'error',
+      );
+      throw error;
+    }
   }
 
   private attachCustomerInfoListener() {
@@ -206,6 +353,9 @@ class RevenueCatService {
     }
 
     Purchases.addCustomerInfoUpdateListener((customerInfo) => {
+      logBillingEvent('customer_info_updated', {
+        customerInfo: getCustomerInfoSummary(customerInfo),
+      });
       const hasPro = this.applyCustomerInfoToStore(customerInfo);
       if (hasPro || useAuthStore.getState().subscriptionSyncState === 'syncing') {
         void this.reconcileIfNeeded(customerInfo);
@@ -226,6 +376,10 @@ class RevenueCatService {
       revenuecatAppUserId: this.configuredAppUserId,
     });
     syncSubscriptionTierToUsageLimit(useAuthStore.getState().subscriptionTier);
+    logBillingEvent('customer_info_applied_to_store', {
+      customerInfo: getCustomerInfoSummary(customerInfo),
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
 
     return hasPro;
   }
@@ -240,6 +394,12 @@ class RevenueCatService {
     const shouldReconcile =
       hasActiveProEntitlement(customerInfo) ||
       useAuthStore.getState().subscriptionSyncState === 'syncing';
+
+    logBillingEvent('reconcile_evaluated', {
+      shouldReconcile,
+      customerInfo: getCustomerInfoSummary(customerInfo),
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
 
     if (!shouldReconcile) {
       return;

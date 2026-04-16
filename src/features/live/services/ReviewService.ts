@@ -1,7 +1,13 @@
 import { useConversationStore } from '@/features/live/store/conversationStore';
+import { useAccessStore } from '@/features/live/store/accessStore';
 import { useDebugStore } from '@/features/live/store/debugStore';
 import { useReviewStore, type ReviewResult } from '@/features/live/store/reviewStore';
+import {
+  normalizeFeatureAccess,
+  toFeatureAccessError,
+} from '@/shared/billing/access';
 import { invokeEdgeFunction } from '@/shared/api/request';
+import type { FeatureAccessEnvelope } from '@/shared/billing/accessTypes';
 import { useAuthStore } from '@/shared/store/authStore';
 
 function getLlmMetaDetail(headers: Headers): string {
@@ -13,7 +19,7 @@ function getLlmMetaDetail(headers: Headers): string {
   return parts.join(' · ');
 }
 
-type ReviewApiResponse = {
+type ReviewApiResponse = FeatureAccessEnvelope & {
   overall_score?: 'green' | 'yellow' | 'red';
   issues?: ReviewResult['issues'];
   better_expression?: string | null;
@@ -44,6 +50,10 @@ export class ReviewService {
         accessToken,
         body: { sessionId, userUtterance, scene, turnId },
       });
+      const access = normalizeFeatureAccess(rawResult, 'review');
+      if (access) {
+        useAccessStore.getState().setFeatureAccess(access);
+      }
       const llmMeta = getLlmMetaDetail(headers);
       const result = mapReviewResponse(rawResult);
 
@@ -58,11 +68,16 @@ export class ReviewService {
       conversationStore.setTurnReview(turnId, result);
       store.setLoading(false);
     } catch (error) {
+      const accessError = toFeatureAccessError(error, 'review');
+      if (accessError) {
+        useAccessStore.getState().setFeatureAccess(accessError.access);
+      }
       console.error('[Review] Failed:', error);
       useDebugStore
         .getState()
         .failTurnLlm(turnId, error instanceof Error ? error.message : 'Review request failed');
       store.setLoading(false);
+      throw accessError ?? error;
     }
   }
 }

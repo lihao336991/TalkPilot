@@ -1,5 +1,6 @@
 import { getAppleSignInCredentials } from '@/shared/auth/providers/appleAuth';
 import { invokeEdgeFunction } from '@/shared/api/request';
+import { logBillingEvent } from '@/shared/billing/logger';
 import {
     clearGoogleSignInSession,
     configureGoogleSignIn,
@@ -12,6 +13,7 @@ import {
     type AuthMode,
     type AuthProviderName,
     type SubscriptionTier,
+    getBillingStateSnapshot,
     useAuthStore,
 } from '../store/authStore';
 
@@ -60,6 +62,10 @@ function normalizeSubscriptionStatus(status: string | null | undefined) {
 
 async function syncProfile(session: Session) {
   const displayName = getDisplayNameFromSession(session);
+  logBillingEvent('profile_sync_started', {
+    userId: session.user.id,
+    authMode: getAuthMode(session),
+  });
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
@@ -107,6 +113,10 @@ async function syncProfile(session: Session) {
     revenuecatAppUserId: refreshedProfile?.revenuecat_app_user_id ?? null,
   });
   syncSubscriptionTierToUsageLimit(subscriptionTier);
+  logBillingEvent('profile_sync_completed', {
+    userId: session.user.id,
+    ...getBillingStateSnapshot(useAuthStore.getState()),
+  });
 }
 
 function getDisplayNameFromSession(session: Session): string | null {
@@ -238,6 +248,9 @@ export async function getValidAccessToken(): Promise<string> {
 
 export async function refreshProfileFromSession() {
   const session = await recoverValidSession();
+  logBillingEvent('profile_refresh_requested', {
+    userId: session?.user.id ?? null,
+  });
   await applySession(session);
 }
 
@@ -245,24 +258,60 @@ export async function reconcileRevenueCatCustomer() {
   const session = await recoverValidSession();
 
   if (!session || session.user.is_anonymous) {
+    logBillingEvent('reconcile_skipped', {
+      reason: 'missing_or_anonymous_session',
+      userId: session?.user.id ?? null,
+    });
     return null;
   }
 
-  const { data } = await invokeEdgeFunction<{
-    ok: boolean;
-    status: string;
-    is_active: boolean;
-    entitlement_id: string;
-    product_id: string | null;
-    expires_at: string | null;
-  }>({
-    functionName: 'revenuecat-sync-customer',
-    accessToken: session.access_token,
-    body: {},
+  logBillingEvent('reconcile_requested', {
+    userId: session.user.id,
+    ...getBillingStateSnapshot(useAuthStore.getState()),
   });
 
-  await refreshProfileFromSession();
-  return data;
+  try {
+    const { data } = await invokeEdgeFunction<{
+      ok: boolean;
+      status: string;
+      is_active: boolean;
+      entitlement_id: string;
+      product_id: string | null;
+      expires_at: string | null;
+    }>({
+      functionName: 'revenuecat-sync-customer',
+      accessToken: session.access_token,
+      body: {},
+    });
+
+    logBillingEvent('reconcile_succeeded', {
+      userId: session.user.id,
+      response: data,
+    });
+    await refreshProfileFromSession();
+    logBillingEvent('reconcile_state_applied', {
+      userId: session.user.id,
+      ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
+    return data;
+  } catch (error) {
+    logBillingEvent(
+      'reconcile_failed',
+      {
+        userId: session.user.id,
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+              }
+            : String(error),
+        ...getBillingStateSnapshot(useAuthStore.getState()),
+      },
+      'error',
+    );
+    throw error;
+  }
 }
 
 async function signInWithIdTokenSession(args: {

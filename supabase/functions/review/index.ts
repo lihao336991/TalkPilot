@@ -1,5 +1,8 @@
+/// <reference path="../_shared/editor-shims.d.ts" />
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { JSON_HEADERS, mapFeatureAccessRow } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
     createLlmRuntime,
@@ -23,9 +26,22 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    return new Response(JSON.stringify({
+      error: "Unauthorized",
+      code: "auth_required",
+      access: {
+        feature: "review",
+        allowed: false,
+        reason: "auth_required",
+        tier: "unknown",
+        used: null,
+        remaining: null,
+        limit: null,
+        resetAt: null,
+      },
+    }), {
       status: 401,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -37,14 +53,9 @@ serve(async (req: Request) => {
   if (typeof sessionId !== "string" || typeof userUtterance !== "string") {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
-
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
 
   const words = userUtterance.trim().split(/\s+/);
   if (words.length < 4) {
@@ -56,10 +67,75 @@ serve(async (req: Request) => {
       }),
       {
         status: 200,
-        headers: responseHeaders,
+        headers: JSON_HEADERS,
       },
     );
   }
+
+  const { data: accessCheck, error: accessCheckError } = await supabase.rpc(
+    "check_feature_access",
+    {
+      p_user_id: user.id,
+      p_feature_key: "review",
+    },
+  );
+
+  if (accessCheckError) {
+    return new Response(JSON.stringify({ error: "Review access check failed" }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const accessBeforeConsume = mapFeatureAccessRow("review", accessCheck?.[0]);
+  if (!accessBeforeConsume.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Review daily limit reached",
+        code: "feature_limit_reached",
+        access: accessBeforeConsume,
+      }),
+      {
+        status: 429,
+        headers: JSON_HEADERS,
+      },
+    );
+  }
+
+  const { data: consumedAccess, error: consumeError } = await supabase.rpc(
+    "consume_feature_access",
+    {
+      p_user_id: user.id,
+      p_feature_key: "review",
+    },
+  );
+
+  if (consumeError) {
+    return new Response(JSON.stringify({ error: "Review access consume failed" }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const access = mapFeatureAccessRow("review", consumedAccess?.[0]);
+  if (!access.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Review daily limit reached",
+        code: "feature_limit_reached",
+        access,
+      }),
+      {
+        status: 429,
+        headers: JSON_HEADERS,
+      },
+    );
+  }
+
+  const llm = createLlmRuntime();
+  const responseHeaders = buildLlmResponseHeaders(llm, {
+    "Content-Type": "application/json",
+  });
 
   const { data: turns } = await supabase
     .from("turns")
@@ -156,7 +232,7 @@ User's utterance to review: "${userUtterance}"`;
       })
       .then();
 
-    return new Response(JSON.stringify({ overall_score, issues, better_expression, praise }), {
+    return new Response(JSON.stringify({ overall_score, issues, better_expression, praise, access }), {
       status: 200,
       headers: responseHeaders,
     });
