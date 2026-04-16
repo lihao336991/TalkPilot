@@ -19,7 +19,9 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "NSSpeechRecognitionUsageDescription": "TalkPilot uses speech recognition to transcribe conversations.",
         "NSLocalNetworkUsageDescription": "允许应用访问局域网内的开发服务器",
         "NSMicrophoneUsageDescription": "TalkPilot uses your microphone to provide real-time English conversation assistance.",
@@ -38,9 +40,14 @@
             "192.168.31.61": {
               "NSIncludesSubdomains": true,
               "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "192.168.31.95": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
             }
           }
-        }
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -51,7 +58,9 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.talkpilot.app",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -83,7 +92,10 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "dcd57691-fa34-47f5-812b-a4267526e963"
+      }
     }
   }
 }
