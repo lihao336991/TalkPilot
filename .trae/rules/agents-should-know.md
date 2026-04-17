@@ -120,6 +120,7 @@
 - `subscriptionSyncState === syncing` 时，文案要明确表达“购买已确认、账号仍在同步中”，避免让用户误以为会员未生效
 - `Restore Purchases` 成功、失败、未找到可恢复订阅，都应提供明确反馈
 - 从 `Customer Center` 返回 `Paywall` 或 `Profile` 后，应主动刷新一次会员状态，减少“明明买了却感觉没生效”的困惑
+- 上架前 `Terms` / `Privacy` / 订阅披露 / App Review 说明材料统一收敛到 `data/legal/legal.json`，RN 页面读取该数据源，静态托管 HTML 通过 `npm run legal:build` 生成到 `dist/legal/`
 
 ### 实时转写约定
 

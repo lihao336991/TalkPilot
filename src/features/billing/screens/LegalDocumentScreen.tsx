@@ -12,10 +12,12 @@ type LegalDocumentScreenProps = {
   title: string;
   subtitle: string;
   sections: LegalSection[];
+  effectiveDate?: string;
+  contactEmail?: string;
 };
 
 export function LegalDocumentScreen(props: LegalDocumentScreenProps) {
-  const { title, subtitle, sections } = props;
+  const { title, subtitle, sections, effectiveDate, contactEmail } = props;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -60,9 +62,18 @@ export function LegalDocumentScreen(props: LegalDocumentScreenProps) {
           ]}
           showsVerticalScrollIndicator={false}>
           <View style={styles.noticeCard}>
-            <Text style={styles.noticeText}>
-              Placeholder copy is provided here so the subscription flow can link to a real in-app Terms / Privacy page. Replace this text with your final legal content before release.
-            </Text>
+            {effectiveDate ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Effective date</Text>
+                <Text style={styles.metaValue}>{effectiveDate}</Text>
+              </View>
+            ) : null}
+            {contactEmail ? (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Contact</Text>
+                <Text style={styles.metaValue}>{contactEmail}</Text>
+              </View>
+            ) : null}
           </View>
 
           {sections.map((section) => (
@@ -119,7 +130,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(210,244,92,0.2)',
   },
-  noticeText: {
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  metaLabel: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: 'rgba(244,255,208,0.76)',
+  },
+  metaValue: {
+    flex: 1,
+    textAlign: 'right',
     fontSize: 13,
     lineHeight: 21,
     color: '#F4FFD0',

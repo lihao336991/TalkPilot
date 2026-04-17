@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "app_name": "TalkPilot",
+    "publisher_name": "桃李不言",
+    "contact_email": "lihao15510558202@gmail.com",
+    "effective_date": "2026-04-17",
+    "hosting": {
+      "terms_url": "https://lihao336991.github.io/TalkPilotPages/legal/terms.html",
+      "privacy_url": "https://lihao336991.github.io/TalkPilotPages/legal/privacy.html",
+      "repo_url": "https://github.com/lihao336991/TalkPilotPages.git",
+      "repo_local_path": "external/TalkPilotPages",
+      "publish_subdirectory": "legal"
+    }
+  },
+  "subscription_disclosure": {
+    "title": "Subscription terms",
+    "bullets": [
+      "Payment will be charged to your Apple ID account at confirmation of purchase.",
+      "Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period.",
+      "Your account will be charged for renewal within 24 hours prior to the end of the current period.",
+      "You can manage or cancel your subscription in your App Store account settings after purchase.",
+      "If you offer a free trial: any unused portion of a free trial period, if offered, will be forfeited when you purchase a subscription."
+    ],
+    "restore_copy": "If you previously purchased a subscription on this Apple ID, tap Restore Purchases to restore access."
+  },
+  "app_review": {
+    "title": "App Review Notes",
+    "summary": "TalkPilot offers auto-renewable subscriptions for TalkPilot Pro. The paywall is available from Profile > Upgrade to Pro and may also appear when a signed-in user reaches free usage limits.",
+    "items": [
+      "The app uses auto-renewable subscriptions only. Pricing is shown by the App Store purchase sheet and may vary by region.",
+      "Users can review Terms of Service and Privacy Policy in-app from the paywall and through hosted pages at /legal/terms.html and /legal/privacy.html.",
+      "Restore Purchases is available on the paywall for users who previously subscribed with the same Apple ID.",
+      "Subscription management is available through the in-app customer center and through Apple account subscription settings.",
+      "A signed-in account is required before purchase so subscription access can sync correctly across sessions."
+    ]
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "subtitle": "Please read these Terms of Service carefully before using TalkPilot.",
+    "sections": [
+      {
+        "title": "1. About TalkPilot",
+        "body": "TalkPilot is a language practice app that helps you improve spoken English with real-time features and AI assistance. These Terms govern your access to and use of the app and related services."
+      },
+      {
+        "title": "2. Accounts",
+        "body": "Some features require you to sign in. You are responsible for the accuracy of the information you provide and for maintaining the security of your account on your device."
+      },
+      {
+        "title": "3. Subscriptions",
+        "body": "TalkPilot may offer a paid subscription that unlocks premium features. Subscription payments and renewals are processed by the App Store. Prices and availability may vary by region and are shown in the purchase flow."
+      },
+      {
+        "title": "4. Billing, renewal, and cancellation",
+        "body": "Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your App Store account settings. Refunds are handled according to App Store policies."
+      },
+      {
+        "title": "5. Restore purchases",
+        "body": "If you reinstall the app or switch devices, you may restore eligible purchases tied to your Apple ID by using the Restore Purchases option in the app. Restoration requires an internet connection and may take time to sync."
+      },
+      {
+        "title": "6. Acceptable use",
+        "body": "You agree not to misuse the app, attempt to disrupt the service, reverse engineer the app, or access the service in an unauthorized way."
+      },
+      {
+        "title": "7. Contact",
+        "body": "If you have questions about these Terms or your subscription, contact us at: lihao15510558202@gmail.com"
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "subtitle": "This Privacy Policy explains how TalkPilot collects and uses information.",
+    "sections": [
+      {
+        "title": "1. Information we collect",
+        "body": "We collect account identifiers (such as a user ID), subscription status, and usage information needed to operate the app. We may also collect diagnostics to improve reliability."
+      },
+      {
+        "title": "2. How we use information",
+        "body": "We use information to authenticate users, provide core functionality, restore purchases, provide customer support, and improve the service."
+      },
+      {
+        "title": "3. Service providers",
+        "body": "We may use service providers to help run the app, such as the App Store for billing, RevenueCat for subscription management, and infrastructure providers for backend services. These providers process information on our behalf."
+      },
+      {
+        "title": "4. Data retention",
+        "body": "We retain information for as long as necessary to provide the service, comply with legal obligations, resolve disputes, and enforce agreements."
+      },
+      {
+        "title": "5. Your choices",
+        "body": "You can manage your subscription in your App Store account settings. You may also contact us for privacy-related requests at: lihao15510558202@gmail.com"
+      },
+      {
+        "title": "6. Contact",
+        "body": "For questions about this Privacy Policy, contact: lihao15510558202@gmail.com"
+      }
+    ]
+  }
+}

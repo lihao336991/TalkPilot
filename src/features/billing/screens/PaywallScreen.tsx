@@ -19,6 +19,7 @@ import type {
 } from "react-native-purchases";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { legalContent } from "../legal/legalContent";
 import {
   type BillingSyncSummary,
   revenueCatService,
@@ -646,10 +647,17 @@ export default function PaywallScreen() {
               </View>
 
               <View style={styles.policyCard}>
-                <Text style={styles.sectionTitle}>Terms & support</Text>
-                <Text style={styles.policyText}>
-                  Subscription renews automatically unless cancelled at least 24
-                  hours before the current period ends.
+                <Text style={styles.sectionTitle}>
+                  {legalContent.subscription_disclosure.title}
+                </Text>
+                {legalContent.subscription_disclosure.bullets.map((item) => (
+                  <View key={item} style={styles.policyBulletRow}>
+                    <View style={styles.policyBulletDot} />
+                    <Text style={styles.policyText}>{item}</Text>
+                  </View>
+                ))}
+                <Text style={styles.policyRestoreText}>
+                  {legalContent.subscription_disclosure.restore_copy}
                 </Text>
                 <View style={styles.inlineActions}>
                   <Pressable
@@ -999,10 +1007,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.05)",
     gap: 12,
   },
+  policyBulletRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  policyBulletDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    marginTop: 7,
+    backgroundColor: "rgba(210,244,92,0.88)",
+  },
   policyText: {
+    flex: 1,
     fontSize: 13,
     lineHeight: 21,
     color: "rgba(255,255,255,0.68)",
+  },
+  policyRestoreText: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: "#F4FFD0",
   },
   inlineActions: {
     flexDirection: "row",
