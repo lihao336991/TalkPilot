@@ -9,9 +9,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "rebuild:ios": "npx expo prebuild --clean && cd ios && pod install",
-    "auth:apple-secret": "node scripts/generate-apple-client-secret.mjs",
     "legal:build": "node scripts/generate-legal-html.mjs",
-    "legal:publish": "node scripts/publish-legal-html.mjs"
+    "legal:publish": "node scripts/publish-legal-html.mjs",
+    "eas:build": "bash scripts/eas-build.sh",
+    "auth:apple-secret": "node scripts/generate-apple-client-secret.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
