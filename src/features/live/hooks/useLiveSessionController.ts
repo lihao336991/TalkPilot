@@ -13,6 +13,7 @@ import { deepgramTokenService } from "@/features/live/services/DeepgramTokenServ
 import { reviewService } from "@/features/live/services/ReviewService";
 import { sessionManager } from "@/features/live/services/SessionManager";
 import type { StreamingConnectionStatus } from "@/features/live/services/StreamingWebSocketClient";
+import { useReviewStore } from "@/features/live/store/reviewStore";
 import { suggestionService } from "@/features/live/services/SuggestionService";
 import { useDebugStore } from "@/features/live/store/debugStore";
 import { useSuggestionStore } from "@/features/live/store/suggestionStore";
@@ -281,8 +282,20 @@ export function useLiveSessionController() {
     }
 
     const debug = useDebugStore.getState();
+    useConversationStore.getState().reset();
+    useSuggestionStore.getState().clear();
+    useReviewStore.getState().clear();
     useAccessStore.getState().clear();
     debug.reset();
+    sessionIdRef.current = null;
+    assistShouldResumeRef.current = false;
+    setDuration(0);
+    setForcedSpeaker(null);
+    setShowCalibration(false);
+    setAssistState("idle");
+    setAssistPreviewText("");
+    setAssistDraftText("");
+    setIsAssistDraftVisible(false);
     debug.startStep("mic", "🎤 Requesting mic permission...");
     console.log("[LiveSession] Requesting mic permission...");
     const granted = await AudioEngine.requestPermission();
@@ -642,7 +655,9 @@ export function useLiveSessionController() {
     deepgramService.disconnect();
     assistStreamingService.disconnect();
     endSession();
-    setListening(false);
+    useConversationStore.getState().reset();
+    useSuggestionStore.getState().clear();
+    useReviewStore.getState().clear();
 
     if (currentSessionId) {
       try {
@@ -657,11 +672,17 @@ export function useLiveSessionController() {
 
     setDuration(0);
     sessionIdRef.current = null;
+    assistShouldResumeRef.current = false;
     setForcedSpeaker(null);
+    setShowCalibration(false);
+    setAssistState("idle");
+    setAssistPreviewText("");
+    setAssistDraftText("");
+    setIsAssistDraftVisible(false);
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
     useDebugStore.getState().reset();
-  }, [duration, endSession, setForcedSpeaker, setListening]);
+  }, [duration, endSession, setForcedSpeaker]);
 
   const isIdle = status === "idle" || status === "ended";
   const isActive =

@@ -48,7 +48,7 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({ status: 'active' }),
 
   endSession: () =>
-    set({ status: 'ended' }),
+    set({ sessionId: null, status: 'ended', startedAt: null }),
 
   setScene: (preset, description) =>
     set({ scenePreset: preset, sceneDescription: description ?? '' }),
