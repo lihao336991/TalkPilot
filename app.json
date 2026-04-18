@@ -86,7 +86,14 @@
         }
       ],
       "./plugins/with-ios-voice-chat",
-      "@kesha-antonov/react-native-background-downloader"
+      "@kesha-antonov/react-native-background-downloader",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "lihao",
+          "project": "react-native"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

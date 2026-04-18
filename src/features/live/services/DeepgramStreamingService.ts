@@ -77,8 +77,6 @@ export class DeepgramStreamingService {
   private lastFinalText: string = '';
   private lastFinalTurnId: string = '';
   private currentUtteranceStartedAt: number | null = null;
-  private audioChunksSent = 0;
-  private firstChunkReported = false;
 
   private async commitBufferedTurn(
     speaker: Speaker,
@@ -134,19 +132,12 @@ export class DeepgramStreamingService {
     console.log('[Deepgram] Connecting WebSocket...');
     this.disconnect();
     this.onUtteranceEnd = onUtteranceEnd;
-    this.audioChunksSent = 0;
-    this.firstChunkReported = false;
-    const traceId = `dgws-${Date.now()}`;
-    const startedAt = Date.now();
 
     const url =
       'wss://api.deepgram.com/v1/listen?' +
       'model=nova-2&language=en&smart_format=true&interim_results=true' +
       '&utterance_end_ms=1500&vad_events=true&punctuate=true&diarize=true' +
       '&encoding=linear16&sample_rate=16000&channels=1';
-    // #region debug-point B:websocket-connect-attempt
-    void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'B', location: 'DeepgramStreamingService.ts:58', msg: '[DEBUG] opening deepgram websocket with authorization header auth', data: { traceId, tokenLength: token.length, tokenHasDot: token.includes('.'), tokenPrefix: token.slice(0, 12), authMode: 'authorization-header-bearer', url, hasEncodingLinear16: url.includes('encoding=linear16'), hasSampleRate16000: url.includes('sample_rate=16000') }, ts: Date.now(), traceId }) }).catch(() => {});
-    // #endregion
 
     return this.client.connect({
       url,
@@ -182,9 +173,6 @@ export class DeepgramStreamingService {
       closeBeforeOpenMessage: (event) =>
         `Deepgram WebSocket closed before ready (${event.code})`,
       onOpen: () => {
-        // #region debug-point A:websocket-open
-        void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'A', location: 'DeepgramStreamingService.ts:68', msg: '[DEBUG] deepgram websocket opened', data: { traceId, elapsedMs: Date.now() - startedAt }, ts: Date.now(), traceId }) }).catch(() => {});
-        // #endregion
         console.log('[Deepgram] WebSocket connected');
       },
       onMessage: async (event: MessageEvent) => {
@@ -197,28 +185,6 @@ export class DeepgramStreamingService {
           const words = data.channel?.alternatives[0]?.words ?? [];
           const speaker = this.determineSpeaker(words);
           const trimmedTranscript = transcript.trim();
-          // #region debug-point F:results-packet
-          void fetch('http://10.200.4.178:7777/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'deepgram-ws-401',
-              runId: 'post-fix',
-              hypothesisId: 'F',
-              location: 'DeepgramStreamingService.ts:88',
-              msg: '[DEBUG] deepgram results packet received',
-              data: {
-                isFinal,
-                transcriptLength: transcript.length,
-                hasWords: words.length > 0,
-                wordCount: words.length,
-                speaker,
-                transcriptPreview: transcript.slice(0, 40),
-              },
-              ts: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
 
           if (!isFinal && trimmedTranscript.length > 0 && this.currentUtteranceStartedAt === null) {
             this.currentUtteranceStartedAt = Date.now();
@@ -249,26 +215,6 @@ export class DeepgramStreamingService {
         }
 
         if (data.type === 'UtteranceEnd') {
-          // #region debug-point F:utterance-end
-          void fetch('http://10.200.4.178:7777/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sessionId: 'deepgram-ws-401',
-              runId: 'post-fix',
-              hypothesisId: 'F',
-              location: 'DeepgramStreamingService.ts:147',
-              msg: '[DEBUG] deepgram utterance end received',
-              data: {
-                hasLastFinalText: this.lastFinalText.length > 0,
-                lastFinalTurnId: this.lastFinalTurnId,
-                interimLength: store.currentInterimText.length,
-                interimSpeaker: store.currentInterimSpeaker,
-              },
-              ts: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           const interimText = store.currentInterimText.trim();
           const interimSpeaker = store.currentInterimSpeaker ?? this.lastFinalSpeaker;
 
@@ -319,17 +265,11 @@ export class DeepgramStreamingService {
         }
       },
       onError: (event: Event) => {
-        // #region debug-point B:websocket-error
-        void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'B', location: 'DeepgramStreamingService.ts:134', msg: '[DEBUG] deepgram websocket errored before usable stream', data: { traceId, elapsedMs: Date.now() - startedAt, eventType: event.type, readyState: this.client.getReadyState() }, ts: Date.now(), traceId }) }).catch(() => {});
-        // #endregion
         console.error('[Deepgram] WebSocket error:', event);
         const store = useConversationStore.getState();
         store.setListening(false);
       },
       onClose: (event: CloseEvent) => {
-        // #region debug-point B:websocket-close
-        void fetch('http://10.200.4.178:7777/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: 'deepgram-ws-401', runId: 'post-fix', hypothesisId: 'B', location: 'DeepgramStreamingService.ts:139', msg: '[DEBUG] deepgram websocket closed', data: { traceId, elapsedMs: Date.now() - startedAt, code: event.code, reason: event.reason, wasClean: event.wasClean }, ts: Date.now(), traceId }) }).catch(() => {});
-        // #endregion
         console.log('[Deepgram] WebSocket closed, code:', event.code, 'reason:', event.reason);
         const store = useConversationStore.getState();
         store.setListening(false);
@@ -344,41 +284,7 @@ export class DeepgramStreamingService {
       if (!didSend) {
         return;
       }
-      this.audioChunksSent += 1;
-      if (!this.firstChunkReported || this.audioChunksSent % 100 === 0) {
-        // #region debug-point E:audio-chunk-sent
-        void fetch('http://10.200.4.178:7777/event', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'deepgram-ws-401',
-            runId: 'post-fix',
-            hypothesisId: 'E',
-            location: 'DeepgramStreamingService.ts:142',
-            msg: '[DEBUG] audio chunk sent to websocket',
-            data: { audioChunksSent: this.audioChunksSent, bytes: (buffer as ArrayBuffer).byteLength },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        this.firstChunkReported = true;
-      }
     } catch (err) {
-      // #region debug-point E:audio-chunk-error
-      void fetch('http://10.200.4.178:7777/event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'deepgram-ws-401',
-          runId: 'post-fix',
-          hypothesisId: 'E',
-          location: 'DeepgramStreamingService.ts:156',
-          msg: '[DEBUG] audio chunk send failed',
-          data: { error: err instanceof Error ? err.message : String(err) },
-          ts: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       console.error('[Deepgram] Failed to send audio chunk:', err);
     }
   }
@@ -428,8 +334,6 @@ export class DeepgramStreamingService {
     this.lastFinalText = '';
     this.lastFinalTurnId = '';
     this.currentUtteranceStartedAt = null;
-    this.audioChunksSent = 0;
-    this.firstChunkReported = false;
   }
 
   async flushHeldForcedTurn(): Promise<void> {

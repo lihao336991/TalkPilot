@@ -1,70 +1,48 @@
-# P0 鉴权
 
-- 把业务权限真正收口到会员状态上
-- 也就是把“已经能付费”变成“付费真的有区别”
-- 你项目里最适合优先接的应该是：
-  - Live 的使用额度
-  - 高级 review / suggestion 能力
-  - 某些 Pro-only 入口的门禁提示
-- 原则：
-  - 本地 RevenueCat 用来立即提权
-  - Supabase 用来冷启动恢复和服务端业务判断
-  - 不要让功能门禁分散在很多页面里各自判断
+下面是一份**可按顺序逐项打勾**的修复清单（按「先阻塞上架 / 再体验与合规 / 最后工程卫生」排）。你可以复制到备忘录或 issue 里用。
 
-# P0 运维
+---
 
-- 把支付链路的可观测性补齐
-- 这一步很重要，不然后面一进 TestFlight 你会很痛苦
-- 最少要补这些日志/状态：
-  - 购买成功
-  - 恢复购买
-  - reconcile 成功/失败
-  - webhook 成功/失败
-  - 当前 subscriptionTier / subscriptionStatus / subscriptionSyncState
-- 你现在已经有请求 adaptor 了，接下来只需要把 billing 关键节点再统一打点即可
+### P0 — 上架与安全（建议优先）
 
-  # P1 体验
+1. **iOS ATS**：从生产配置里移除 `NSAllowsArbitraryLoads`、各局域网 IP 的 `NSExceptionDomains`；只保留业务必需的 HTTPS 域名例外（若有）。
+2. **权限文案**：统一语言（建议全英文上架包）；核对 `NSMicrophoneUsageDescription`、`NSSpeechRecognitionUsageDescription`；评估是否仍需要 `NSLocalNetworkUsageDescription`（若仅为调试可删）。
+3. **EAS / 环境变量**：在 EAS **production** 中配齐所有 `EXPO_PUBLIC_*`（Supabase、Google、RevenueCat iOS/Android 等）；确认正式包不会读到占位或本地 `.env` 遗漏。
+4. **Supabase 客户端**：避免生产环境静默使用 `placeholder` URL/anon key（构建失败或启动时显性校验/报错）。
+5. **RevenueCat**：App Store / Play 商品与 RC 配置一致；沙盒走通购买、恢复、过期；Android 若上架则补全 **Play 公钥/SDK key** 与结算。
+6. **隐私政策与条款**：确定**对外可访问**的隐私政策、用户协议 URL，并与商店后台填写一致。
+7. **账号与数据（视产品而定）**：若提供注册登录，核对 Apple **账号删除**要求是否在应用内或网页可完成；隐私政策中写明收集项（语音、账户等）。
 
-- 做一轮会员体验打磨
-- 建议优先补：
-  - 购买成功后的明确反馈
-  - syncing 时更友好的文案
-  - Restore 成功/失败的明确提示
-  - 已订阅用户进入 Paywall 时的更自然状态
-  - Customer Center 返回后的页面刷新
-- 这部分不复杂，但会显著减少“明明买了却感觉没生效”的困惑
+---
 
-  # P1 法务与配置
+### P1 — 审核与运营
 
-- 把上架前必须项补齐
-- 包括：
-  - Terms
-  - Privacy
-  - App Store 订阅文案
-  - 价格、续费说明、恢复购买文案
-  - App Review 需要的说明材料
-- 你现在页面壳已经有了，主要是把正式文案和链接替换进去
+8. **App Store Connect**：准备截图、描述、分级、出口合规；填写**审核备注**（如何开始一次 Live、如何测付费墙）。
+9. **审核账号**：若必须登录，提供**专用测试账号**与步骤说明。
+10. **后台模式说明**：`UIBackgroundModes: audio` 在审核备注中简短说明用途（实时口语练习）。
+11. **Google Play（若上 Android）**：数据安全问卷、内容分级、后台录音/麦克风说明与权限一致。
 
-  # P1 验证
+---
 
-- 做一套真机联调 checklist
-- 我建议你固定一份最小回归清单：
-  - Apple 登录
-  - 首购
-  - 恢复购买
-  - 退出登录再登录
-  - 杀进程重开
-  - 会员门禁是否变化
-  - Customer Center 是否正常
-  - Supabase profile 是否更新
-- 这份清单后面每次改 billing 都能复用
+### P2 — 稳定性与成本
 
-  # P2 商业化
+12. **崩溃监控**：接入 Sentry（或同类）并验证 release 符号表/source map。
+13. **服务端**：Edge Functions 鉴权、Supabase **RLS**、按用户/按日的 **用量与限流**（防刷 Deepgram/LLM）。
+14. **Webhook**：RevenueCat webhook 与 `revenuecat-sync` 等在生产环境密钥与 URL 正确、可重试。
 
-- 等闭环稳定后，再考虑“卖得更好”
-- 比如：
-  - 限额触发 paywall 的时机优化
-  - 首次登录后的升级引导
-  - 年付默认高亮
-  - Pro 权益解释更清楚
-  - 订阅转化埋点
+---
+
+### P3 — 代码与仓库卫生
+
+15. **开发入口**：确认 `app/(dev)/test` 等仅在 dev client 出现，production 路由不可达或已移除。
+16. **TypeScript / CI**：`legacy` 若不再参与主包，在 `tsconfig` 中 **exclude** 或拆仓库，避免 `tsc` 长期失败。
+17. **依赖与插件**：`expo-build-properties`、Google Sign-In、`background-downloader` 等与当前上架目标一致；删除未使用权限/插件。
+
+---
+
+### P4 — 文档与发版流程
+
+18. **发版 checklist**：在 README 或内部文档写清：EAS profile、`eas secret`、版本号策略、`appVersionSource: remote` 与商店版本对齐。
+19. **密钥轮换**：若 `.env.example` / 历史提交曾暴露真实 URL，评估轮换 anon key 与相关密钥。
+
+---

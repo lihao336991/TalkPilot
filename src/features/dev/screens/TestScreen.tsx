@@ -1,5 +1,7 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { Sentry } from '@/shared/monitoring/sentry';
 
 const checks = [
   'Expo Router entry is active.',
@@ -9,6 +11,30 @@ const checks = [
 ];
 
 export default function TestScreen() {
+  const [status, setStatus] = useState<string | null>(null);
+
+  const sendTestMessage = async () => {
+    const eventId = Sentry.captureMessage('TalkPilot manual Sentry test message', 'info');
+    await Sentry.flush();
+
+    setStatus(`Message sent: ${eventId}`);
+    Alert.alert('Sentry test sent', `Message event id:\n${eventId}`);
+  };
+
+  const sendTestException = async () => {
+    const error = new Error('TalkPilot manual Sentry test exception');
+    const eventId = Sentry.captureException(error, {
+      tags: {
+        source: 'dev-test-screen',
+      },
+    });
+
+    await Sentry.flush();
+
+    setStatus(`Exception sent: ${eventId}`);
+    Alert.alert('Sentry test sent', `Exception event id:\n${eventId}`);
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>TalkPilot Dev</Text>
@@ -21,6 +47,15 @@ export default function TestScreen() {
           </View>
         ))}
       </View>
+      <View style={styles.actions}>
+        <Pressable onPress={() => void sendTestMessage()} style={[styles.button, styles.secondaryButton]}>
+          <Text style={styles.secondaryButtonText}>Send test message</Text>
+        </Pressable>
+        <Pressable onPress={() => void sendTestException()} style={[styles.button, styles.primaryButton]}>
+          <Text style={styles.primaryButtonText}>Send test exception</Text>
+        </Pressable>
+      </View>
+      {status ? <Text style={styles.status}>{status}</Text> : null}
     </View>
   );
 }
@@ -51,6 +86,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(21,22,25,0.08)',
   },
+  actions: {
+    marginTop: 18,
+    gap: 12,
+  },
+  button: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    backgroundColor: '#151619',
+  },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(21,22,25,0.12)',
+  },
+  primaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#151619',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -69,5 +133,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#1A1A1A',
+  },
+  status: {
+    marginTop: 14,
+    fontSize: 13,
+    lineHeight: 18,
+    color: 'rgba(26,26,26,0.68)',
   },
 });

@@ -5,7 +5,7 @@ import {
     ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useNavigationContainerRef } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
@@ -14,6 +14,10 @@ import "../global.css";
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
+import {
+  Sentry,
+  sentryNavigationIntegration,
+} from "@/shared/monitoring/sentry";
 import { useAuthStore } from "@/shared/store/authStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -25,7 +29,7 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     ...FontAwesome.font,
@@ -76,6 +80,20 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const authMode = useAuthStore((state) => state.authMode);
   const userId = useAuthStore((state) => state.userId);
+  const navigationRef = useNavigationContainerRef();
+
+  useEffect(() => {
+    sentryNavigationIntegration.registerNavigationContainer(navigationRef);
+  }, [navigationRef]);
+
+  useEffect(() => {
+    if (authMode === "authenticated" && userId) {
+      Sentry.setUser({ id: userId });
+      return;
+    }
+
+    Sentry.setUser(null);
+  }, [authMode, userId]);
 
   useEffect(() => {
     if (authMode !== "authenticated" || !userId) {
@@ -143,3 +161,5 @@ function RootLayoutNav() {
     </ThemeProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
