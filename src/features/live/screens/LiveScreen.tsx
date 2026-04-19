@@ -70,17 +70,21 @@ export default function LiveScreen() {
       edges={["top"]}
     >
       {isIdle && (
-        <StartSessionCard
-          onStart={handleStartSession}
-          dailyMinutesUsed={dailyMinutesUsed}
-          dailyMinutesLimit={dailyMinutesLimit}
-          isLimitReached={isDailyLimitReached}
-          selectedScene={scenePreset}
-        />
+        <>
+          <DebugOverlay inline />
+          <StartSessionCard
+            onStart={handleStartSession}
+            dailyMinutesUsed={dailyMinutesUsed}
+            dailyMinutesLimit={dailyMinutesLimit}
+            isLimitReached={isDailyLimitReached}
+            selectedScene={scenePreset}
+          />
+        </>
       )}
 
       {isActive && (
         <View style={styles.activeContainer}>
+          <DebugOverlay inline />
           <View style={styles.wsStatusCard}>
             <View
               style={[
@@ -139,8 +143,6 @@ export default function LiveScreen() {
         onComplete={handleCalibrationComplete}
         onSkip={handleCalibrationSkip}
       />
-
-      <DebugOverlay />
 
       <Modal
         animationType="fade"

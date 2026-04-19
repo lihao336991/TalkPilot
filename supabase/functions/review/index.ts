@@ -2,7 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { JSON_HEADERS, mapFeatureAccessRow } from "../_shared/access.ts";
+import { JSON_HEADERS } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
     createLlmRuntime,
@@ -72,65 +72,18 @@ serve(async (req: Request) => {
     );
   }
 
-  const { data: accessCheck, error: accessCheckError } = await supabase.rpc(
-    "check_feature_access",
-    {
-      p_user_id: user.id,
-      p_feature_key: "review",
-    },
-  );
-
-  if (accessCheckError) {
-    return new Response(JSON.stringify({ error: "Review access check failed" }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
-  }
-
-  const accessBeforeConsume = mapFeatureAccessRow("review", accessCheck?.[0]);
-  if (!accessBeforeConsume.allowed) {
-    return new Response(
-      JSON.stringify({
-        error: "Review daily limit reached",
-        code: "feature_limit_reached",
-        access: accessBeforeConsume,
-      }),
-      {
-        status: 429,
-        headers: JSON_HEADERS,
-      },
-    );
-  }
-
-  const { data: consumedAccess, error: consumeError } = await supabase.rpc(
-    "consume_feature_access",
-    {
-      p_user_id: user.id,
-      p_feature_key: "review",
-    },
-  );
-
-  if (consumeError) {
-    return new Response(JSON.stringify({ error: "Review access consume failed" }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
-  }
-
-  const access = mapFeatureAccessRow("review", consumedAccess?.[0]);
-  if (!access.allowed) {
-    return new Response(
-      JSON.stringify({
-        error: "Review daily limit reached",
-        code: "feature_limit_reached",
-        access,
-      }),
-      {
-        status: 429,
-        headers: JSON_HEADERS,
-      },
-    );
-  }
+  // Temporary bypass: review quota enforcement is disabled until the
+  // feature-access RPC path is stabilized in production.
+  const access = {
+    feature: "review",
+    allowed: true,
+    reason: "bypassed",
+    tier: "unknown",
+    used: null,
+    remaining: null,
+    limit: null,
+    resetAt: null,
+  };
 
   const llm = createLlmRuntime();
   const responseHeaders = buildLlmResponseHeaders(llm, {

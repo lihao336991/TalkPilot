@@ -1,46 +1,14 @@
+import { translationService } from '@/features/live/services/TranslationService';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
-
-const ASSIST_TTS_MODE: 'local' | 'cloud' = 'local';
-const LOCAL_TTS_LANGUAGE = 'en-US';
-const SpeechModule = (() => {
-  try {
-    return require('expo-speech') as
-      | {
-          speak: (
-            text: string,
-            options?: {
-              language?: string;
-              pitch?: number;
-              rate?: number;
-              onDone?: () => void;
-              onStopped?: () => void;
-              onError?: (error: unknown) => void;
-            },
-          ) => void;
-          stop?: () => void;
-        }
-      | null;
-  } catch {
-    return null;
-  }
-})();
 
 export type AssistReplyResult = {
   sourceText: string;
   englishReply: string;
   hint: string | null;
-  audioBase64: string | null;
-  audioMimeType: string | null;
-  ttsMode: 'local' | 'cloud';
 };
 
 class AssistReplyService {
-  private sound: Audio.Sound | null = null;
-  private outputFileUri = `${FileSystem.cacheDirectory ?? ''}assist-reply.mp3`;
-
   async translateTranscript(
     transcript: string,
     sceneHint: string,
@@ -50,115 +18,46 @@ class AssistReplyService {
       throw new Error('Assist transcript is empty');
     }
 
-    const shouldUseCloudTts = ASSIST_TTS_MODE === 'cloud' || !SpeechModule?.speak;
     const accessToken = await getValidAccessToken();
-
-    const { data: payload } = await invokeEdgeFunction<{
+    const { data } = await invokeEdgeFunction<{
       source_text?: string;
-      english_reply?: string;
+      translated_text?: string;
+      english_reply?: string | null;
       hint?: string | null;
-      audio_base64?: string | null;
-      audio_mime_type?: string | null;
     }>({
       functionName: 'assist-reply',
       accessToken,
       body: {
         transcript: sourceText,
         scene_hint: sceneHint,
-        tts_mode: shouldUseCloudTts ? 'cloud' : 'none',
+        direction: 'to_en',
+        target_language: 'en',
+        tts_mode: 'none',
       },
     });
 
+    const englishReply =
+      data.translated_text?.trim() || data.english_reply?.trim() || '';
+    if (!englishReply) {
+      throw new Error('Failed to generate English reply');
+    }
+
     return {
-      sourceText: payload.source_text ?? sourceText,
-      englishReply: payload.english_reply ?? '',
-      hint: payload.hint ?? null,
-      audioBase64: payload.audio_base64 ?? null,
-      audioMimeType: payload.audio_mime_type ?? null,
-      ttsMode: shouldUseCloudTts ? 'cloud' : 'local',
+      sourceText: data.source_text?.trim() || sourceText,
+      englishReply,
+      hint: data.hint ?? null,
     };
   }
 
   async playReply(result: AssistReplyResult): Promise<void> {
-    if (ASSIST_TTS_MODE === 'local' && SpeechModule?.speak) {
-      await this.stopPlayback();
-
-      try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          playThroughEarpieceAndroid: false,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-          shouldDuckAndroid: true,
-        });
-      } catch (e) {
-        console.warn('[AssistReply] Failed to set audio mode for TTS:', e);
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        SpeechModule.speak(result.englishReply, {
-          language: LOCAL_TTS_LANGUAGE,
-          rate: 0.98,
-          pitch: 1,
-          onDone: resolve,
-          onStopped: resolve,
-          onError: reject,
-        });
-      });
+    if (!result.englishReply.trim()) {
       return;
     }
-
-    if (!result.audioBase64 || !this.outputFileUri) {
-      return;
-    }
-
-    await this.stopPlayback();
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-      playThroughEarpieceAndroid: false,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      shouldDuckAndroid: true,
-    });
-
-    await FileSystem.writeAsStringAsync(this.outputFileUri, result.audioBase64, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    const { sound } = await Audio.Sound.createAsync({ uri: this.outputFileUri }, { shouldPlay: true });
-    this.sound = sound;
-
-    await new Promise<void>((resolve) => {
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (!status.isLoaded) {
-          return;
-        }
-
-        if (status.didJustFinish) {
-          resolve();
-        }
-      });
-    });
+    await translationService.speakEnglish(result.englishReply);
   }
 
   async stopPlayback(): Promise<void> {
-    try {
-      SpeechModule?.stop?.();
-    } catch {}
-
-    if (!this.sound) {
-      return;
-    }
-
-    const sound = this.sound;
-    this.sound = null;
-    try {
-      await sound.stopAsync();
-    } catch {}
-    await sound.unloadAsync();
+    await translationService.stopPlayback();
   }
 }
 

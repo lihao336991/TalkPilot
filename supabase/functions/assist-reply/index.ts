@@ -7,6 +7,8 @@ import {
   withLlmDefaults,
 } from "../_shared/llm.ts";
 
+type TranslationDirection = "to_en" | "to_native";
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
@@ -18,6 +20,73 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   }
 
   return btoa(binary);
+}
+
+function normalizeDirection(raw: unknown): TranslationDirection {
+  return raw === "to_native" ? "to_native" : "to_en";
+}
+
+function languageDisplayName(tag: string): string {
+  const primary = tag.split("-")[0].toLowerCase();
+  const map: Record<string, string> = {
+    zh: "Chinese (Simplified)",
+    ja: "Japanese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    ru: "Russian",
+    nl: "Dutch",
+    hi: "Hindi",
+    id: "Indonesian",
+    tr: "Turkish",
+    pl: "Polish",
+    sv: "Swedish",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+    uk: "Ukrainian",
+    th: "Thai",
+    vi: "Vietnamese",
+    ar: "Arabic",
+    en: "English",
+  };
+  return map[primary] ?? tag;
+}
+
+function buildPrompt(
+  direction: TranslationDirection,
+  sourceText: string,
+  sceneHint: string,
+  targetLanguageTag: string,
+) {
+  if (direction === "to_en") {
+    return [
+      {
+        role: "system" as const,
+        content:
+          "You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken English that an English speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).",
+      },
+      {
+        role: "user" as const,
+        content: `Scene hint: ${sceneHint || "general conversation"}\nOriginal text: ${sourceText}`,
+      },
+    ];
+  }
+
+  const targetName = languageDisplayName(targetLanguageTag);
+  return [
+    {
+      role: "system" as const,
+      content: `You are a faithful real-time translator for a live conversation. Translate the English utterance into natural, spoken ${targetName}. Preserve the speaker's intent, tone, and register; do not add or omit meaning. Keep it concise. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).`,
+    },
+    {
+      role: "user" as const,
+      content: `Scene hint: ${sceneHint || "general conversation"}\nOriginal text: ${sourceText}`,
+    },
+  ];
 }
 
 serve(async (req: Request) => {
@@ -44,6 +113,8 @@ serve(async (req: Request) => {
   let transcript = "";
   let sceneHint = "";
   let ttsMode = "";
+  let direction: TranslationDirection = "to_en";
+  let targetLanguage = "zh-CN";
 
   try {
     const payload = await req.json();
@@ -65,6 +136,12 @@ serve(async (req: Request) => {
         : typeof payload.ttsMode === "string"
           ? payload.ttsMode
           : "none";
+    direction = normalizeDirection(payload.direction);
+    if (typeof payload.target_language === "string" && payload.target_language.trim()) {
+      targetLanguage = payload.target_language.trim();
+    } else if (typeof payload.targetLanguage === "string" && payload.targetLanguage.trim()) {
+      targetLanguage = payload.targetLanguage.trim();
+    }
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
       status: 400,
@@ -86,41 +163,41 @@ serve(async (req: Request) => {
     "Content-Type": "application/json",
   });
 
-  const translationPrompt = [
-    {
-      role: "system" as const,
-      content:
-        "You are an English speaking helper for a live conversation. Convert the user's non-English intent into one short, natural English reply they can say immediately. Keep it simple, spoken, and concise. Output valid JSON only with keys english_reply and hint.",
-    },
-    {
-      role: "user" as const,
-      content: `Scene hint: ${sceneHint || "general conversation"}\nOriginal text: ${sourceText}`,
-    },
-  ];
+  const translationPrompt = buildPrompt(
+    direction,
+    sourceText,
+    sceneHint,
+    targetLanguage,
+  );
 
   const translationCompletion = await llm.client.chat.completions.create(
     withLlmDefaults(llm, {
       messages: translationPrompt,
-      max_tokens: 140,
-      temperature: 0.4,
+      max_tokens: 200,
+      temperature: 0.3,
       response_format: { type: "json_object" },
     }),
   );
 
   const translationRaw = translationCompletion.choices[0]?.message?.content ?? "{}";
-  let englishReply = "";
+  let translatedText = "";
   let hint = "";
   try {
     const parsed = JSON.parse(translationRaw);
-    englishReply = typeof parsed.english_reply === "string" ? parsed.english_reply.trim() : "";
+    translatedText =
+      typeof parsed.translated_text === "string"
+        ? parsed.translated_text.trim()
+        : typeof parsed.english_reply === "string"
+          ? parsed.english_reply.trim()
+          : "";
     hint = typeof parsed.hint === "string" ? parsed.hint.trim() : "";
   } catch {
-    englishReply = translationRaw.trim();
+    translatedText = translationRaw.trim();
   }
 
-  if (!englishReply) {
+  if (!translatedText) {
     return new Response(
-      JSON.stringify({ error: "Failed to generate English reply" }),
+      JSON.stringify({ error: "Failed to generate translation" }),
       { status: 502, headers: responseHeaders },
     );
   }
@@ -128,7 +205,7 @@ serve(async (req: Request) => {
   let audioBase64: string | null = null;
   let audioMimeType: string | null = null;
 
-  if (ttsMode === "cloud") {
+  if (ttsMode === "cloud" && direction === "to_en") {
     const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY");
     if (!deepgramApiKey) {
       return new Response(
@@ -145,7 +222,7 @@ serve(async (req: Request) => {
           Authorization: `Token ${deepgramApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: englishReply }),
+        body: JSON.stringify({ text: translatedText }),
       },
     );
 
@@ -169,7 +246,11 @@ serve(async (req: Request) => {
   return new Response(
     JSON.stringify({
       source_text: sourceText,
-      english_reply: englishReply,
+      direction,
+      target_language: direction === "to_en" ? "en" : targetLanguage,
+      translated_text: translatedText,
+      // Back-compat: old clients expected `english_reply` for to_en translation.
+      english_reply: direction === "to_en" ? translatedText : null,
       hint: hint || null,
       audio_base64: audioBase64,
       audio_mime_type: audioMimeType,

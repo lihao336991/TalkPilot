@@ -12,7 +12,7 @@ import Animated, {
 
 type SpeakerCalibrationProps = {
   visible: boolean;
-  onComplete: (speakerId: number) => void;
+  onComplete: () => void;
   onSkip: () => void;
 };
 
@@ -46,9 +46,9 @@ export function SpeakerCalibration({ visible, onComplete, onSkip }: SpeakerCalib
             <Feather name="mic" size={24} color="#FFFFFF" />
           </View>
 
-          <Text style={styles.title}>Speaker Calibration</Text>
+          <Text style={styles.title}>Voice Detection</Text>
           <Text style={styles.instruction}>
-            Say "Hello, this is me" so we can identify your voice during the conversation.
+            Please speak first when the session starts — the system will automatically recognize your voice from the first sentence.
           </Text>
 
           <View style={styles.waveContainer}>
@@ -58,15 +58,15 @@ export function SpeakerCalibration({ visible, onComplete, onSkip }: SpeakerCalib
           </View>
 
           <View style={styles.actions}>
-            <Pressable style={styles.skipButton} onPress={onSkip} accessibilityLabel="Skip calibration">
+            <Pressable style={styles.skipButton} onPress={onSkip} accessibilityLabel="Skip voice detection">
               <Text style={styles.skipText}>Skip</Text>
             </Pressable>
             <Pressable
               style={styles.doneButton}
-              onPress={() => onComplete(0)}
-              accessibilityLabel="Done calibration"
+              onPress={() => onComplete()}
+              accessibilityLabel="Start session"
             >
-              <Text style={styles.doneText}>Done</Text>
+              <Text style={styles.doneText}>Got it</Text>
             </Pressable>
           </View>
         </View>

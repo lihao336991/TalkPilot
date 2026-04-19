@@ -42,6 +42,21 @@ function getTraceStatus(trace: DebugTurnTrace): 'running' | 'done' | 'error' {
   return 'running';
 }
 
+function getCollapsedStatus(
+  latestStep: ReturnType<typeof useDebugStore.getState>['steps'][number] | undefined,
+  latestTrace: DebugTurnTrace | undefined,
+): 'running' | 'done' | 'error' {
+  if (latestStep) {
+    return latestStep.status;
+  }
+
+  if (latestTrace) {
+    return getTraceStatus(latestTrace);
+  }
+
+  return 'running';
+}
+
 function TraceCard({ trace }: { trace: DebugTurnTrace }) {
   const asrLatency =
     trace.asrFinalAt !== undefined
@@ -121,13 +136,18 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
   );
 }
 
-function DebugOverlayContent() {
+type DebugPanelProps = {
+  inline?: boolean;
+};
+
+function DebugOverlayContent({ inline = false }: DebugPanelProps) {
   const steps = useDebugStore((s) => s.steps);
   const turnTraces = useDebugStore((s) => s.turnTraces);
   const [collapsed, setCollapsed] = React.useState(false);
   const insets = useSafeAreaInsets();
+  const hasDebugData = steps.length > 0 || turnTraces.length > 0;
 
-  if (steps.length === 0 && turnTraces.length === 0) return null;
+  if (!inline && !hasDebugData) return null;
 
   const latestStep = steps[steps.length - 1];
   const latestTrace = turnTraces[turnTraces.length - 1];
@@ -135,11 +155,17 @@ function DebugOverlayContent() {
   if (collapsed) {
     return (
       <Pressable
-        style={[styles.collapsedPill, { top: Math.max(8, insets.top + 8) }]}
+        style={
+          inline
+            ? styles.inlineCollapsedPill
+            : [styles.collapsedPill, { top: Math.max(8, insets.top + 8) }]
+        }
         onPress={() => setCollapsed(false)}
       >
-        <StatusIcon status={latestStep ? latestStep.status : getTraceStatus(latestTrace!)} />
-        <Text style={styles.collapsedTitle}>主流程调试</Text>
+        <StatusIcon status={getCollapsedStatus(latestStep, latestTrace)} />
+        <Text style={styles.collapsedTitle}>
+          {inline ? "Live 调试" : "主流程调试"}
+        </Text>
         <Text style={styles.collapsedLabel} numberOfLines={1}>
           {buildCollapsedLabel(latestStep, latestTrace)}
         </Text>
@@ -149,19 +175,47 @@ function DebugOverlayContent() {
   }
 
   return (
-    <View style={[styles.container, { top: insets.top }]}>
+    <View
+      style={[
+        inline ? styles.inlineContainer : styles.container,
+        !inline && { top: insets.top },
+      ]}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>主流程调试</Text>
-        <Pressable
-          onPress={() => setCollapsed(true)}
-          accessibilityRole="button"
-          accessibilityLabel="隐藏调试面板"
-          hitSlop={16}
-        >
-          <Text style={styles.headerAction}>隐藏</Text>
-        </Pressable>
+        {!inline ? (
+          <Pressable
+            onPress={() => setCollapsed(true)}
+            accessibilityRole="button"
+            accessibilityLabel="隐藏调试面板"
+            hitSlop={16}
+          >
+            <Text style={styles.headerAction}>隐藏</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.inlineHeaderRight}>
+            <Text style={styles.inlineHint}>Live 页面实时展示</Text>
+            <Pressable
+              onPress={() => setCollapsed(true)}
+              accessibilityRole="button"
+              accessibilityLabel="收起调试面板"
+              hitSlop={16}
+            >
+              <Text style={styles.headerAction}>收起</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
       <ScrollView style={styles.scroll} nestedScrollEnabled>
+        {!hasDebugData && inline ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>等待连接与转写链路数据</Text>
+            <Text style={styles.emptyBody}>
+              进入 Live 页后会先预建主 WS，开始对话后这里会继续显示 ASR、LLM 和 assist 的状态。
+            </Text>
+          </View>
+        ) : null}
+
         {steps.length > 0 ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>主流程</Text>
@@ -216,9 +270,9 @@ function DebugOverlayContent() {
   );
 }
 
-export function DebugOverlay() {
+export function DebugOverlay(props: DebugPanelProps) {
   if (!__DEV__) return null;
-  return <DebugOverlayContent />;
+  return <DebugOverlayContent {...props} />;
 }
 
 const styles = StyleSheet.create({
@@ -235,12 +289,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  inlineContainer: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    maxHeight: 320,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   collapsedPill: {
     position: 'absolute',
     top: 8,
     right: 12,
     zIndex: 9999,
     maxWidth: 240,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  inlineCollapsedPill: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -279,6 +355,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#60A5FA',
+  },
+  inlineHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.58)',
+  },
+  inlineHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyState: {
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  emptyTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.92)',
+  },
+  emptyBody: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 17,
+    color: 'rgba(255,255,255,0.62)',
   },
   scroll: {
     flexGrow: 0,

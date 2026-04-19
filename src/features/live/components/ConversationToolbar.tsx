@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
-    PressAndSlideAction,
-    PressAndSlideButton,
+  PressAndSlideAction,
+  PressAndSlideButton,
 } from "./PressAndSlideButton";
 
 type ConversationToolbarProps = {
@@ -93,7 +93,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    position: "relative",
     paddingHorizontal: 24,
     paddingTop: 18,
     paddingBottom: 20,
@@ -110,7 +109,6 @@ const styles = StyleSheet.create({
       width: 0,
       height: 8,
     },
-    zIndex: 1,
   },
   sideSlot: {
     width: 48,
@@ -120,8 +118,8 @@ const styles = StyleSheet.create({
   centerColumn: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
     flex: 1,
+    gap: 12,
   },
   timerWrap: {
     alignItems: "center",
@@ -129,14 +127,12 @@ const styles = StyleSheet.create({
   },
   button: {
     padding: 8,
-    zIndex: 1,
   },
   timer: {
     fontSize: 18,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
     color: "#1A1A1A",
-    zIndex: 1,
   },
   timerHint: {
     fontSize: 12,

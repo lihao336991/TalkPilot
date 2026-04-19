@@ -1,15 +1,21 @@
 import ReviewDetailCard from "@/features/live/components/ReviewDetailCard";
 import ReviewIndicator from "@/features/live/components/ReviewIndicator";
 import type { ReviewResult } from "@/features/live/store/reviewStore";
+import type {
+  TranslationDirection,
+  TranslationStatus,
+} from "@/features/live/store/conversationStore";
+import { translationService } from "@/features/live/services/TranslationService";
+import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
-    Animated,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 const GRADIENTS = {
@@ -27,6 +33,9 @@ type TranscriptBubbleProps = {
   showReviewIndicator?: boolean;
   isAssist?: boolean;
   assistSourceText?: string;
+  translation?: string;
+  translationStatus?: TranslationStatus;
+  translationDirection?: TranslationDirection;
 };
 
 export function TranscriptBubble({
@@ -38,16 +47,30 @@ export function TranscriptBubble({
   showReviewIndicator = false,
   isAssist = false,
   assistSourceText,
+  translation,
+  translationStatus,
+  translationDirection,
 }: TranscriptBubbleProps) {
   const isSelf = speaker === "self";
   const opacity = React.useRef(new Animated.Value(isFinal ? 1 : 0.6)).current;
   const [detailVisible, setDetailVisible] = React.useState(false);
+  const [speaking, setSpeaking] = React.useState(false);
   const hasVisibleReviewIndicator =
     showReviewIndicator &&
     isSelf &&
     review !== undefined &&
     reviewScore !== undefined &&
     reviewScore !== "green";
+
+  const hasTranslation =
+    translationStatus === "loading" ||
+    translationStatus === "done" ||
+    translationStatus === "error";
+  const canPlayTranslation =
+    translationStatus === "done" &&
+    translationDirection === "to_en" &&
+    isSelf &&
+    !!translation;
 
   React.useEffect(() => {
     Animated.timing(opacity, {
@@ -56,6 +79,16 @@ export function TranscriptBubble({
       useNativeDriver: true,
     }).start();
   }, [isFinal, opacity]);
+
+  const handlePlayTranslation = React.useCallback(async () => {
+    if (!translation || !canPlayTranslation) return;
+    try {
+      setSpeaking(true);
+      await translationService.speakEnglish(translation);
+    } finally {
+      setSpeaking(false);
+    }
+  }, [translation, canPlayTranslation]);
 
   return (
     <View style={[styles.row, isSelf ? styles.rowSelf : styles.rowOther]}>
@@ -71,9 +104,7 @@ export function TranscriptBubble({
           style={[
             styles.bubble,
             isSelf ? styles.bubbleSelf : styles.bubbleOther,
-            isSelf &&
-              reviewScore &&
-              !isAssist && { backgroundColor: "transparent" },
+            isSelf && reviewScore && !isAssist && { backgroundColor: "transparent" },
             isAssist && styles.bubbleAssist,
             { opacity },
           ]}
@@ -104,6 +135,41 @@ export function TranscriptBubble({
           >
             {text}
           </Animated.Text>
+
+          {hasTranslation && (
+            <View style={styles.translationContainer}>
+              <View style={styles.translationDivider} />
+              <View style={styles.translationRow}>
+                <View style={styles.translationTextWrap}>
+                  {translationStatus === "loading" && (
+                    <Text style={styles.translationLoading}>Translating...</Text>
+                  )}
+                  {translationStatus === "done" && translation && (
+                    <Text style={styles.translationText}>{translation}</Text>
+                  )}
+                  {translationStatus === "error" && (
+                    <Text style={styles.translationError}>
+                      Translation failed
+                    </Text>
+                  )}
+                </View>
+                {canPlayTranslation && (
+                  <Pressable
+                    onPress={handlePlayTranslation}
+                    style={styles.ttsButton}
+                    accessibilityLabel="Play English translation"
+                    hitSlop={8}
+                  >
+                    <Feather
+                      name={speaking ? "volume-2" : "volume-1"}
+                      size={16}
+                      color="#174EA6"
+                    />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          )}
         </Animated.View>
       </Pressable>
       {hasVisibleReviewIndicator && review && (
@@ -145,6 +211,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    overflow: "hidden",
   },
   bubbleSelf: {
     backgroundColor: "#F2F2F7",
@@ -157,7 +224,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(21,22,25,0.08)",
   },
   bubbleAssist: {
-    backgroundColor: "#E8F0FE", // A soft blue background for assist messages
+    backgroundColor: "#E8F0FE",
     borderWidth: 1,
     borderColor: "#D2E3FC",
   },
@@ -171,7 +238,7 @@ const styles = StyleSheet.create({
   },
   assistDivider: {
     height: 1,
-    backgroundColor: "rgba(26,26,26,0.08)",
+    backgroundColor: "rgba(21,22,25,0.08)",
     marginTop: 6,
     width: "100%",
   },
@@ -185,8 +252,49 @@ const styles = StyleSheet.create({
   textOther: {
     color: "#1A1A1A",
   },
-  textAssist: {
-    color: "#174EA6", // A slightly darker blue for the translated text to stand out
+  translationContainer: {
+    marginTop: 8,
+  },
+  translationDivider: {
+    height: 1,
+    backgroundColor: "rgba(21,22,25,0.08)",
+    marginBottom: 6,
+  },
+  translationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  translationTextWrap: {
+    flex: 1,
+  },
+  translationText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#174EA6",
     fontWeight: "500",
+  },
+  textAssist: {
+    color: "#174EA6",
+    fontWeight: "500",
+  },
+  translationLoading: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "rgba(21,22,25,0.5)",
+    fontStyle: "italic",
+  },
+  translationError: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#B42318",
+  },
+  ttsButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(23,78,166,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

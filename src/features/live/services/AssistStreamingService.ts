@@ -1,6 +1,9 @@
 import { StreamingWebSocketClient } from '@/features/live/services/StreamingWebSocketClient';
 import { useConversationStore } from '@/features/live/store/conversationStore';
-import { getDeepgramLanguage, getDeviceLanguageTag } from '@/shared/locale/deviceLanguage';
+import {
+  getDeepgramLanguage,
+  getDeviceLanguageTag,
+} from '@/shared/locale/deviceLanguage';
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binaryString = atob(base64);
@@ -83,7 +86,7 @@ export class AssistStreamingService {
     const url =
       `wss://api.deepgram.com/v1/listen?` +
       `model=nova-2&language=${deepgramLang}&smart_format=true&interim_results=true` +
-      `&utterance_end_ms=1200&vad_events=true&punctuate=true` +
+      `&utterance_end_ms=1000&vad_events=true&punctuate=true` +
       `&encoding=linear16&sample_rate=16000&channels=1`;
 
     return this.client.connect({
@@ -209,6 +212,11 @@ export class AssistStreamingService {
     this.disconnectClient();
   }
 
+  cancelCapture(): void {
+    this.resetCaptureState();
+    this.disconnectClient();
+  }
+
   private handleMessage(event: MessageEvent) {
     const capture = this.activeCapture;
     if (!capture) {
@@ -290,11 +298,6 @@ export class AssistStreamingService {
     }
   }
 
-  cancelCapture(): void {
-    this.resetCaptureState();
-    this.disconnectClient();
-  }
-
   private clearCaptureTimers(capture: AssistCaptureState) {
     if (capture.settleTimer) {
       clearTimeout(capture.settleTimer);
@@ -318,8 +321,7 @@ export class AssistStreamingService {
           return;
         }
 
-        // Cancelling assist capture must drop any server-side buffered transcript
-        // so the next press starts from a clean stream.
+        // Drop any server-side buffered transcript so the next press starts clean.
         try {
           socket.send('{"type":"Finalize"}');
         } catch {}

@@ -27,6 +27,7 @@ type DeepgramMessage = {
     alternatives: Array<{
       transcript: string;
       words?: DeepgramWord[];
+      languages?: string[];
     }>;
   };
   is_final?: boolean;
@@ -36,9 +37,11 @@ type FinalTurnPayload = {
   speaker: Speaker;
   text: string;
   turnId: string;
+  detectedLanguage?: string;
 };
 
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
+const MAIN_DEEPGRAM_LANGUAGE = 'en';
 
 function mergeTranscriptSegments(existing: string, incoming: string): string {
   const base = existing.trim();
@@ -76,12 +79,14 @@ export class DeepgramStreamingService {
   private lastFinalSpeaker: Speaker = 'other';
   private lastFinalText: string = '';
   private lastFinalTurnId: string = '';
+  private lastFinalLanguage: string | undefined = undefined;
   private currentUtteranceStartedAt: number | null = null;
 
   private async commitBufferedTurn(
     speaker: Speaker,
     text: string,
     turnId: string,
+    detectedLanguage?: string,
   ): Promise<void> {
     if (speaker === 'self') {
       useSuggestionStore.getState().clear();
@@ -95,6 +100,7 @@ export class DeepgramStreamingService {
       text,
       isFinal: true,
       timestamp: committedAt,
+      detectedLanguage,
     });
 
     const sessionId = useSessionStore.getState().sessionId;
@@ -114,6 +120,7 @@ export class DeepgramStreamingService {
       speaker,
       text,
       turnId,
+      detectedLanguage,
     });
   }
 
@@ -122,6 +129,7 @@ export class DeepgramStreamingService {
     this.lastFinalSpeaker = 'other';
     this.lastFinalText = '';
     this.lastFinalTurnId = '';
+    this.lastFinalLanguage = undefined;
     this.currentUtteranceStartedAt = null;
   }
 
@@ -135,8 +143,8 @@ export class DeepgramStreamingService {
 
     const url =
       'wss://api.deepgram.com/v1/listen?' +
-      'model=nova-2&language=en&smart_format=true&interim_results=true' +
-      '&utterance_end_ms=1500&vad_events=true&punctuate=true&diarize=true' +
+      `model=nova-2&language=${MAIN_DEEPGRAM_LANGUAGE}&smart_format=true&interim_results=true` +
+      '&utterance_end_ms=1000&vad_events=true&punctuate=true&diarize=true' +
       '&encoding=linear16&sample_rate=16000&channels=1';
 
     return this.client.connect({
@@ -180,9 +188,11 @@ export class DeepgramStreamingService {
         const store = useConversationStore.getState();
 
         if (data.type === 'Results') {
-          const transcript = data.channel?.alternatives[0]?.transcript ?? '';
+          const alt = data.channel?.alternatives[0];
+          const transcript = alt?.transcript ?? '';
           const isFinal = data.is_final ?? false;
-          const words = data.channel?.alternatives[0]?.words ?? [];
+          const words = alt?.words ?? [];
+          const detectedLanguage = alt?.languages?.[0] ?? MAIN_DEEPGRAM_LANGUAGE;
           const speaker = this.determineSpeaker(words);
           const trimmedTranscript = transcript.trim();
 
@@ -191,7 +201,7 @@ export class DeepgramStreamingService {
           }
 
           if (isFinal && trimmedTranscript.length > 0) {
-            console.log('[Deepgram] Final transcript (' + speaker + '):', transcript.substring(0, 80));
+            console.log('[Deepgram] Final transcript (' + speaker + ', lang=' + (detectedLanguage ?? '?') + '):', transcript.substring(0, 80));
             const timestamp = Date.now();
             const turnId = this.lastFinalTurnId || `${timestamp}`;
             const recordingStartedAt = this.currentUtteranceStartedAt ?? timestamp;
@@ -200,6 +210,9 @@ export class DeepgramStreamingService {
             this.lastFinalSpeaker = speaker;
             this.lastFinalText = mergedText;
             this.lastFinalTurnId = turnId;
+            if (detectedLanguage) {
+              this.lastFinalLanguage = detectedLanguage;
+            }
             useDebugStore.getState().registerTurnTrace({
               turnId,
               speaker,
@@ -239,25 +252,16 @@ export class DeepgramStreamingService {
           const committedSpeaker = this.lastFinalSpeaker;
           const committedText = this.lastFinalText;
           const committedTurnId = this.lastFinalTurnId;
+          const committedLanguage = this.lastFinalLanguage;
 
-          console.log('[Deepgram] UtteranceEnd -> speaker=' + committedSpeaker + ', turnId=' + committedTurnId);
-
-          if (store.forcedSpeaker === 'other' && !store.releaseForcedOnUtteranceEnd) {
-            console.log('[Deepgram] Holding simulated-other turn until explicit release');
-            return;
-          }
-
-          if (store.releaseForcedOnUtteranceEnd) {
-            store.setForcedSpeaker(null);
-            store.setReleaseForcedOnUtteranceEnd(false);
-            console.log('[Deepgram] Cleared forced speaker after utterance end');
-          }
+          console.log('[Deepgram] UtteranceEnd -> speaker=' + committedSpeaker + ', lang=' + (committedLanguage ?? '?') + ', turnId=' + committedTurnId);
 
           if (committedText && committedTurnId) {
             await this.commitBufferedTurn(
               committedSpeaker,
               committedText,
               committedTurnId,
+              committedLanguage,
             );
           }
 
@@ -333,55 +337,11 @@ export class DeepgramStreamingService {
     this.lastFinalSpeaker = 'other';
     this.lastFinalText = '';
     this.lastFinalTurnId = '';
+    this.lastFinalLanguage = undefined;
     this.currentUtteranceStartedAt = null;
   }
 
-  async flushHeldForcedTurn(): Promise<void> {
-    const store = useConversationStore.getState();
-    const text = this.lastFinalText || store.currentInterimText.trim();
-    const turnId = this.lastFinalTurnId || `${Date.now()}`;
-
-    store.setForcedSpeaker(null);
-    store.setReleaseForcedOnUtteranceEnd(false);
-
-    if (!text) {
-      this.resetBufferedTurn();
-      return;
-    }
-
-    await this.commitBufferedTurn('other', text, turnId);
-    this.resetBufferedTurn();
-  }
-
-  cancelHeldForcedTurn(): void {
-    const store = useConversationStore.getState();
-    store.setForcedSpeaker(null);
-    store.setReleaseForcedOnUtteranceEnd(false);
-    this.resetBufferedTurn();
-  }
-
-  private determineSpeaker(words: DeepgramWord[]): Speaker {
-    const { selfSpeakerId, forcedSpeaker } = useConversationStore.getState();
-
-    if (forcedSpeaker) {
-      return forcedSpeaker;
-    }
-
-    if (selfSpeakerId === null) {
-      return 'other';
-    }
-
-    if (words.length === 0) {
-      return 'other';
-    }
-
-    const hasSpeakerField = words.some(
-      (w) => w.speaker !== undefined && w.speaker !== null,
-    );
-    if (!hasSpeakerField) {
-      return 'other';
-    }
-
+  private getMajoritySpeaker(words: DeepgramWord[]): number {
     const speakerCounts = new Map<number, number>();
     for (const w of words) {
       if (w.speaker !== undefined && w.speaker !== null) {
@@ -389,16 +349,48 @@ export class DeepgramStreamingService {
       }
     }
 
-    let majoritySpeaker = -1;
+    let majority = -1;
     let maxCount = 0;
     for (const [speaker, count] of speakerCounts) {
       if (count > maxCount) {
         maxCount = count;
-        majoritySpeaker = speaker;
+        majority = speaker;
       }
     }
+    return majority;
+  }
 
-    return majoritySpeaker === selfSpeakerId ? 'self' : 'other';
+  private determineSpeaker(words: DeepgramWord[]): Speaker {
+    const store = useConversationStore.getState();
+    const { selfSpeakerId, forcedSpeaker } = store;
+
+    if (forcedSpeaker) {
+      return forcedSpeaker;
+    }
+
+    if (words.length === 0) {
+      return selfSpeakerId === null ? 'self' : 'other';
+    }
+
+    const hasSpeakerField = words.some(
+      (w) => w.speaker !== undefined && w.speaker !== null,
+    );
+    if (!hasSpeakerField) {
+      return selfSpeakerId === null ? 'self' : 'other';
+    }
+
+    const majority = this.getMajoritySpeaker(words);
+    if (majority === -1) {
+      return selfSpeakerId === null ? 'self' : 'other';
+    }
+
+    if (selfSpeakerId === null) {
+      console.log('[Deepgram] Auto-locking selfSpeakerId to', majority);
+      store.setSelfSpeakerId(majority);
+      return 'self';
+    }
+
+    return majority === selfSpeakerId ? 'self' : 'other';
   }
 }
 

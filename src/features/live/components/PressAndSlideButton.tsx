@@ -15,7 +15,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export type PressAndSlideAction = "cancel" | "send" | "text";
 
@@ -54,8 +54,6 @@ export function PressAndSlideButton({
   );
 
   const dragX = useSharedValue(0);
-  const scale = useSharedValue(1);
-
   const overlayVisible = isActive;
 
   const iconColor = useMemo(() => {
@@ -67,9 +65,8 @@ export function PressAndSlideButton({
     if (finalAction === "cancel") {
       onPressOut("cancel");
       return;
-    } else {
-      onPressOut(finalAction === "text" ? "text" : "send");
     }
+    onPressOut(finalAction === "text" ? "text" : "send");
   };
 
   const panGesture = Gesture.Pan()
@@ -102,11 +99,9 @@ export function PressAndSlideButton({
       dragX.value = withSpring(0);
     });
 
-  const animatedButtonStyle = useAnimatedStyle(() => {
-    return {
-      backgroundColor: isActive ? activeBg : defaultBg,
-    };
-  });
+  const animatedButtonStyle = useAnimatedStyle(() => ({
+    backgroundColor: isActive ? activeBg : defaultBg,
+  }));
 
   const animatedBubbleStyle = useAnimatedStyle(() => {
     const clampedX = Math.max(-120, Math.min(120, dragX.value));
@@ -182,7 +177,7 @@ export function PressAndSlideButton({
                     {bubbleText}
                   </Text>
                   <View style={styles.waveformCorner}>
-                    <WaveformBars color="rgba(32,72,17,0.8)" compact={true} />
+                    <WaveformBars color="rgba(32,72,17,0.8)" compact />
                   </View>
                 </>
               ) : (
@@ -210,7 +205,6 @@ export function PressAndSlideButton({
             <Animated.View
               style={styles.arcShape}
               entering={SlideInDown.duration(300)
-                .delay(0)
                 .withInitialValues({ transform: [{ translateY: 20 }] })
                 .easing(Easing.out(Easing.quad))}
               exiting={SlideOutDown.duration(150)}
@@ -278,7 +272,7 @@ export function PressAndSlideButton({
 
             <Animated.View
               style={styles.bottomCenterContent}
-              entering={FadeIn.duration(300).delay(0)}
+              entering={FadeIn.duration(300)}
               exiting={FadeOut.duration(150)}
             >
               <Text

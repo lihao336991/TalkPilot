@@ -37,6 +37,9 @@ export function ConversationFlow() {
             }
             isAssist={item.isAssist}
             assistSourceText={item.assistSourceText}
+            translation={item.translation}
+            translationStatus={item.translationStatus}
+            translationDirection={item.translationDirection}
           />
         )}
         keyExtractor={keyExtractor}
