@@ -1,6 +1,6 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
 import { CustomTabBar } from '@/features/navigation/components/CustomTabBar';
+import { Tabs } from 'expo-router';
+import React from 'react';
 
 export default function TabLayout() {
   return (
@@ -21,12 +21,13 @@ export default function TabLayout() {
           title: 'History',
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="community"
         options={{
           title: 'Coach',
+          href: null, // 二期实现前隐藏
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="profile"
         options={{

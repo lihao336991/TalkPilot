@@ -2,9 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 
 import type { PressAndSlideAction } from "@/features/live/components/PressAndSlideButton";
-import { useAccessStore } from "@/features/live/store/accessStore";
-import { useConversationStore } from "@/features/live/store/conversationStore";
-import { useSessionStore } from "@/features/live/store/sessionStore";
 import { assistReplyService } from "@/features/live/services/AssistReplyService";
 import { assistStreamingService } from "@/features/live/services/AssistStreamingService";
 import { AudioEngine, audioEngine } from "@/features/live/services/AudioEngine";
@@ -13,18 +10,22 @@ import { deepgramTokenService } from "@/features/live/services/DeepgramTokenServ
 import { reviewService } from "@/features/live/services/ReviewService";
 import { sessionManager } from "@/features/live/services/SessionManager";
 import type { StreamingConnectionStatus } from "@/features/live/services/StreamingWebSocketClient";
-import { useReviewStore } from "@/features/live/store/reviewStore";
 import { suggestionService } from "@/features/live/services/SuggestionService";
 import { translationService } from "@/features/live/services/TranslationService";
+import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
+import { useAccessStore } from "@/features/live/store/accessStore";
+import { useConversationStore } from "@/features/live/store/conversationStore";
 import { useDebugStore } from "@/features/live/store/debugStore";
+import { useReviewStore } from "@/features/live/store/reviewStore";
+import { useSessionStore } from "@/features/live/store/sessionStore";
 import { useSuggestionStore } from "@/features/live/store/suggestionStore";
 import {
   isFeatureAccessError,
   shouldRedirectToLogin,
   shouldRedirectToPaywall,
 } from "@/shared/billing/access";
-import { type Href, useRouter } from "expo-router";
 import { useIsFocused } from "@react-navigation/native";
+import { type Href, useRouter } from "expo-router";
 
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 const LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS = 45_000;
@@ -83,6 +84,7 @@ export function useLiveSessionController() {
   const setForcedSpeaker = useConversationStore((s) => s.setForcedSpeaker);
 
   const [duration, setDuration] = useState(0);
+  const [showEnrollment, setShowEnrollment] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
   const [assistState, setAssistState] = useState<AssistUiState>("idle");
   const [assistPreviewText, setAssistPreviewText] = useState("");
@@ -368,6 +370,21 @@ export function useLiveSessionController() {
         } else {
           await connectStreamingSocket();
         }
+
+        // Prime Deepgram with the user's enrollment audio so selfSpeakerId is
+        // locked before the live mic opens — no need to repeat each session.
+        const enrollmentChunks = await voiceEnrollmentService.loadEnrollmentChunks();
+        if (enrollmentChunks.length > 0) {
+          debug.startStep("enroll-prime", "Priming speaker ID...");
+          try {
+            await deepgramService.primeWithEnrollment(enrollmentChunks);
+            debug.completeStep("enroll-prime", "locked");
+          } catch (primeErr) {
+            debug.failStep("enroll-prime", "skipped");
+            console.warn("[LiveSession] Enrollment prime failed, continuing:", primeErr);
+          }
+        }
+
         startSession(sessionId);
         await startAudioCapture();
         console.log("[LiveSession] Streaming started");
@@ -448,8 +465,25 @@ export function useLiveSessionController() {
     debug.completeStep("audio-init");
     deepgramTokenService.prewarm();
 
+    // Show enrollment setup if the user hasn't recorded a voice sample yet
+    const hasEnrollment = await voiceEnrollmentService.hasEnrollment();
+    if (!hasEnrollment) {
+      setShowEnrollment(true);
+      return;
+    }
+
     setShowCalibration(true);
   }, [isDailyLimitReached, router, setForcedSpeaker]);
+
+  const handleEnrollmentComplete = useCallback(() => {
+    setShowEnrollment(false);
+    setShowCalibration(true);
+  }, []);
+
+  const handleEnrollmentSkip = useCallback(() => {
+    setShowEnrollment(false);
+    setShowCalibration(true);
+  }, []);
 
   const handleCalibrationComplete = useCallback(() => {
     console.log("[LiveSession] Voice detection acknowledged, auto-lock enabled");
@@ -797,6 +831,7 @@ export function useLiveSessionController() {
     assistShouldResumeRef.current = false;
     setForcedSpeaker(null);
     setShowCalibration(false);
+    setShowEnrollment(false);
     setAssistState("idle");
     setAssistPreviewText("");
     setAssistDraftText("");
@@ -840,7 +875,10 @@ export function useLiveSessionController() {
     mainWsMeta,
     assistWsMeta,
     shouldShowAssistWs,
+    showEnrollment,
     handleStartSession,
+    handleEnrollmentComplete,
+    handleEnrollmentSkip,
     handleCalibrationComplete,
     handleCalibrationSkip,
     handlePause,

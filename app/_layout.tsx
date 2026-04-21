@@ -1,8 +1,9 @@
+import OnboardingScreen from "@/features/onboarding/screens/OnboardingScreen";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack, useNavigationContainerRef } from "expo-router";
@@ -71,9 +72,21 @@ function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <RootLayoutNav />
+      <OnboardingGate>
+        <RootLayoutNav />
+      </OnboardingGate>
     </GestureHandlerRootView>
   );
+}
+
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  // TODO: 接 storage 缓存后改回 useOnboardingState()，目前每次冷启都展示
+  const [done, setDone] = useState(false);
+
+  if (!done) {
+    return <OnboardingScreen onComplete={() => setDone(true)} />;
+  }
+  return <>{children}</>;
 }
 
 function RootLayoutNav() {

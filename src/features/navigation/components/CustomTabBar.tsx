@@ -1,21 +1,27 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSessionStore } from '@/features/live/store/sessionStore';
+import { useSessionStore } from "@/features/live/store/sessionStore";
+import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
+import { Feather } from "@expo/vector-icons";
+import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-export const getTabBarHeight = (bottomInset: number) => 58 + Math.max(bottomInset - 8, 8);
+export const getTabBarHeight = (bottomInset: number) =>
+  58 + Math.max(bottomInset - 8, 8);
 
-export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function CustomTabBar({
+  state,
+  descriptors,
+  navigation,
+}: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const sessionStatus = useSessionStore((s) => s.status);
   const isImmersiveLive =
-    sessionStatus === 'active' || sessionStatus === 'paused' || sessionStatus === 'calibrating';
+    sessionStatus === "active" ||
+    sessionStatus === "paused" ||
+    sessionStatus === "calibrating";
 
-  if (isImmersiveLive) {
-    return null;
-  }
+  if (isImmersiveLive) return null;
 
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -26,7 +32,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             minHeight: getTabBarHeight(insets.bottom),
             paddingBottom: Math.max(insets.bottom - 8, 8),
           },
-        ]}>
+        ]}
+      >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const label =
@@ -40,20 +47,21 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
           const onPress = () => {
             const event = navigation.emit({
-              type: 'tabPress',
+              type: "tabPress",
               target: route.key,
               canPreventDefault: true,
             });
-
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name, route.params);
             }
           };
 
-          let iconName: keyof typeof Feather.glyphMap = 'mic';
-          if (route.name === 'library') iconName = 'clock';
-          if (route.name === 'community') iconName = 'message-circle';
-          if (route.name === 'profile') iconName = 'user';
+          let iconName: keyof typeof Feather.glyphMap = "mic";
+          if (route.name === "library") iconName = "clock";
+          if (route.name === "community") iconName = "message-circle";
+          if (route.name === "profile") iconName = "user";
+
+          const isLiveTab = route.name === "index";
 
           return (
             <Pressable
@@ -63,22 +71,35 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               accessibilityLabel={options.tabBarAccessibilityLabel}
               testID={options.tabBarButtonTestID}
               onPress={onPress}
-              style={styles.tabItem}>
-              <Feather
-                name={iconName}
-                size={24}
-                color={isFocused ? '#1A1A1A' : 'rgba(26,26,26,0.3)'}
-                style={{ marginBottom: 4 }}
-                strokeWidth={isFocused ? 2.5 : 1.5}
-              />
-              <Text
-                style={[
-                  styles.label,
-                  { color: isFocused ? '#1A1A1A' : 'rgba(26,26,26,0.3)' },
-                ]}>
-                {label as string}
-              </Text>
-              {isFocused && <View style={styles.dot} />}
+              style={styles.tabItem}
+            >
+              {isLiveTab ? (
+                /* Live tab — pill button */
+                <View style={[styles.livePill, isFocused && styles.livePillActive]}>
+                  <Feather
+                    name="mic"
+                    size={18}
+                    color={isFocused ? palette.accentDeep : palette.accentDark}
+                  />
+                  <Text style={[styles.livePillLabel, isFocused && styles.livePillLabelActive]}>
+                    Live
+                  </Text>
+                </View>
+              ) : (
+                /* Regular tabs */
+                <View style={styles.tabInner}>
+                  <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
+                    <Feather
+                      name={iconName}
+                      size={20}
+                      color={isFocused ? palette.accentDark : palette.textTertiary}
+                    />
+                  </View>
+                  <Text style={[styles.label, isFocused && styles.labelActive]}>
+                    {label as string}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -89,51 +110,72 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
   },
   surface: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    backgroundColor: 'rgba(245,242,237,0.96)',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingTop: 10,
+    backgroundColor: palette.bgTabBar,
     borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
-    shadowColor: '#151619',
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    shadowOffset: {
-      width: 0,
-      height: -6,
-    },
-    elevation: 16,
+    borderTopColor: palette.accentBorder,
+    ...shadows.tabBar,
   },
   tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
     flex: 1,
-    position: 'relative',
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  /* Regular tab */
+  tabInner: {
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  iconWrap: {
+    width: 36,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.xs,
+  },
+  iconWrapActive: {
+    backgroundColor: palette.accentMutedMid,
   },
   label: {
-    fontSize: 10,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...typography.tabLabel,
+    color: palette.textTertiary,
   },
-  dot: {
-    position: 'absolute',
-    bottom: -6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#1A1A1A',
+  labelActive: {
+    color: palette.accentDark,
+  },
+  /* Live pill */
+  livePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentMuted,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    marginBottom: 2,
+  },
+  livePillActive: {
+    backgroundColor: palette.accent,
+    borderColor: palette.accent,
+  },
+  livePillLabel: {
+    ...typography.labelLg,
+    color: palette.accentDark,
+  },
+  livePillLabelActive: {
+    color: palette.accentDeep,
   },
 });

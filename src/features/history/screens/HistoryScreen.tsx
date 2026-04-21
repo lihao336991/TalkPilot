@@ -1,8 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Feather } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { TabScrollScreen } from '@/features/navigation/components/TabScrollScreen';
-import { supabase } from '@/shared/api/supabase';
+import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
+import { supabase } from "@/shared/api/supabase";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type HistorySession = {
   id: string;
@@ -15,84 +23,59 @@ type HistorySession = {
 };
 
 const HISTORY_CACHE_TTL_MS = 30_000;
-
 let historySessionsCache: HistorySession[] = [];
 let historySessionsCacheAt = 0;
 
-function formatDuration(durationSeconds: number | null): string {
-  if (!durationSeconds || durationSeconds <= 0) {
-    return 'Less than 1 min';
-  }
-
-  const minutes = Math.floor(durationSeconds / 60);
-  const seconds = durationSeconds % 60;
-
-  if (minutes === 0) {
-    return `${seconds}s`;
-  }
-
-  if (seconds === 0) {
-    return `${minutes} min`;
-  }
-
-  return `${minutes} min ${seconds}s`;
+function formatDuration(s: number | null): string {
+  if (!s || s <= 0) return "< 1 min";
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  if (m === 0) return `${sec}s`;
+  if (sec === 0) return `${m} min`;
+  return `${m} min ${sec}s`;
 }
 
-function formatSessionDate(isoString: string): string {
-  const date = new Date(isoString);
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+function formatSessionDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
 function formatSceneLabel(session: HistorySession): string {
-  if (session.scene_description?.trim()) {
-    return session.scene_description.trim();
-  }
-
+  if (session.scene_description?.trim()) return session.scene_description.trim();
   if (session.scene_preset) {
     return session.scene_preset
-      .split('_')
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ');
+      .split("_")
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ");
   }
-
-  return 'Free conversation';
+  return "Free conversation";
 }
 
-function buildSessionSummary(session: HistorySession): string {
-  if (session.status === 'active') {
-    return 'Session is still active. End it from Live to save the final duration.';
-  }
-
-  if (session.status === 'paused') {
-    return 'Session is paused and can be resumed from the Live tab.';
-  }
-
-  if (!session.ended_at) {
-    return 'Session has started but no final wrap-up data is available yet.';
-  }
-
-  return `Started on ${formatSessionDate(session.started_at)} and saved for later review.`;
+function statusColor(status: string): string {
+  if (status === "ended") return "#D2F45C";
+  if (status === "paused") return "#FF9F6B";
+  return "#8EC5FF";
 }
 
 export default function HistoryScreen() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = getTabBarHeight(insets.bottom);
   const [sessions, setSessions] = useState<HistorySession[]>(historySessionsCache);
   const [isLoading, setIsLoading] = useState(historySessionsCache.length === 0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadSessions = useCallback(async (options?: { force?: boolean }) => {
-    const shouldUseCache =
-      !options?.force &&
+  const loadSessions = useCallback(async (opts?: { force?: boolean }) => {
+    const useCache =
+      !opts?.force &&
       historySessionsCache.length > 0 &&
       Date.now() - historySessionsCacheAt < HISTORY_CACHE_TTL_MS;
 
-    if (shouldUseCache) {
-      setErrorMessage(null);
+    if (useCache) {
       setSessions(historySessionsCache);
       setIsLoading(false);
       return;
@@ -102,25 +85,21 @@ export default function HistoryScreen() {
     setErrorMessage(null);
 
     const { data, error } = await supabase
-      .from('sessions')
-      .select(
-        'id, scene_preset, scene_description, started_at, ended_at, duration_seconds, status',
-      )
-      .order('started_at', { ascending: false });
+      .from("sessions")
+      .select("id, scene_preset, scene_description, started_at, ended_at, duration_seconds, status")
+      .order("started_at", { ascending: false });
 
     if (error) {
-      setErrorMessage(error.message || 'Failed to load sessions.');
-      if (historySessionsCache.length === 0) {
-        setSessions([]);
-      }
+      setErrorMessage(error.message || "Failed to load sessions.");
+      if (historySessionsCache.length === 0) setSessions([]);
       setIsLoading(false);
       return;
     }
 
-    const nextSessions = data ?? [];
-    historySessionsCache = nextSessions;
+    const next = data ?? [];
+    historySessionsCache = next;
     historySessionsCacheAt = Date.now();
-    setSessions(nextSessions);
+    setSessions(next);
     setIsLoading(false);
   }, []);
 
@@ -128,238 +107,338 @@ export default function HistoryScreen() {
     void loadSessions();
   }, [loadSessions]);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadSessions({ force: true });
+    setRefreshing(false);
+  }
+
   const totalMinutes = Math.round(
-    sessions.reduce(
-      (sum, session) => sum + Math.max(session.duration_seconds ?? 0, 0),
-      0,
-    ) / 60,
+    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0) / 60,
   );
-  const endedSessionsCount = sessions.filter(
-    (session) => session.status === 'ended',
-  ).length;
+  const completedCount = sessions.filter((s) => s.status === "ended").length;
 
   return (
-    <TabScrollScreen
-      title="History"
-      subtitle="Session recap and review"
-      actionIcon="refresh-cw"
-      onActionPress={() => {
-        void loadSessions({ force: true });
-      }}
-      actionAccessibilityLabel="Refresh session history"
-    >
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryEyebrow}>Recent activity</Text>
-        <Text style={styles.summaryTitle}>
-          Your latest assisted conversations stay organized here for review.
-        </Text>
-        <View style={styles.summaryRow}>
-          <View>
-            <Text style={styles.summaryValue}>{sessions.length}</Text>
-            <Text style={styles.summaryLabel}>saved sessions</Text>
-          </View>
-          <View>
-            <Text style={styles.summaryValue}>{totalMinutes}</Text>
-            <Text style={styles.summaryLabel}>minutes practiced</Text>
-          </View>
-          <View>
-            <Text style={styles.summaryValue}>{endedSessionsCount}</Text>
-            <Text style={styles.summaryLabel}>completed</Text>
-          </View>
+    <View style={styles.root}>
+      {/* ── Header ── */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View>
+          <Text style={styles.headerEyebrow}>HISTORY</Text>
+          <Text style={styles.headerTitle}>Sessions</Text>
         </View>
+        <Pressable
+          onPress={handleRefresh}
+          style={styles.refreshBtn}
+          accessibilityLabel="Refresh session history"
+        >
+          <Feather name="refresh-cw" size={18} color={refreshing ? "#D2F45C" : "rgba(255,255,255,0.55)"} />
+        </Pressable>
       </View>
 
-      {isLoading && (
-        <View style={styles.stateCard}>
-          <Text style={styles.stateTitle}>Loading sessions...</Text>
-          <Text style={styles.stateDescription}>
-            Pulling your latest conversation history from Supabase.
-          </Text>
-        </View>
-      )}
-
-      {!isLoading && errorMessage && sessions.length === 0 && (
-        <View style={styles.stateCard}>
-          <Text style={styles.stateTitle}>Could not load history</Text>
-          <Text style={styles.stateDescription}>{errorMessage}</Text>
-          <Pressable style={styles.retryButton} onPress={() => {
-            void loadSessions({ force: true });
-          }}>
-            <Text style={styles.retryButtonText}>Try again</Text>
-          </Pressable>
-        </View>
-      )}
-
-      {!isLoading && !errorMessage && sessions.length === 0 && (
-        <View style={styles.stateCard}>
-          <Text style={styles.stateTitle}>No saved sessions yet</Text>
-          <Text style={styles.stateDescription}>
-            Start a conversation in Live and end it once to see it appear here.
-          </Text>
-        </View>
-      )}
-
-      {!isLoading && !errorMessage && sessions.map((session) => (
-        <View key={session.id} style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleWrap}>
-              <Text style={styles.cardTitle}>{formatSceneLabel(session)}</Text>
-              <View style={styles.statusRow}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    session.status === 'ended'
-                      ? styles.statusEnded
-                      : session.status === 'paused'
-                        ? styles.statusPaused
-                        : styles.statusActive,
-                  ]}
-                />
-                <Text style={styles.statusText}>{session.status}</Text>
-              </View>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarHeight + 80 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Stats banner ── */}
+        <LinearGradient
+          colors={["#111A00", "#0A0A0A"]}
+          style={styles.statsBanner}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{sessions.length}</Text>
+              <Text style={styles.statLabel}>sessions</Text>
             </View>
-            <Feather
-              name="chevron-right"
-              size={18}
-              color="rgba(26,26,26,0.3)"
-            />
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{totalMinutes}</Text>
+              <Text style={styles.statLabel}>min practiced</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{completedCount}</Text>
+              <Text style={styles.statLabel}>completed</Text>
+            </View>
           </View>
-          <Text style={styles.cardMeta}>
-            {formatDuration(session.duration_seconds)} · {formatSessionDate(session.started_at)}
-          </Text>
-          <Text style={styles.cardSummary}>{buildSessionSummary(session)}</Text>
-        </View>
-      ))}
-    </TabScrollScreen>
+          <View style={styles.statsAccentLine} />
+        </LinearGradient>
+
+        {/* ── Loading ── */}
+        {isLoading && (
+          <View style={styles.stateCard}>
+            <View style={styles.stateIconWrap}>
+              <Feather name="loader" size={22} color="rgba(255,255,255,0.4)" />
+            </View>
+            <Text style={styles.stateTitle}>Loading sessions…</Text>
+            <Text style={styles.stateBody}>Pulling your conversation history.</Text>
+          </View>
+        )}
+
+        {/* ── Error ── */}
+        {!isLoading && errorMessage && sessions.length === 0 && (
+          <View style={styles.stateCard}>
+            <View style={[styles.stateIconWrap, { backgroundColor: "rgba(255,80,80,0.12)" }]}>
+              <Feather name="alert-circle" size={22} color="#FF6B6B" />
+            </View>
+            <Text style={styles.stateTitle}>Could not load history</Text>
+            <Text style={styles.stateBody}>{errorMessage}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => void loadSessions({ force: true })}>
+              <Text style={styles.retryBtnText}>Try again</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* ── Empty ── */}
+        {!isLoading && !errorMessage && sessions.length === 0 && (
+          <View style={styles.stateCard}>
+            <View style={styles.stateIconWrap}>
+              <Feather name="mic-off" size={22} color="rgba(255,255,255,0.4)" />
+            </View>
+            <Text style={styles.stateTitle}>No sessions yet</Text>
+            <Text style={styles.stateBody}>
+              Start a conversation in Live and end it to see it appear here.
+            </Text>
+          </View>
+        )}
+
+        {/* ── Session cards ── */}
+        {!isLoading &&
+          !errorMessage &&
+          sessions.map((session) => {
+            const accent = statusColor(session.status);
+            return (
+              <View key={session.id} style={styles.card}>
+                {/* left accent bar */}
+                <View style={[styles.cardAccentBar, { backgroundColor: accent }]} />
+
+                <View style={styles.cardInner}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {formatSceneLabel(session)}
+                    </Text>
+                    <View style={[styles.statusPill, { borderColor: `${accent}40`, backgroundColor: `${accent}14` }]}>
+                      <View style={[styles.statusDot, { backgroundColor: accent }]} />
+                      <Text style={[styles.statusText, { color: accent }]}>
+                        {session.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardMetaRow}>
+                    <Feather name="clock" size={12} color="rgba(255,255,255,0.35)" />
+                    <Text style={styles.cardMeta}>
+                      {formatDuration(session.duration_seconds)}
+                    </Text>
+                    <Text style={styles.cardMetaDot}>·</Text>
+                    <Text style={styles.cardMeta}>
+                      {formatSessionDate(session.started_at)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  summaryCard: {
-    borderRadius: 26,
-    padding: 22,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 24,
-  },
-  summaryEyebrow: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    color: 'rgba(26,26,26,0.36)',
-    marginBottom: 10,
-  },
-  summaryTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: 'rgba(26,26,26,0.52)',
-    marginTop: 4,
-  },
-  card: {
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  cardTitleWrap: {
+  root: {
     flex: 1,
-    paddingRight: 12,
+    backgroundColor: "#0A0A0A",
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
+  headerEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 2.5,
+    color: "#D2F45C",
+    marginBottom: 4,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  headerTitle: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    lineHeight: 34,
   },
-  statusEnded: {
-    backgroundColor: '#34C759',
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  statusPaused: {
-    backgroundColor: '#FF9500',
+  scroll: {
+    flex: 1,
   },
-  statusActive: {
-    backgroundColor: '#4A90E2',
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(26,26,26,0.52)',
-    textTransform: 'capitalize',
+  statsBanner: {
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 4,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(210,244,92,0.12)",
   },
-  cardMeta: {
-    fontSize: 12,
-    color: 'rgba(26,26,26,0.42)',
-    marginBottom: 10,
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
   },
-  cardSummary: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(26,26,26,0.7)',
+  statItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.45)",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  statsAccentLine: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "#D2F45C",
+    opacity: 0.35,
   },
   stateCard: {
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 12,
+    borderColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+  },
+  stateIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
   stateTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  stateDescription: {
+  stateBody: {
     fontSize: 14,
     lineHeight: 21,
-    color: 'rgba(26,26,26,0.68)',
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
   },
-  retryButton: {
-    alignSelf: 'flex-start',
-    marginTop: 14,
-    borderRadius: 14,
-    backgroundColor: '#151619',
-    paddingHorizontal: 14,
+  retryBtn: {
+    marginTop: 6,
+    paddingHorizontal: 20,
     paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
-  retryButtonText: {
+  retryBtnText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  card: {
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  cardAccentBar: {
+    width: 3,
+    borderRadius: 2,
+    margin: 14,
+    marginRight: 0,
+    opacity: 0.8,
+  },
+  cardInner: {
+    flex: 1,
+    padding: 14,
+    gap: 8,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  cardMeta: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.4)",
+  },
+  cardMetaDot: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.2)",
   },
 });

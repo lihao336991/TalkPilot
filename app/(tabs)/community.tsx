@@ -1,1 +1,2 @@
-export { default } from '@/features/coach/screens/CoachScreen';
+// TODO 二期
+// export { default } from '@/features/coach/screens/CoachScreen';

@@ -1,3 +1,4 @@
+import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
@@ -36,52 +37,53 @@ export function ConversationToolbar({
 }: ConversationToolbarProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.sideSlot}>
+      {/* Timer row */}
+      <View style={styles.timerRow}>
+        <View style={styles.timerLiveDot} />
+        <Text style={styles.timer}>{formatDuration(duration)}</Text>
+        <Text style={styles.timerHint}>
+          {isPaused ? "Paused" : isNativeAssistActive ? "Listening…" : "Live"}
+        </Text>
+      </View>
+
+      {/* Controls row */}
+      <View style={styles.controlsRow}>
         <Pressable
-          style={styles.button}
+          style={styles.sideBtn}
           onPress={isPaused ? onResume : onPause}
           accessibilityLabel={isPaused ? "Resume" : "Pause"}
         >
-          <Feather
-            name={isPaused ? "play-circle" : "pause-circle"}
-            size={28}
-            color="#1A1A1A"
-          />
+          <View style={styles.sideBtnInner}>
+            <Feather name={isPaused ? "play" : "pause"} size={20} color={palette.textPrimary} />
+          </View>
+          <Text style={styles.sideBtnLabel}>{isPaused ? "Resume" : "Pause"}</Text>
         </Pressable>
-      </View>
 
-      <View style={styles.centerColumn}>
-        <View style={styles.timerWrap}>
-          <Text style={styles.timer}>{formatDuration(duration)}</Text>
-          <Text style={styles.timerHint}>
-            {isNativeAssistActive
-              ? "Listening..."
-              : "Hold to speak, release to send"}
+        <View style={styles.centerSlot}>
+          <Text style={styles.assistHint}>
+            {isNativeAssistActive ? "Release to send" : "Hold to speak"}
           </Text>
+          <PressAndSlideButton
+            icon="message-circle"
+            defaultColor={palette.accentDeep}
+            activeColor={palette.accentDeep}
+            defaultBg={palette.accent}
+            activeBg={palette.accent}
+            cancelBg="#FF5A58"
+            sendBg={palette.accent}
+            onPressIn={onNativeAssistPressIn}
+            onPressOut={onNativeAssistPressOut}
+            previewText={assistPreviewText}
+            slideThresholdLeft={-72}
+            slideThresholdRight={72}
+          />
         </View>
-        <PressAndSlideButton
-          icon="message-circle"
-          defaultColor="#1A1A1A"
-          activeColor="#FFFFFF"
-          defaultBg="#FFFFFF"
-          activeBg="#92EA63"
-          cancelBg="#FF5A58"
-          sendBg="#92EA63"
-          onPressIn={onNativeAssistPressIn}
-          onPressOut={onNativeAssistPressOut}
-          previewText={assistPreviewText}
-          slideThresholdLeft={-72}
-          slideThresholdRight={72}
-        />
-      </View>
 
-      <View style={styles.sideSlot}>
-        <Pressable
-          style={styles.button}
-          onPress={onEnd}
-          accessibilityLabel="End conversation"
-        >
-          <Feather name="stop-circle" size={28} color="#FF3B30" />
+        <Pressable style={styles.sideBtn} onPress={onEnd} accessibilityLabel="End conversation">
+          <View style={[styles.sideBtnInner, styles.endBtnInner]}>
+            <Feather name="square" size={18} color={palette.danger} />
+          </View>
+          <Text style={[styles.sideBtnLabel, styles.endBtnLabel]}>End</Text>
         </Pressable>
       </View>
     </View>
@@ -90,53 +92,81 @@ export function ConversationToolbar({
 
 const styles = StyleSheet.create({
   container: {
+    marginHorizontal: spacing.lg,
+    marginBottom: 28,
+    borderRadius: radii.xxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 14,
+    paddingBottom: 18,
+    backgroundColor: palette.bgCard,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    gap: 14,
+    ...shadows.card,
+  },
+  timerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+  },
+  timerLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: palette.accentDark,
+  },
+  timer: {
+    ...typography.timer,
+    color: palette.textPrimary,
+  },
+  timerHint: {
+    ...typography.caption,
+    color: palette.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  controlsRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 20,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    borderRadius: 34,
-    marginHorizontal: 16,
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: "rgba(21,22,25,0.06)",
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
   },
-  sideSlot: {
-    width: 48,
+  sideBtn: {
     alignItems: "center",
-    justifyContent: "flex-end",
+    gap: spacing.xs + 2,
+    width: 56,
   },
-  centerColumn: {
+  sideBtnInner: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accentMuted,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
     alignItems: "center",
     justifyContent: "center",
+  },
+  endBtnInner: {
+    backgroundColor: palette.dangerLight,
+    borderColor: palette.dangerBorder,
+  },
+  sideBtnLabel: {
+    ...typography.tabLabel,
+    color: palette.textTertiary,
+  },
+  endBtnLabel: {
+    color: palette.danger,
+  },
+  centerSlot: {
     flex: 1,
-    gap: 12,
-  },
-  timerWrap: {
     alignItems: "center",
-    gap: 2,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
-  button: {
-    padding: 8,
-  },
-  timer: {
-    fontSize: 18,
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
-    color: "#1A1A1A",
-  },
-  timerHint: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
+  assistHint: {
+    ...typography.caption,
+    color: palette.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
 });

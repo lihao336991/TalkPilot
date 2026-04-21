@@ -228,6 +228,13 @@ export class DeepgramStreamingService {
         }
 
         if (data.type === 'UtteranceEnd') {
+          // If we're in enrollment priming mode, just lock the speaker and resolve
+          if (this.onPrimeUtteranceEnd) {
+            this.onPrimeUtteranceEnd();
+            this.resetBufferedTurn();
+            return;
+          }
+
           const interimText = store.currentInterimText.trim();
           const interimSpeaker = store.currentInterimSpeaker ?? this.lastFinalSpeaker;
 
@@ -340,6 +347,58 @@ export class DeepgramStreamingService {
     this.lastFinalLanguage = undefined;
     this.currentUtteranceStartedAt = null;
   }
+
+  /**
+   * Sends a pre-recorded enrollment audio sample through the already-open WebSocket
+   * so Deepgram assigns a speaker ID to the user's voice before the live mic starts.
+   * Resolves once an UtteranceEnd is received (or after a timeout) with the locked speaker ID.
+   */
+  async primeWithEnrollment(base64Chunks: string[]): Promise<void> {
+    if (base64Chunks.length === 0) return;
+
+    console.log('[Deepgram] Priming with enrollment audio...');
+
+    await new Promise<void>((resolve) => {
+      const PRIME_TIMEOUT_MS = 6_000;
+      let settled = false;
+
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        // Unregister the temporary utterance-end override
+        this.onPrimeUtteranceEnd = null;
+        resolve();
+      };
+
+      const timer = setTimeout(() => {
+        console.warn('[Deepgram] Enrollment prime timed out, continuing without lock');
+        settle();
+      }, PRIME_TIMEOUT_MS);
+
+      // Temporarily intercept the next UtteranceEnd to detect the primed speaker
+      this.onPrimeUtteranceEnd = settle;
+
+      // Send all enrollment chunks
+      for (const chunk of base64Chunks) {
+        try {
+          const buffer = base64ToArrayBuffer(chunk);
+          this.client.send(buffer);
+        } catch (err) {
+          console.error('[Deepgram] Failed to send enrollment chunk:', err);
+        }
+      }
+
+      // Signal end of enrollment audio
+      try {
+        this.client.send('{"type":"Finalize"}');
+      } catch {}
+    });
+
+    console.log('[Deepgram] Enrollment prime complete, selfSpeakerId=', useConversationStore.getState().selfSpeakerId);
+  }
+
+  private onPrimeUtteranceEnd: (() => void) | null = null;
 
   private getMajoritySpeaker(words: DeepgramWord[]): number {
     const speakerCounts = new Map<number, number>();

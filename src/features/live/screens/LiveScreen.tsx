@@ -1,3 +1,4 @@
+import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import {
   Modal,
   Pressable,
@@ -17,6 +18,7 @@ import { FloatingSimulateButton } from "../components/FloatingSimulateButton";
 import { SpeakerCalibration } from "../components/SpeakerCalibration";
 import { StartSessionCard } from "../components/StartSessionCard";
 import SuggestionPanel from "../components/SuggestionPanel";
+import { VoiceEnrollmentCard } from "../components/VoiceEnrollmentCard";
 
 import { DebugOverlay } from "../components/DebugOverlay";
 import { useLiveSessionController } from "../hooks/useLiveSessionController";
@@ -37,6 +39,7 @@ export default function LiveScreen() {
     assistWsStatus,
     forcedSpeaker,
     duration,
+    showEnrollment,
     showCalibration,
     assistState,
     assistPreviewText,
@@ -49,6 +52,8 @@ export default function LiveScreen() {
     assistWsMeta,
     shouldShowAssistWs,
     handleStartSession,
+    handleEnrollmentComplete,
+    handleEnrollmentSkip,
     handleCalibrationComplete,
     handleCalibrationSkip,
     handlePause,
@@ -138,6 +143,12 @@ export default function LiveScreen() {
         </View>
       )}
 
+      <VoiceEnrollmentCard
+        visible={showEnrollment}
+        onComplete={handleEnrollmentComplete}
+        onSkip={handleEnrollmentSkip}
+      />
+
       <SpeakerCalibration
         visible={showCalibration}
         onComplete={handleCalibrationComplete}
@@ -212,7 +223,7 @@ export default function LiveScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F6F7FB",
+    backgroundColor: palette.bgBase,
   },
   activeContainer: {
     flex: 1,
@@ -220,20 +231,21 @@ const styles = StyleSheet.create({
   wsStatusCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: spacing.lg,
+    marginTop: 10,
+    marginBottom: 6,
+    borderRadius: radii.md,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: "rgba(21,22,25,0.06)",
+    borderColor: palette.accentBorder,
+    ...shadows.cardSm,
   },
   wsStatusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginTop: 5,
     marginRight: 10,
   },
@@ -244,26 +256,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: spacing.sm,
   },
   wsStatusLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1A1A1A",
+    ...typography.labelMd,
+    color: palette.textPrimary,
   },
   wsStatusValue: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6B7280",
+    ...typography.caption,
+    color: palette.textTertiary,
     textTransform: "uppercase",
   },
   wsStatusHint: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#6B7280",
+    marginTop: 3,
+    ...typography.caption,
+    color: palette.textTertiary,
   },
   assistWsRow: {
-    marginTop: 8,
+    marginTop: 6,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -271,85 +281,81 @@ const styles = StyleSheet.create({
   assistWsDot: {
     marginTop: 0,
     marginRight: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   assistWsLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#374151",
+    ...typography.caption,
+    color: palette.textSecondary,
   },
   assistWsValue: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6B7280",
+    ...typography.caption,
+    color: palette.textTertiary,
     textTransform: "uppercase",
   },
   assistDraftBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(17,24,39,0.58)",
+    backgroundColor: palette.overlayDark,
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
   },
   assistDraftCard: {
-    borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    shadowColor: "#000000",
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
+    borderRadius: radii.xl,
+    backgroundColor: palette.bgCardSolid,
+    borderWidth: 1,
+    borderColor: palette.accentBorderStrong,
+    padding: spacing.xl,
+    ...shadows.cardLg,
   },
   assistDraftTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#111827",
+    ...typography.displaySm,
+    color: palette.textPrimary,
   },
   assistDraftSubtitle: {
     marginTop: 6,
     fontSize: 13,
     lineHeight: 19,
-    color: "#6B7280",
+    color: palette.textSecondary,
   },
   assistDraftInput: {
     minHeight: 180,
-    marginTop: 16,
-    paddingHorizontal: 16,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     borderRadius: 18,
-    backgroundColor: "#F3F4F6",
-    fontSize: 16,
-    lineHeight: 24,
-    color: "#111827",
+    backgroundColor: palette.bgInput,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    ...typography.bodyLg,
+    color: palette.textPrimary,
   },
   assistDraftActions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 16,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   assistDraftButton: {
     flex: 1,
     height: 50,
-    borderRadius: 16,
+    borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
   },
   assistDraftGhostButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
   },
   assistDraftPrimaryButton: {
-    backgroundColor: "#111827",
+    backgroundColor: palette.accent,
   },
   assistDraftButtonText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.textOnAccent,
   },
   assistDraftGhostButtonText: {
-    color: "#111827",
+    color: palette.textPrimary,
   },
 });
