@@ -81,6 +81,16 @@ type BillingStateSnapshot = Pick<
   | 'revenuecatAppUserId'
 >;
 
+type DerivedSubscriptionState = Pick<
+  AuthState,
+  | 'subscriptionTier'
+  | 'subscriptionStatus'
+  | 'subscriptionSyncState'
+  | 'subscriptionExpiresAt'
+  | 'subscriptionProvider'
+  | 'revenuecatAppUserId'
+>;
+
 export function getBillingStateSnapshot(state: BillingStateSnapshot) {
   return {
     profileSubscriptionTier: state.profileSubscriptionTier,
@@ -105,7 +115,7 @@ function deriveSubscriptionState(args: {
   hasLocalProEntitlement: boolean;
   localRevenuecatAppUserId: string | null;
   localSubscriptionExpiresAt: string | null;
-}) {
+}): DerivedSubscriptionState {
   const profileHasPaidAccess =
     args.profileSubscriptionTier === 'pro' ||
     args.profileSubscriptionTier === 'unlimited';

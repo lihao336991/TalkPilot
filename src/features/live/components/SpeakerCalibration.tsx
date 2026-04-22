@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,6 +10,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 type SpeakerCalibrationProps = {
   visible: boolean;
@@ -38,17 +40,18 @@ function WaveBar({ delay }: { delay: number }) {
 }
 
 export function SpeakerCalibration({ visible, onComplete, onSkip }: SpeakerCalibrationProps) {
+  const { t } = useTranslation();
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Feather name="mic" size={24} color="#FFFFFF" />
+            <Feather name="mic" size={24} color={palette.textOnAccent} />
           </View>
 
-          <Text style={styles.title}>Voice Detection</Text>
+          <Text style={styles.title}>{t('live.speakerCalibration.title')}</Text>
           <Text style={styles.instruction}>
-            Please speak first when the session starts — the system will automatically recognize your voice from the first sentence.
+            {t('live.speakerCalibration.instruction')}
           </Text>
 
           <View style={styles.waveContainer}>
@@ -58,15 +61,19 @@ export function SpeakerCalibration({ visible, onComplete, onSkip }: SpeakerCalib
           </View>
 
           <View style={styles.actions}>
-            <Pressable style={styles.skipButton} onPress={onSkip} accessibilityLabel="Skip voice detection">
-              <Text style={styles.skipText}>Skip</Text>
+            <Pressable
+              style={styles.skipButton}
+              onPress={onSkip}
+              accessibilityLabel={t('live.speakerCalibration.skipAccessibilityLabel')}
+            >
+              <Text style={styles.skipText}>{t('common.actions.skip')}</Text>
             </Pressable>
             <Pressable
               style={styles.doneButton}
               onPress={() => onComplete()}
-              accessibilityLabel="Start session"
+              accessibilityLabel={t('live.speakerCalibration.startAccessibilityLabel')}
             >
-              <Text style={styles.doneText}>Got it</Text>
+              <Text style={styles.doneText}>{t('common.actions.gotIt')}</Text>
             </Pressable>
           </View>
         </View>
@@ -78,80 +85,84 @@ export function SpeakerCalibration({ visible, onComplete, onSkip }: SpeakerCalib
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: palette.overlayDark,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxxl,
   },
   card: {
     width: '100%',
-    borderRadius: 28,
-    padding: 28,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radii.xxl,
+    padding: spacing.xxl + 4,
+    backgroundColor: palette.bgCardSolid,
+    borderWidth: 1,
+    borderColor: palette.accentBorderStrong,
     alignItems: 'center',
-    gap: 16,
+    gap: spacing.lg,
+    ...shadows.cardLg,
   },
   iconCircle: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: '#151619',
+    borderRadius: radii.pill,
+    backgroundColor: palette.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: 20,
+    ...typography.displaySm,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: palette.textPrimary,
   },
   instruction: {
-    fontSize: 15,
+    ...typography.bodyMd,
     lineHeight: 22,
-    color: 'rgba(26,26,26,0.68)',
+    color: palette.textSecondary,
     textAlign: 'center',
   },
   waveContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: spacing.sm - 2,
     height: 40,
-    marginVertical: 8,
+    marginVertical: spacing.sm,
   },
   waveBar: {
     width: 4,
     borderRadius: 2,
-    backgroundColor: '#151619',
+    backgroundColor: palette.accentDark,
   },
   actions: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    gap: spacing.md,
+    marginTop: spacing.sm,
     width: '100%',
   },
   skipButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
+    borderColor: palette.accentBorder,
+    backgroundColor: palette.bgGhostButton,
     alignItems: 'center',
   },
   skipText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '600',
-    color: 'rgba(26,26,26,0.68)',
+    color: palette.textPrimary,
   },
   doneButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: '#151619',
+    borderRadius: radii.md,
+    backgroundColor: palette.accent,
     alignItems: 'center',
   },
   doneText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: palette.textOnAccent,
   },
 });

@@ -1,6 +1,7 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import {
   PressAndSlideAction,
   PressAndSlideButton,
@@ -35,6 +36,7 @@ export function ConversationToolbar({
   assistPreviewText,
   duration,
 }: ConversationToolbarProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
       {/* Timer row */}
@@ -42,7 +44,11 @@ export function ConversationToolbar({
         <View style={styles.timerLiveDot} />
         <Text style={styles.timer}>{formatDuration(duration)}</Text>
         <Text style={styles.timerHint}>
-          {isPaused ? "Paused" : isNativeAssistActive ? "Listening…" : "Live"}
+          {isPaused
+            ? t("live.toolbar.paused")
+            : isNativeAssistActive
+              ? t("live.toolbar.listening")
+              : t("live.toolbar.live")}
         </Text>
       </View>
 
@@ -51,22 +57,26 @@ export function ConversationToolbar({
         <Pressable
           style={styles.sideBtn}
           onPress={isPaused ? onResume : onPause}
-          accessibilityLabel={isPaused ? "Resume" : "Pause"}
+          accessibilityLabel={isPaused ? t("live.toolbar.resume") : t("live.toolbar.pause")}
         >
           <View style={styles.sideBtnInner}>
             <Feather name={isPaused ? "play" : "pause"} size={20} color={palette.textPrimary} />
           </View>
-          <Text style={styles.sideBtnLabel}>{isPaused ? "Resume" : "Pause"}</Text>
+          <Text style={styles.sideBtnLabel}>
+            {isPaused ? t("live.toolbar.resume") : t("live.toolbar.pause")}
+          </Text>
         </Pressable>
 
         <View style={styles.centerSlot}>
           <Text style={styles.assistHint}>
-            {isNativeAssistActive ? "Release to send" : "Hold to speak"}
+            {isNativeAssistActive
+              ? t("live.toolbar.releaseToSend")
+              : t("live.toolbar.holdToSpeak")}
           </Text>
           <PressAndSlideButton
-            icon="message-circle"
-            defaultColor={palette.accentDeep}
-            activeColor={palette.accentDeep}
+            label="SOS"
+            defaultColor={palette.textOnAccent}
+            activeColor={palette.textOnAccent}
             defaultBg={palette.accent}
             activeBg={palette.accent}
             cancelBg="#FF5A58"
@@ -79,11 +89,19 @@ export function ConversationToolbar({
           />
         </View>
 
-        <Pressable style={styles.sideBtn} onPress={onEnd} accessibilityLabel="End conversation">
+        <Pressable
+          style={styles.sideBtn}
+          onPress={onEnd}
+          accessibilityLabel={t("live.toolbar.endConversation")}
+        >
           <View style={[styles.sideBtnInner, styles.endBtnInner]}>
-            <Feather name="square" size={18} color={palette.danger} />
+            <MaterialCommunityIcons
+              name="phone-hangup"
+              size={20}
+              color={palette.textOnAccent}
+            />
           </View>
-          <Text style={[styles.sideBtnLabel, styles.endBtnLabel]}>End</Text>
+          <Text style={[styles.sideBtnLabel, styles.endBtnLabel]}>{t("live.toolbar.end")}</Text>
         </Pressable>
       </View>
     </View>
@@ -147,8 +165,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   endBtnInner: {
-    backgroundColor: palette.dangerLight,
-    borderColor: palette.dangerBorder,
+    backgroundColor: palette.danger,
+    borderColor: palette.danger,
   },
   sideBtnLabel: {
     ...typography.tabLabel,

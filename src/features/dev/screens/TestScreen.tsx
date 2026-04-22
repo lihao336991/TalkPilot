@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Sentry } from '@/shared/monitoring/sentry';
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 const checks = [
   'Expo Router entry is active.',
@@ -63,81 +64,82 @@ export default function TestScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F2ED',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    backgroundColor: palette.bgBase,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xxxl,
   },
   title: {
-    fontSize: 32,
+    ...typography.displayLg,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 10,
+    color: palette.textPrimary,
+    marginBottom: spacing.sm + 2,
   },
   subtitle: {
-    fontSize: 15,
+    ...typography.bodyMd,
     lineHeight: 22,
-    color: 'rgba(26,26,26,0.7)',
-    marginBottom: 24,
+    color: palette.textSecondary,
+    marginBottom: spacing.xxl,
   },
   card: {
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
+    borderRadius: radii.xl,
+    backgroundColor: palette.bgCard,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
+    borderColor: palette.accentBorder,
+    ...shadows.card,
   },
   actions: {
-    marginTop: 18,
-    gap: 12,
+    marginTop: spacing.lg + 2,
+    gap: spacing.md,
   },
   button: {
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButton: {
-    backgroundColor: '#151619',
+    backgroundColor: palette.accent,
   },
   secondaryButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.12)',
+    borderColor: palette.accentBorder,
   },
   primaryButtonText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: palette.textOnAccent,
   },
   secondaryButtonText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '600',
-    color: '#151619',
+    color: palette.textPrimary,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 14,
+    gap: spacing.sm + 2,
+    marginBottom: spacing.md + 2,
   },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#151619',
+    borderRadius: radii.xs / 2,
+    backgroundColor: palette.accentDark,
     marginTop: 7,
   },
   rowText: {
     flex: 1,
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 22,
-    color: '#1A1A1A',
+    color: palette.textPrimary,
   },
   status: {
-    marginTop: 14,
-    fontSize: 13,
+    marginTop: spacing.md + 2,
+    ...typography.bodySm,
     lineHeight: 18,
-    color: 'rgba(26,26,26,0.68)',
+    color: palette.textSecondary,
   },
 });

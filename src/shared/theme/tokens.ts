@@ -9,30 +9,30 @@ import type { TextStyle, ViewStyle } from "react-native";
 // ─── Color Palette ────────────────────────────────────────────────────────────
 
 export const palette = {
-  // Accent — Lime Green
-  accent: "#D2F45C",
-  accentDark: "#8FB800",
+  // Accent — Deeper Lime Green
+  accent: "#C2EA45",
+  accentDark: "#86AE00",
   accentDeep: "#0A1400",
-  accentMuted: "rgba(210,244,92,0.12)",
-  accentMutedMid: "rgba(210,244,92,0.18)",
-  accentMutedStrong: "rgba(210,244,92,0.3)",
-  accentBorder: "rgba(143,184,0,0.2)",
-  accentBorderStrong: "rgba(143,184,0,0.3)",
-  accentGradientEnd: "#B8E000",
+  accentMuted: "rgba(194,234,69,0.12)",
+  accentMutedMid: "rgba(194,234,69,0.18)",
+  accentMutedStrong: "rgba(194,234,69,0.3)",
+  accentBorder: "rgba(134,174,0,0.2)",
+  accentBorderStrong: "rgba(134,174,0,0.3)",
+  accentGradientEnd: "#A9D400",
 
   // Background
   bgBase: "#F3F7EE",
   bgCard: "rgba(255,255,255,0.75)",
   bgCardSolid: "rgba(255,255,255,0.95)",
   bgTabBar: "rgba(243,247,238,0.95)",
-  bgInput: "rgba(210,244,92,0.06)",
-  bgGhostButton: "rgba(210,244,92,0.1)",
+  bgInput: "rgba(194,234,69,0.06)",
+  bgGhostButton: "rgba(194,234,69,0.1)",
 
   // Text
   textPrimary: "#0F172A",
   textSecondary: "#64748B",
   textTertiary: "#94A3B8",
-  textAccent: "#8FB800",
+  textAccent: "#86AE00",
   textOnAccent: "#0A1400",
 
   // Danger
@@ -58,42 +58,42 @@ export const palette = {
 
 export const shadows: Record<string, ViewStyle> = {
   card: {
-    shadowColor: "#8FB800",
+    shadowColor: "#86AE00",
     shadowOpacity: 0.12,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
   cardSm: {
-    shadowColor: "#8FB800",
+    shadowColor: "#86AE00",
     shadowOpacity: 0.08,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
   cardLg: {
-    shadowColor: "#8FB800",
+    shadowColor: "#86AE00",
     shadowOpacity: 0.15,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
   mic: {
-    shadowColor: "#D2F45C",
+    shadowColor: "#C2EA45",
     shadowOpacity: 0.4,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 0 },
     elevation: 12,
   },
   tabBar: {
-    shadowColor: "#8FB800",
+    shadowColor: "#86AE00",
     shadowOpacity: 0.1,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -3 },
     elevation: 8,
   },
   usageCard: {
-    shadowColor: "#D2F45C",
+    shadowColor: "#C2EA45",
     shadowOpacity: 0.15,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },

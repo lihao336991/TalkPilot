@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Easing,
@@ -12,10 +13,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthActionPanel } from '@/shared/auth/components/AuthActionPanel';
 import { useAuthStore } from '@/shared/store/authStore';
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const authMode = useAuthStore((state) => state.authMode);
   const [isClosing, setIsClosing] = useState(false);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -139,11 +142,11 @@ export default function LoginScreen() {
           ]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close login"
+            accessibilityLabel={t('auth.login.closeAccessibilityLabel')}
             disabled={isClosing}
             onPress={() => closeSheet()}
             style={styles.closeButton}>
-            <Feather name="x" size={20} color="rgba(20,20,20,0.56)" />
+            <Feather name="x" size={20} color={palette.textSecondary} />
           </Pressable>
         </Animated.View>
 
@@ -158,9 +161,9 @@ export default function LoginScreen() {
               transform: [{ translateY: sheetTranslateY }],
             },
           ]}>
-          <Text style={styles.sheetTitle}>Continue with your account</Text>
+          <Text style={styles.sheetTitle}>{t('auth.login.title')}</Text>
           <Text style={styles.sheetSubtitle}>
-            Use Apple or Google to keep your progress synced on this device.
+            {t('auth.login.subtitle')}
           </Text>
           <AuthActionPanel onSuccess={() => closeSheet()} />
         </Animated.View>
@@ -173,7 +176,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(232,232,232,0.96)',
+    backgroundColor: palette.bgTabBar,
   },
   backdropContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -183,15 +186,18 @@ const styles = StyleSheet.create({
   },
   closeButtonWrap: {
     position: 'absolute',
-    right: 24,
+    right: spacing.xxl,
   },
   closeButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: palette.bgCardSolid,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    ...shadows.cardSm,
   },
   centerMark: {
     position: 'absolute',
@@ -199,30 +205,31 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#050505',
+    borderRadius: radii.md,
+    backgroundColor: palette.accentDark,
   },
   sheet: {
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingTop: 16,
-    paddingHorizontal: 14,
-    backgroundColor: '#050505',
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: palette.bgCardSolid,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    gap: 10,
+    borderColor: palette.accentBorderStrong,
+    gap: spacing.sm + 2,
   },
   sheetTitle: {
+    ...typography.displaySm,
     fontSize: 17,
     fontWeight: '700',
     textAlign: 'center',
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   sheetSubtitle: {
     marginBottom: 2,
-    fontSize: 12,
+    ...typography.labelMd,
     lineHeight: 18,
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.58)',
+    color: palette.textSecondary,
   },
 });

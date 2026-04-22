@@ -1,4 +1,5 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
+import { useTranslation } from "react-i18next";
 import {
   Modal,
   Pressable,
@@ -27,6 +28,7 @@ import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
 
 export default function LiveScreen() {
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const {
     scenePreset,
@@ -74,9 +76,9 @@ export default function LiveScreen() {
       style={[styles.container, { paddingBottom: bottomPadding }]}
       edges={["top"]}
     >
+      <DebugOverlay />
       {isIdle && (
         <>
-          <DebugOverlay inline />
           <StartSessionCard
             onStart={handleStartSession}
             dailyMinutesUsed={dailyMinutesUsed}
@@ -89,7 +91,6 @@ export default function LiveScreen() {
 
       {isActive && (
         <View style={styles.activeContainer}>
-          <DebugOverlay inline />
           <View style={styles.wsStatusCard}>
             <View
               style={[
@@ -103,7 +104,9 @@ export default function LiveScreen() {
                 <Text style={styles.wsStatusValue}>{mainWsStatus}</Text>
               </View>
               <Text style={styles.wsStatusHint}>
-                {isListening ? "Mic is sending audio" : "Mic is paused"}
+                {isListening
+                  ? t("live.screen.wsHintListening")
+                  : t("live.screen.wsHintPaused")}
               </Text>
               {shouldShowAssistWs ? (
                 <View style={styles.assistWsRow}>
@@ -165,9 +168,9 @@ export default function LiveScreen() {
       >
         <View style={styles.assistDraftBackdrop}>
           <View style={styles.assistDraftCard}>
-            <Text style={styles.assistDraftTitle}>Edit before sending</Text>
+            <Text style={styles.assistDraftTitle}>{t("live.screen.assistDraftTitle")}</Text>
             <Text style={styles.assistDraftSubtitle}>
-              Refine your text, then generate an English reply
+              {t("live.screen.assistDraftSubtitle")}
             </Text>
 
             <TextInput
@@ -177,8 +180,8 @@ export default function LiveScreen() {
               autoFocus
               multiline
               textAlignVertical="top"
-              placeholder="Edit your speech into clearer text"
-              placeholderTextColor="#9CA3AF"
+              placeholder={t("live.screen.assistDraftPlaceholder")}
+              placeholderTextColor={palette.textTertiary}
             />
 
             <View style={styles.assistDraftActions}>
@@ -197,7 +200,7 @@ export default function LiveScreen() {
                     styles.assistDraftGhostButtonText,
                   ]}
                 >
-                  Cancel
+                  {t("common.actions.cancel")}
                 </Text>
               </Pressable>
 
@@ -210,7 +213,9 @@ export default function LiveScreen() {
                   void submitAssistDraft();
                 }}
               >
-                <Text style={styles.assistDraftButtonText}>Generate reply</Text>
+                <Text style={styles.assistDraftButtonText}>
+                  {t("common.actions.generateReply")}
+                </Text>
               </Pressable>
             </View>
           </View>

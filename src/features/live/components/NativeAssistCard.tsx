@@ -1,4 +1,5 @@
 import { getLanguageDisplayName } from '@/shared/locale/deviceLanguage';
+import { useTranslation } from "react-i18next";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -17,29 +18,32 @@ export default function NativeAssistCard({
   hint,
   status,
 }: Props) {
+  const { i18n, t } = useTranslation();
   const languageLabel = sourceLanguage
-    ? getLanguageDisplayName(sourceLanguage)
-    : 'Native';
+    ? getLanguageDisplayName(sourceLanguage, i18n.language === "zh-CN" ? "zh-CN" : "en")
+    : t("common.labels.native");
 
   const statusText =
     status === "recording"
-      ? "Listening to your native speech..."
+      ? t("live.nativeAssist.listening")
       : status === "processing"
-        ? "Generating English reply..."
-        : "English assist ready";
+        ? t("live.nativeAssist.generating")
+        : t("live.nativeAssist.ready");
 
   return (
     <View style={styles.container}>
       <Text style={styles.status}>{statusText}</Text>
       {sourceText ? (
         <View style={styles.section}>
-          <Text style={styles.label}>{languageLabel} original</Text>
+          <Text style={styles.label}>
+            {t("live.nativeAssist.original", { language: languageLabel })}
+          </Text>
           <Text style={styles.sourceText}>{sourceText}</Text>
         </View>
       ) : null}
       {englishText ? (
         <View style={styles.section}>
-          <Text style={styles.label}>Suggested reply</Text>
+          <Text style={styles.label}>{t("live.nativeAssist.suggestedReply")}</Text>
           <Text style={styles.enText}>{englishText}</Text>
         </View>
       ) : null}

@@ -9,6 +9,36 @@ import {
   withLlmDefaults,
 } from "../_shared/llm.ts";
 
+function languageDisplayName(tag: string): string {
+  const primary = tag.split("-")[0].toLowerCase();
+  const map: Record<string, string> = {
+    zh: "Chinese (Simplified)",
+    ja: "Japanese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    ru: "Russian",
+    nl: "Dutch",
+    hi: "Hindi",
+    id: "Indonesian",
+    tr: "Turkish",
+    pl: "Polish",
+    sv: "Swedish",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+    uk: "Ukrainian",
+    th: "Thai",
+    vi: "Vietnamese",
+    ar: "Arabic",
+    en: "English",
+  };
+  return map[primary] ?? tag;
+}
+
 function sanitizeSuggestionText(text: string): string {
   return text
     .replace(
@@ -58,6 +88,10 @@ serve(async (req: Request) => {
   const sessionId = body.session_id ?? body.sessionId;
   const lastUtterance = body.last_utterance ?? body.lastUtterance;
   const scene = body.scene;
+  const targetLanguage = typeof (body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage) === "string" &&
+      String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    ? String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    : "en";
 
   if (typeof sessionId !== "string" || typeof lastUtterance !== "string") {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
@@ -91,10 +125,13 @@ serve(async (req: Request) => {
     .map((t: { speaker: string; text: string }) => `${t.speaker}: ${t.text}`)
     .join("\n");
 
-  const systemPrompt = `You are an English conversation coach. The user is practicing English in a "${scene || "general"}" scenario.
+  const targetLanguageName = languageDisplayName(targetLanguage);
+
+  const systemPrompt = `You are a ${targetLanguageName} conversation coach. The user is practicing ${targetLanguageName} in a "${scene || "general"}" scenario.
 
 Based on the conversation so far and the last thing the other person said, generate exactly ONE natural reply suggestion for the user. 
 The reply should be 1-2 sentences. 
+The suggestion MUST be written in ${targetLanguageName}.
 
 CRITICAL INSTRUCTIONS:
 - NEVER include any reasoning, thought process, or explanations.

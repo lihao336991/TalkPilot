@@ -1,14 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { signInWithApple, signInWithGoogle } from '@/shared/api/supabase';
+import { palette, radii, spacing, typography } from '@/shared/theme/tokens';
 
 type AuthActionPanelProps = {
   onSuccess?: () => void | Promise<void>;
 };
 
 export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
+  const { t } = useTranslation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<'apple' | 'google' | null>(null);
 
@@ -27,7 +30,9 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
 
       await onSuccess?.();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '登录失败，请稍后重试。');
+      setErrorMessage(
+        error instanceof Error ? error.message : t('auth.login.fallbackError'),
+      );
     } finally {
       setPendingProvider(null);
     }
@@ -36,9 +41,9 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
   if (!isSupportedPlatform) {
     return (
       <View style={styles.unsupportedCard}>
-        <Text style={styles.unsupportedTitle}>iOS only for now</Text>
+        <Text style={styles.unsupportedTitle}>{t('auth.login.unsupportedTitle')}</Text>
         <Text style={styles.unsupportedBody}>
-          Apple and Google sign-in are currently enabled for the iOS build in this first release.
+          {t('auth.login.unsupportedBody')}
         </Text>
       </View>
     );
@@ -63,24 +68,24 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
           pendingProvider !== null ? styles.buttonDisabled : null,
         ]}>
         {pendingProvider === 'google' ? (
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={palette.textOnAccent} />
         ) : (
           <View style={styles.googleButtonContent}>
-            <FontAwesome name="google" size={18} color="#FFFFFF" />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            <FontAwesome name="google" size={18} color={palette.textOnAccent} />
+            <Text style={styles.googleButtonText}>{t('auth.login.googleButton')}</Text>
           </View>
         )}
       </Pressable>
 
       {pendingProvider === 'apple' ? (
         <View style={styles.inlineLoading}>
-          <ActivityIndicator color="#FFFFFF" />
-          <Text style={styles.inlineLoadingText}>Completing Apple sign-in...</Text>
+          <ActivityIndicator color={palette.textPrimary} />
+          <Text style={styles.inlineLoadingText}>{t('auth.login.appleLoading')}</Text>
         </View>
       ) : null}
 
       <Text style={styles.legalHint}>
-        By continuing, you agree to use your Apple or Google account on this device.
+        {t('auth.login.legalHint')}
       </Text>
 
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
@@ -90,7 +95,7 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 14,
+    gap: spacing.md + 2,
   },
   appleButton: {
     width: '100%',
@@ -98,12 +103,12 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     height: 54,
-    borderRadius: 16,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1F1F22',
+    backgroundColor: palette.accent,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: palette.accentBorderStrong,
   },
   googleButtonPressed: {
     opacity: 0.8,
@@ -112,12 +117,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   googleButtonText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: palette.textOnAccent,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -126,40 +131,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   inlineLoadingText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.72)',
+    ...typography.bodySm,
+    color: palette.textSecondary,
   },
   legalHint: {
     marginTop: 2,
-    fontSize: 11,
+    ...typography.caption,
     lineHeight: 16,
     textAlign: 'center',
-    color: 'rgba(255,255,255,0.42)',
+    color: palette.textTertiary,
   },
   errorText: {
-    fontSize: 13,
+    ...typography.bodySm,
     lineHeight: 20,
-    color: '#FF9B88',
+    color: palette.danger,
   },
   unsupportedCard: {
-    borderRadius: 18,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: 8,
+    borderColor: palette.accentBorder,
+    gap: spacing.sm,
   },
   unsupportedTitle: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   unsupportedBody: {
-    fontSize: 13,
+    ...typography.bodySm,
     lineHeight: 20,
-    color: 'rgba(255,255,255,0.68)',
+    color: palette.textSecondary,
   },
 });

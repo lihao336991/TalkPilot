@@ -6,7 +6,11 @@ import {
 import type { FeatureAccessEnvelope } from '@/shared/billing/accessTypes';
 import { useDebugStore } from '@/features/live/store/debugStore';
 import { invokeEdgeFunction } from '@/shared/api/request';
-import { useSuggestionStore } from '@/features/live/store/suggestionStore';
+import {
+  type Suggestion,
+  useSuggestionStore,
+} from '@/features/live/store/suggestionStore';
+import { useLocaleStore } from '@/shared/store/localeStore';
 import { useAuthStore } from '@/shared/store/authStore';
 
 function getLlmMetaDetail(headers: Headers): string {
@@ -18,6 +22,20 @@ function getLlmMetaDetail(headers: Headers): string {
   return parts.join(' · ');
 }
 
+function isSuggestion(value: unknown): value is Suggestion {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    (candidate.style === 'formal' ||
+      candidate.style === 'casual' ||
+      candidate.style === 'simple') &&
+    typeof candidate.text === 'string'
+  );
+}
+
 export class SuggestionService {
   async fetchSuggestions(
     sessionId: string,
@@ -27,6 +45,7 @@ export class SuggestionService {
   ): Promise<void> {
     const store = useSuggestionStore.getState();
     const accessToken = useAuthStore.getState().accessToken;
+    const { learningLanguage } = useLocaleStore.getState();
 
     store.startLoading(turnId);
 
@@ -38,7 +57,12 @@ export class SuggestionService {
       }>({
         functionName: 'suggest',
         accessToken,
-        body: { sessionId, lastUtterance, scene },
+        body: {
+          sessionId,
+          lastUtterance,
+          scene,
+          learningLanguage,
+        },
       });
 
       const access = normalizeFeatureAccess(payload, 'suggestion');
@@ -46,7 +70,9 @@ export class SuggestionService {
         useAccessStore.getState().setFeatureAccess(access);
       }
       const llmMeta = getLlmMetaDetail(headers);
-      const suggestions = Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+      const suggestions = Array.isArray(payload?.suggestions)
+        ? payload.suggestions.filter(isSuggestion)
+        : [];
       const isStillCurrent = useSuggestionStore.getState().triggerTurnId === turnId;
       console.log('[Suggestion] Received suggestions:', suggestions.length, llmMeta);
       useDebugStore

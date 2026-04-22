@@ -7,7 +7,7 @@ import {
   withLlmDefaults,
 } from "../_shared/llm.ts";
 
-type TranslationDirection = "to_en" | "to_native";
+type TranslationDirection = "to_learning" | "to_native";
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
@@ -23,7 +23,11 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 function normalizeDirection(raw: unknown): TranslationDirection {
-  return raw === "to_native" ? "to_native" : "to_en";
+  if (raw === "to_native") {
+    return "to_native";
+  }
+
+  return "to_learning";
 }
 
 function languageDisplayName(tag: string): string {
@@ -62,12 +66,13 @@ function buildPrompt(
   sceneHint: string,
   targetLanguageTag: string,
 ) {
-  if (direction === "to_en") {
+  if (direction === "to_learning") {
+    const targetName = languageDisplayName(targetLanguageTag);
     return [
       {
         role: "system" as const,
         content:
-          "You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken English that an English speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).",
+          `You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken ${targetName} that a native ${targetName} speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).`,
       },
       {
         role: "user" as const,
@@ -113,7 +118,7 @@ serve(async (req: Request) => {
   let transcript = "";
   let sceneHint = "";
   let ttsMode = "";
-  let direction: TranslationDirection = "to_en";
+  let direction: TranslationDirection = "to_learning";
   let targetLanguage = "zh-CN";
 
   try {
@@ -136,8 +141,14 @@ serve(async (req: Request) => {
         : typeof payload.ttsMode === "string"
           ? payload.ttsMode
           : "none";
-    direction = normalizeDirection(payload.direction);
-    if (typeof payload.target_language === "string" && payload.target_language.trim()) {
+    direction = normalizeDirection(
+      payload.direction === "to_en" ? "to_learning" : payload.direction,
+    );
+    if (typeof payload.learning_language === "string" && payload.learning_language.trim()) {
+      targetLanguage = payload.learning_language.trim();
+    } else if (typeof payload.learningLanguage === "string" && payload.learningLanguage.trim()) {
+      targetLanguage = payload.learningLanguage.trim();
+    } else if (typeof payload.target_language === "string" && payload.target_language.trim()) {
       targetLanguage = payload.target_language.trim();
     } else if (typeof payload.targetLanguage === "string" && payload.targetLanguage.trim()) {
       targetLanguage = payload.targetLanguage.trim();
@@ -205,7 +216,8 @@ serve(async (req: Request) => {
   let audioBase64: string | null = null;
   let audioMimeType: string | null = null;
 
-  if (ttsMode === "cloud" && direction === "to_en") {
+  if (ttsMode === "cloud" && direction === "to_learning" &&
+    targetLanguage.toLowerCase().startsWith("en")) {
     const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY");
     if (!deepgramApiKey) {
       return new Response(
@@ -247,10 +259,13 @@ serve(async (req: Request) => {
     JSON.stringify({
       source_text: sourceText,
       direction,
-      target_language: direction === "to_en" ? "en" : targetLanguage,
+        target_language: targetLanguage,
       translated_text: translatedText,
-      // Back-compat: old clients expected `english_reply` for to_en translation.
-      english_reply: direction === "to_en" ? translatedText : null,
+        learning_reply: translatedText,
+        // Back-compat: old clients expected `english_reply` for English learning.
+        english_reply: targetLanguage.toLowerCase().startsWith("en")
+          ? translatedText
+          : null,
       hint: hint || null,
       audio_base64: audioBase64,
       audio_mime_type: audioMimeType,

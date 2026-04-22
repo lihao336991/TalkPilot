@@ -9,6 +9,7 @@ import { translationService } from "@/features/live/services/TranslationService"
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   Animated,
   Modal,
@@ -51,6 +52,7 @@ export function TranscriptBubble({
   translationStatus,
   translationDirection,
 }: TranscriptBubbleProps) {
+  const { t } = useTranslation();
   const isSelf = speaker === "self";
   const opacity = React.useRef(new Animated.Value(isFinal ? 1 : 0.6)).current;
   const [detailVisible, setDetailVisible] = React.useState(false);
@@ -68,7 +70,7 @@ export function TranscriptBubble({
     translationStatus === "error";
   const canPlayTranslation =
     translationStatus === "done" &&
-    translationDirection === "to_en" &&
+    translationDirection === "to_learning" &&
     isSelf &&
     !!translation;
 
@@ -84,7 +86,7 @@ export function TranscriptBubble({
     if (!translation || !canPlayTranslation) return;
     try {
       setSpeaking(true);
-      await translationService.speakEnglish(translation);
+      await translationService.speakLearning(translation);
     } finally {
       setSpeaking(false);
     }
@@ -142,14 +144,16 @@ export function TranscriptBubble({
               <View style={styles.translationRow}>
                 <View style={styles.translationTextWrap}>
                   {translationStatus === "loading" && (
-                    <Text style={styles.translationLoading}>Translating...</Text>
+                    <Text style={styles.translationLoading}>
+                      {t("live.transcript.translating")}
+                    </Text>
                   )}
                   {translationStatus === "done" && translation && (
                     <Text style={styles.translationText}>{translation}</Text>
                   )}
                   {translationStatus === "error" && (
                     <Text style={styles.translationError}>
-                      Translation failed
+                      {t("live.transcript.translationFailed")}
                     </Text>
                   )}
                 </View>
@@ -157,7 +161,7 @@ export function TranscriptBubble({
                   <Pressable
                     onPress={handlePlayTranslation}
                     style={styles.ttsButton}
-                    accessibilityLabel="Play English translation"
+                    accessibilityLabel={t("live.transcript.playLearningTranslation")}
                     hitSlop={8}
                   >
                     <Feather

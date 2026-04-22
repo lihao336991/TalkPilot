@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,6 +21,7 @@ export function LegalDocumentScreen(props: LegalDocumentScreenProps) {
   const { title, subtitle, sections, effectiveDate, contactEmail } = props;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   function closeScreen() {
     if (router.canGoBack()) {
@@ -44,7 +46,7 @@ export function LegalDocumentScreen(props: LegalDocumentScreenProps) {
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close legal document"
+            accessibilityLabel={t('billing.legal.closeAccessibilityLabel')}
             onPress={closeScreen}
             style={styles.iconButton}>
             <Feather name="arrow-left" size={20} color="#FFFFFF" />
@@ -64,13 +66,13 @@ export function LegalDocumentScreen(props: LegalDocumentScreenProps) {
           <View style={styles.noticeCard}>
             {effectiveDate ? (
               <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Effective date</Text>
+                <Text style={styles.metaLabel}>{t('common.legal.effectiveDate')}</Text>
                 <Text style={styles.metaValue}>{effectiveDate}</Text>
               </View>
             ) : null}
             {contactEmail ? (
               <View style={styles.metaRow}>
-                <Text style={styles.metaLabel}>Contact</Text>
+                <Text style={styles.metaLabel}>{t('common.legal.contact')}</Text>
                 <Text style={styles.metaValue}>{contactEmail}</Text>
               </View>
             ) : null}

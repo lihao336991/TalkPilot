@@ -1,9 +1,6 @@
 import { StreamingWebSocketClient } from '@/features/live/services/StreamingWebSocketClient';
 import { useConversationStore } from '@/features/live/store/conversationStore';
-import {
-  getDeepgramLanguage,
-  getDeviceLanguageTag,
-} from '@/shared/locale/deviceLanguage';
+import { getDeepgramLanguageForTag } from '@/shared/locale/deviceLanguage';
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binaryString = atob(base64);
@@ -76,16 +73,30 @@ export class AssistStreamingService {
   });
   private captureSequence = 0;
   private activeCapture: AssistCaptureState | null = null;
+  private currentNativeLanguageTag = 'zh-CN';
+  private currentDeepgramLanguage = 'zh-CN';
 
-  connect(token: string): Promise<void> {
-    if (this.client.canResumeWithoutReconnect()) {
+  connect(token: string, nativeLanguageTag: string): Promise<void> {
+    const nextDeepgramLanguage = getDeepgramLanguageForTag(nativeLanguageTag);
+    if (
+      this.client.canResumeWithoutReconnect() &&
+      this.currentDeepgramLanguage === nextDeepgramLanguage
+    ) {
+      this.currentNativeLanguageTag = nativeLanguageTag;
+      this.currentDeepgramLanguage = nextDeepgramLanguage;
       return Promise.resolve();
     }
 
-    const deepgramLang = getDeepgramLanguage();
+    if (this.client.canResumeWithoutReconnect()) {
+      this.disconnectClient();
+    }
+
+    this.currentNativeLanguageTag = nativeLanguageTag;
+    this.currentDeepgramLanguage = nextDeepgramLanguage;
+
     const url =
       `wss://api.deepgram.com/v1/listen?` +
-      `model=nova-2&language=${deepgramLang}&smart_format=true&interim_results=true` +
+      `model=nova-2&language=${this.currentDeepgramLanguage}&smart_format=true&interim_results=true` +
       `&utterance_end_ms=1000&vad_events=true&punctuate=true` +
       `&encoding=linear16&sample_rate=16000&channels=1`;
 
@@ -134,7 +145,7 @@ export class AssistStreamingService {
     this.resetCaptureState();
     this.activeCapture = {
       id: this.captureSequence + 1,
-      sourceLanguage: getDeviceLanguageTag(),
+      sourceLanguage: this.currentNativeLanguageTag,
       latestTranscript: '',
       finalTranscript: '',
       awaitingFinalization: false,
@@ -162,7 +173,7 @@ export class AssistStreamingService {
     if (!capture) {
       return {
         transcript: '',
-        sourceLanguage: getDeviceLanguageTag(),
+        sourceLanguage: this.currentNativeLanguageTag,
       };
     }
 
@@ -192,8 +203,19 @@ export class AssistStreamingService {
     this.client.cancelPausedRetention();
   }
 
-  canResumeWithoutReconnect(): boolean {
-    return this.client.canResumeWithoutReconnect();
+  canResumeWithoutReconnect(expectedNativeLanguageTag?: string): boolean {
+    if (!this.client.canResumeWithoutReconnect()) {
+      return false;
+    }
+
+    if (!expectedNativeLanguageTag) {
+      return true;
+    }
+
+    return (
+      getDeepgramLanguageForTag(expectedNativeLanguageTag) ===
+      this.currentDeepgramLanguage
+    );
   }
 
   getPreviewTranscript(): string {

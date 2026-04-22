@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Modal,
@@ -29,6 +30,7 @@ type Props = {
 const RECORD_DURATION_MS = voiceEnrollmentService.getRecordingDurationMs();
 
 export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('intro');
   const [countdown, setCountdown] = useState(Math.ceil(RECORD_DURATION_MS / 1000));
   const chunksRef = useRef<string[]>([]);
@@ -134,7 +136,7 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Voice Setup</Text>
+            <Text style={styles.title}>{t('live.voiceEnrollment.title')}</Text>
             <Pressable onPress={onSkip} hitSlop={12}>
               <Feather name="x" size={20} color="#6B7280" />
             </Pressable>
@@ -143,19 +145,21 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
           {phase === 'intro' && (
             <>
               <Text style={styles.body}>
-                Speak for {Math.ceil(RECORD_DURATION_MS / 1000)} seconds so the
-                app can recognise your voice and separate it from your
-                conversation partner's.
+                {t('live.voiceEnrollment.introBody', {
+                  seconds: Math.ceil(RECORD_DURATION_MS / 1000),
+                })}
               </Text>
               <Text style={styles.hint}>
-                You only need to do this once. Your sample is stored locally.
+                {t('live.voiceEnrollment.introHint')}
               </Text>
               <Pressable style={styles.primaryButton} onPress={startRecording}>
                 <Feather name="mic" size={18} color="#FFF" />
-                <Text style={styles.primaryButtonText}>Start Recording</Text>
+                <Text style={styles.primaryButtonText}>
+                  {t('common.actions.startRecording')}
+                </Text>
               </Pressable>
               <Pressable onPress={onSkip}>
-                <Text style={styles.skipText}>Skip for now</Text>
+                <Text style={styles.skipText}>{t('live.voiceEnrollment.skipForNow')}</Text>
               </Pressable>
             </>
           )}
@@ -163,19 +167,21 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
           {phase === 'recording' && (
             <>
               <Text style={styles.body}>
-                Keep talking naturally — anything works.
+                {t('live.voiceEnrollment.recordingBody')}
               </Text>
               <Animated.View style={[styles.recordingOrb, pulseStyle]}>
                 <Feather name="mic" size={32} color="#FFF" />
               </Animated.View>
-              <Text style={styles.countdown}>{countdown}s</Text>
+              <Text style={styles.countdown}>
+                {t('live.voiceEnrollment.countdown', { count: countdown })}
+              </Text>
             </>
           )}
 
           {phase === 'saving' && (
             <View style={styles.centeredRow}>
               <ActivityIndicator size="large" color="#111827" />
-              <Text style={styles.savingText}>Saving voice sample…</Text>
+              <Text style={styles.savingText}>{t('live.voiceEnrollment.saving')}</Text>
             </View>
           )}
 
@@ -185,11 +191,10 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
                 <Feather name="check" size={32} color="#FFF" />
               </View>
               <Text style={styles.body}>
-                Voice sample saved. Your voice will be recognised automatically
-                in every session.
+                {t('live.voiceEnrollment.doneBody')}
               </Text>
               <Pressable style={styles.primaryButton} onPress={onComplete}>
-                <Text style={styles.primaryButtonText}>Continue</Text>
+                <Text style={styles.primaryButtonText}>{t('common.actions.continue')}</Text>
               </Pressable>
             </>
           )}

@@ -1,0 +1,492 @@
+export const en = {
+  app: {
+    defaultHeaderTitle: "TalkPilot",
+    defaultHeaderSubtitle: "Real-Time Language Copilot",
+    notFoundTitle: "This screen doesn't exist.",
+    notFoundAction: "Go to home screen!",
+    notFoundScreenTitle: "Oops!",
+  },
+  navigation: {
+    tabs: {
+      live: "Live",
+      history: "History",
+      coach: "Coach",
+      profile: "Profile",
+    },
+  },
+  common: {
+    actions: {
+      cancel: "Cancel",
+      close: "Close",
+      continue: "Continue",
+      retry: "Retry",
+      tryAgain: "Try again",
+      settings: "Settings",
+      useSystem: "Follow system",
+      goToProfile: "Go to Profile",
+      stayHere: "Stay here",
+      logIn: "Log in",
+      logOut: "Log out",
+      skip: "Skip",
+      next: "Next",
+      getStarted: "Get Started",
+      gotIt: "Got it",
+      startRecording: "Start Recording",
+      startConversation: "Start conversation",
+      generateReply: "Generate reply",
+      restorePurchases: "Restore Purchases",
+      manageSubscription: "Manage subscription",
+      upgradeToPro: "Upgrade to Pro",
+      viewPlans: "View plans",
+    },
+    labels: {
+      native: "Native",
+      unavailable: "Unavailable",
+      notSignedIn: "Not signed in",
+      emailUnavailable: "Email unavailable",
+      app: "app",
+      account: "account",
+      guest: "guest",
+      aiPowered: "AI-powered",
+      realTime: "Real-time",
+    },
+    languageName: {
+      en: "English",
+      "zh-CN": "Simplified Chinese",
+      es: "Spanish",
+      ja: "Japanese",
+      ko: "Korean",
+      fr: "French",
+      de: "German",
+      "pt-BR": "Portuguese (Brazil)",
+    },
+    status: {
+      loginRequired: "Log in required",
+      syncing: "Syncing…",
+      synced: "Synced",
+      signingOut: "Signing out…",
+    },
+    legal: {
+      effectiveDate: "Effective date",
+      contact: "Contact",
+    },
+    authProvider: {
+      anonymous: "guest",
+      apple: "Apple",
+      google: "Google",
+      unknown: "account",
+    },
+    subscriptionTier: {
+      free: "Free",
+      pro: "TalkPilot Pro",
+      unlimited: "TalkPilot Pro",
+      freePreview: "Free preview",
+    },
+    subscriptionStatus: {
+      inactive: "inactive",
+      active: "active",
+      trialing: "trialing",
+      canceled: "canceled",
+      billingIssue: "billing issue",
+      expired: "expired",
+      syncing: "syncing",
+    },
+  },
+  auth: {
+    login: {
+      closeAccessibilityLabel: "Close login",
+      title: "Continue with your account",
+      subtitle:
+        "Use Apple or Google to keep your progress synced on this device.",
+      fallbackError: "Sign in failed. Please try again later.",
+      googleButton: "Continue with Google",
+      appleLoading: "Completing Apple sign-in...",
+      legalHint:
+        "By continuing, you agree to use your Apple or Google account on this device.",
+      unsupportedTitle: "iOS only for now",
+      unsupportedBody:
+        "Apple and Google sign-in are currently enabled for the iOS build in this first release.",
+    },
+  },
+  onboarding: {
+    currentLearningLanguage: "Current learning language: {{language}}",
+    changeInSettings: "You can change this anytime in Settings.",
+    slides: {
+      realtime: {
+        eyebrow: "REAL-TIME",
+        headline: "Your AI co-pilot\nin every conversation",
+        body:
+          "TalkPilot listens as you speak and gives you instant feedback - grammar, vocabulary, and natural expression, all in the moment.",
+      },
+      review: {
+        eyebrow: "INSTANT REVIEW",
+        headline: "Know exactly what\nto fix, right now",
+        body:
+          "Every sentence you speak gets scored. Tap any bubble to see what went wrong, the corrected version, and a better way to say it.",
+      },
+      suggest: {
+        eyebrow: "AI SUGGESTIONS",
+        headline: "Never get stuck\nfor words again",
+        body:
+          "When you don't know what to say next, TalkPilot generates a natural reply suggestion based on the full conversation context.",
+      },
+      getstarted: {
+        eyebrow: "LET'S GO",
+        headline: "Start your first\nconversation",
+        body:
+          "Tap the mic, start talking. TalkPilot works in the background - no setup, no interruptions. Just speak naturally.",
+      },
+    },
+  },
+  live: {
+    nativeAssist: {
+      listening: "Listening to your native speech...",
+      generating: "Generating learning-language reply...",
+      ready: "Assist reply ready",
+      original: "{{language}} original",
+      suggestedReply: "Suggested reply",
+    },
+    screen: {
+      wsHintListening: "Mic is sending audio",
+      wsHintPaused: "Mic is paused",
+      assistDraftTitle: "Edit before sending",
+      assistDraftSubtitle:
+        "Refine your text, then generate a reply in your learning language",
+      assistDraftPlaceholder: "Edit your speech into clearer text",
+    },
+    startSession: {
+      accessibilityLabel: "Start conversation",
+      titleReady: "Start Conversation",
+      subtitleReady: "Tap to begin your live session",
+      titleLimit: "Daily limit reached",
+      subtitleLimit: "Upgrade to Pro for 120 min/day",
+      usageLabel: "Daily usage",
+      usageLimitReached: "Limit reached",
+      usageRemaining: "{{count}} min left",
+      usageSummary: "{{used}} / {{limit}} min used today",
+    },
+    voiceEnrollment: {
+      title: "Voice Setup",
+      introBody:
+        "Speak for {{seconds}} seconds so the app can recognise your voice and separate it from your conversation partner's.",
+      introHint:
+        "You only need to do this once. Your sample is stored locally.",
+      skipForNow: "Skip for now",
+      recordingBody: "Keep talking naturally - anything works.",
+      countdown: "{{count}}s",
+      saving: "Saving voice sample…",
+      doneBody:
+        "Voice sample saved. Your voice will be recognised automatically in every session.",
+    },
+    speakerCalibration: {
+      title: "Voice Detection",
+      instruction:
+        "Please speak first when the session starts - the system will automatically recognize your voice from the first sentence.",
+      skipAccessibilityLabel: "Skip voice detection",
+      startAccessibilityLabel: "Start session",
+    },
+    suggestionPanel: {
+      title: "Quick Reply",
+    },
+    suggestionStyle: {
+      formal: "Formal",
+      casual: "Casual",
+      simple: "Simple",
+    },
+    reviewIndicator: {
+      pass: "Pass",
+      warn: "Warn",
+      error: "Error",
+      grammar: "Grammar",
+      wording: "Wording",
+      naturalness: "Naturalness",
+      tryTemplate: "Try: {{text}}",
+      tapReviewDetails: "Tap to review details",
+      moreNaturalOption: "More natural option",
+      suggestion: "Suggestion",
+      tapSeeFeedback: "Tap to see feedback",
+    },
+    reviewDetail: {
+      scoreHelpPass: "This sentence is okay.",
+      scoreHelpWarn: "A small fix or cleaner phrasing will sound better.",
+      scoreHelpError: "There is a clear issue worth fixing.",
+      mainIssue: "Main issue",
+      youSaid: "You said",
+      sayInstead: "Say instead",
+      recommendedWording: "Recommended wording",
+      goodPart: "Good part",
+      empty: "No detailed issue was returned for this sentence.",
+    },
+    transcript: {
+      translating: "Translating...",
+      translationFailed: "Translation failed",
+      playLearningTranslation: "Play learning-language translation",
+    },
+    toolbar: {
+      paused: "Paused",
+      listening: "Listening…",
+      live: "Live",
+      resume: "Resume",
+      pause: "Pause",
+      holdToSpeak: "Hold to speak",
+      releaseToSend: "Release to send",
+      endConversation: "End conversation",
+      end: "End",
+    },
+    pressAndSlide: {
+      editDraftFallback: "Release to turn this into editable text",
+      releaseCancel: "Release to cancel",
+      cancel: "Cancel",
+      releaseEditText: "Release to edit text",
+      slideToText: "Slide here for text",
+      releaseSend: "Release to send",
+    },
+    conversationFlow: {
+      listening: "Listening...",
+    },
+  },
+  history: {
+    headerEyebrow: "History",
+    headerTitle: "Sessions",
+    refreshAccessibilityLabel: "Refresh session history",
+    stats: {
+      sessions: "sessions",
+      minutesPracticed: "min practiced",
+      completed: "completed",
+    },
+    state: {
+      loadingTitle: "Loading sessions…",
+      loadingBody: "Pulling your conversation history.",
+      errorTitle: "Could not load history",
+      emptyTitle: "No sessions yet",
+      emptyBody:
+        "Start a conversation in Live and end it to see it appear here.",
+    },
+    duration: {
+      lessThanOneMinute: "< 1 min",
+      seconds: "{{count}}s",
+      minutesOnly: "{{count}} min",
+      minutesSeconds: "{{minutes}} min {{seconds}}s",
+    },
+    scene: {
+      freeConversation: "Free conversation",
+    },
+    sessionStatus: {
+      ended: "ended",
+      paused: "paused",
+      active: "active",
+    },
+  },
+  coach: {
+    title: "Coach",
+    subtitle: "Practice flows and reply strategy",
+    heroTitle:
+      "Build reusable coaching surfaces before wiring in real-time AI logic.",
+    heroDescription:
+      "This tab is ready for prompt templates, speaking drills, review rubrics, and expression packs.",
+    drills: {
+      replyPolishTitle: "Reply polish",
+      replyPolishDescription:
+        "Shorten a response while keeping it friendly and confident.",
+      rephraseIntentTitle: "Rephrase intent",
+      rephraseIntentDescription:
+        "Switch between casual, business, and interview tones in one tap.",
+      repairMomentsTitle: "Repair moments",
+      repairMomentsDescription:
+        'Handle "Sorry, could you repeat that?" and clarification follow-ups.',
+    },
+    placeholderTitle: "Coming soon",
+    placeholderBody:
+      "Coach features are planned for Phase 2. Stay tuned for prompt templates, speaking drills, and expression packs.",
+  },
+  settings: {
+    title: "Settings",
+    subtitle: "Choose the app language and the language you want to learn.",
+    section: {
+      appLanguage: "App language",
+      learningLanguage: "Learning language",
+    },
+    appLanguage: {
+      description:
+        "This changes navigation, buttons, alerts, and other interface text.",
+      followSystemTitle: "Follow system",
+      followSystemDescription:
+        "Use your device language automatically. Current: {{language}}",
+    },
+    learningLanguage: {
+      description:
+        "This saves which language you want to learn in TalkPilot.",
+      supportNote:
+        "The main live WebSocket listens to your learning language, while Assist listens to your native language for rescue input.",
+    },
+    voiceEnrollment: {
+      title: "Voice sample",
+      description:
+        "If you already saved a local voice sample, Live can enter directly without showing the voice recognition prompt.",
+      statusLabel: "Local sample",
+      loading: "Checking…",
+      saved: "Saved on this device",
+      notSaved: "Not set up yet",
+      savedHint:
+        "You can play back this sample or reset it. After reset, Live will ask you to record again next time.",
+      emptyHint:
+        "No local sample is saved right now. The next Live session will ask you to record one.",
+      playAction: "Play sample",
+      playing: "Playing…",
+      resetAction: "Reset sample",
+      unavailableTitle: "Sample unavailable",
+      unavailableBody:
+        "The local voice sample could not be loaded. Try recording it again from Live.",
+      playbackErrorTitle: "Playback failed",
+      playbackErrorBody:
+        "The local voice sample could not be played right now. Please try again.",
+      resetConfirmTitle: "Reset voice sample?",
+      resetConfirmBody:
+        "This removes the local enrollment sample. The next Live session will ask you to record a new one.",
+    },
+  },
+  profile: {
+    headerEyebrow: "Account",
+    headerTitle: "Profile",
+    talkPilotMember: "TalkPilot Member",
+    guestAccount: "Guest account",
+    signOutFailed: "Sign out failed.",
+    signOutConfirmTitle: "Log out?",
+    signOutConfirmMessage:
+      "You'll return to guest mode. Sign in again anytime.",
+    membershipBody: {
+      syncing:
+        "Purchase confirmed. Pro access is already active while we finish syncing.",
+      active: "Pro is active. Manage billing or restore purchases anytime below.",
+      free: "Free includes 10 live min, 100 reviews, and 100 suggestions per day.",
+      guest:
+        "Log in before purchasing so your subscription stays synced across devices.",
+    },
+    limits: {
+      live: "Live",
+      review: "Review",
+      suggest: "Suggest",
+      liveFree: "10 min/day",
+      livePro: "120 min/day",
+      reviewFree: "100/day",
+      reviewPro: "Unlimited",
+      suggestFree: "100/day",
+      suggestPro: "Unlimited",
+    },
+    detail: {
+      status: "Status",
+      sync: "Sync",
+      billing: "Billing",
+      expires: "Expires",
+      email: "Email",
+    },
+    preferences: {
+      title: "Preferences",
+      body: "Adjust app language and choose the language you want to learn.",
+      appLanguage: "App language",
+      learningLanguage: "Learning language",
+    },
+  },
+  billing: {
+    customerCenter: {
+      unsupportedTitle: "Customer center is mobile-only",
+      unsupportedBody:
+        "Open the iOS or Android build to manage subscriptions with RevenueCat UI.",
+      closeAccessibilityLabel: "Close customer center",
+      title: "Manage subscription",
+      subtitle:
+        "Review your plan, restore purchases, or manage billing actions from RevenueCat Customer Center.",
+    },
+    legal: {
+      closeAccessibilityLabel: "Close legal document",
+    },
+    paywall: {
+      closeAccessibilityLabel: "Close paywall",
+      titleEyebrow: "TalkPilot Pro",
+      titleChoosePlan: "Choose your plan",
+      titleAlreadyPro: "You're already Pro",
+      loading: "Loading paywall...",
+      unavailableTitle: "Paywall unavailable",
+      unavailableFallback: "Failed to load paywall.",
+      webUnsupportedTitle: "Purchases are not available on web",
+      webUnsupportedBody:
+        "Open the iOS or Android development build to test RevenueCat paywalls.",
+      activeStatusSyncing:
+        "Pro is already active. We're just finishing the account sync.",
+      activeStatusReady: "This account already has Pro access.",
+      restoreChecking: "Checking this account for existing purchases...",
+      restoreCompleteTitle: "Restore complete",
+      restoreMissingTitle: "Nothing to restore",
+      restoreFailedTitle: "Restore failed",
+      restoreFailedFallback:
+        "We couldn't restore purchases right now. Please try again later.",
+      purchaseCompleteTitle: "Purchase complete",
+      purchaseReceivedTitle: "Purchase received",
+      purchaseFailedTitle: "Purchase failed",
+      purchaseFailedFallback: "Please try again in a moment.",
+      purchaseCancelled: "Purchase cancelled. No changes were made.",
+      purchaseProcessing: "Processing purchase...",
+      sectionTitlePlans: "Plans",
+      sectionTitleAvailablePlans: "Available plans",
+      sectionTitleProDetails: "Pro details",
+      noOfferingTitle: "No offering configured",
+      noOfferingBody:
+        "RevenueCat did not return a current offering. Check your default offering in the dashboard.",
+      statusCard: {
+        syncingTitle: "Pro is active and still syncing",
+        syncingBody:
+          "Your purchase has already gone through. You can keep using Pro while we finish syncing this account.",
+        activeTitle: "Pro is already active",
+        activeBody:
+          "This account already has Pro. You can manage billing below or review other plans if you want to switch later.",
+      },
+      benefits: {
+        live: "120 live speaking minutes every day instead of 10",
+        review: "Unlimited AI review instead of the free 100/day cap",
+        suggest: "Unlimited AI reply suggestions instead of the free 100/day cap",
+        sync: "Purchase restore and account sync",
+      },
+      inlineActionTerms: "Terms",
+      inlineActionPrivacy: "Privacy",
+      footerManageSubscription: "Manage subscription",
+      footerManageBillingSyncing: "Pro active, manage billing",
+      footerRestorePurchases: "Restore Purchases",
+      footerRestoring: "Restoring...",
+      continueForPrice: "Continue for {{price}}",
+      choosePlanFallback: "Choose a plan",
+      package: {
+        periodYear: "per year",
+        periodMonth: "per month",
+        periodWeek: "per week",
+        periodSubscription: "subscription",
+        cycleAnnual: "Annual billing",
+        cycleMonthly: "Monthly billing",
+        cycleWeekly: "Weekly billing",
+        cycleRecurring: "Recurring billing",
+        titleYearly: "Yearly Pro",
+        titleMonthly: "Monthly Pro",
+        titleFallback: "Pro Plan",
+        captionYearly: "Best value",
+        captionMonthly: "Most flexible",
+        captionFallback: "Premium access",
+        badgeYearly: "Best Value",
+        badgeMonthly: "Most Flexible",
+        savePercent: "Save {{percent}}%",
+        saveAmount: "Save {{amount}}",
+        perMonth: "{{price}} / month",
+      },
+      summary: {
+        purchaseReady: "You're all set. Pro is active on this account now.",
+        purchaseSyncing:
+          "Purchase confirmed. Pro is already active, and we're finishing account sync in the background.",
+        purchaseDelayed:
+          "Purchase completed, but activation is taking a little longer than expected.",
+        restoreReady: "Your subscription has been restored and is ready to use.",
+        restoreSyncing:
+          "Restore succeeded. Pro is available now, and account sync is still finishing.",
+        restoreMissing:
+          "No active subscription was found to restore for this account.",
+      },
+    },
+  },
+} as const;

@@ -3,6 +3,7 @@ import { supabase } from "@/shared/api/supabase";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Pressable,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 
 type HistorySession = {
   id: string;
@@ -26,17 +28,20 @@ const HISTORY_CACHE_TTL_MS = 30_000;
 let historySessionsCache: HistorySession[] = [];
 let historySessionsCacheAt = 0;
 
-function formatDuration(s: number | null): string {
-  if (!s || s <= 0) return "< 1 min";
+function formatDuration(
+  s: number | null,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (!s || s <= 0) return t("history.duration.lessThanOneMinute");
   const m = Math.floor(s / 60);
   const sec = s % 60;
-  if (m === 0) return `${sec}s`;
-  if (sec === 0) return `${m} min`;
-  return `${m} min ${sec}s`;
+  if (m === 0) return t("history.duration.seconds", { count: sec });
+  if (sec === 0) return t("history.duration.minutesOnly", { count: m });
+  return t("history.duration.minutesSeconds", { minutes: m, seconds: sec });
 }
 
-function formatSessionDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+function formatSessionDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -44,7 +49,10 @@ function formatSessionDate(iso: string): string {
   });
 }
 
-function formatSceneLabel(session: HistorySession): string {
+function formatSceneLabel(
+  session: HistorySession,
+  t: (key: string) => string,
+): string {
   if (session.scene_description?.trim()) return session.scene_description.trim();
   if (session.scene_preset) {
     return session.scene_preset
@@ -52,17 +60,18 @@ function formatSceneLabel(session: HistorySession): string {
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
       .join(" ");
   }
-  return "Free conversation";
+  return t("history.scene.freeConversation");
 }
 
 function statusColor(status: string): string {
-  if (status === "ended") return "#D2F45C";
-  if (status === "paused") return "#FF9F6B";
-  return "#8EC5FF";
+  if (status === "ended") return palette.accentDark;
+  if (status === "paused") return "#B45309";
+  return "#2563EB";
 }
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
+  const { i18n, t } = useTranslation();
   const tabBarHeight = getTabBarHeight(insets.bottom);
   const [sessions, setSessions] = useState<HistorySession[]>(historySessionsCache);
   const [isLoading, setIsLoading] = useState(historySessionsCache.length === 0);
@@ -90,7 +99,7 @@ export default function HistoryScreen() {
       .order("started_at", { ascending: false });
 
     if (error) {
-      setErrorMessage(error.message || "Failed to load sessions.");
+      setErrorMessage(error.message || t("billing.paywall.unavailableFallback"));
       if (historySessionsCache.length === 0) setSessions([]);
       setIsLoading(false);
       return;
@@ -101,7 +110,7 @@ export default function HistoryScreen() {
     historySessionsCacheAt = Date.now();
     setSessions(next);
     setIsLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadSessions();
@@ -123,15 +132,15 @@ export default function HistoryScreen() {
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
-          <Text style={styles.headerEyebrow}>HISTORY</Text>
-          <Text style={styles.headerTitle}>Sessions</Text>
+          <Text style={styles.headerEyebrow}>{t("history.headerEyebrow")}</Text>
+          <Text style={styles.headerTitle}>{t("history.headerTitle")}</Text>
         </View>
         <Pressable
           onPress={handleRefresh}
           style={styles.refreshBtn}
-          accessibilityLabel="Refresh session history"
+          accessibilityLabel={t("history.refreshAccessibilityLabel")}
         >
-          <Feather name="refresh-cw" size={18} color={refreshing ? "#D2F45C" : "rgba(255,255,255,0.55)"} />
+          <Feather name="refresh-cw" size={18} color={refreshing ? palette.textAccent : palette.textSecondary} />
         </Pressable>
       </View>
 
@@ -145,7 +154,7 @@ export default function HistoryScreen() {
       >
         {/* ── Stats banner ── */}
         <LinearGradient
-          colors={["#111A00", "#0A0A0A"]}
+          colors={[palette.accentMuted, palette.bgCardSolid]}
           style={styles.statsBanner}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -153,17 +162,17 @@ export default function HistoryScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{sessions.length}</Text>
-              <Text style={styles.statLabel}>sessions</Text>
+              <Text style={styles.statLabel}>{t("history.stats.sessions")}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalMinutes}</Text>
-              <Text style={styles.statLabel}>min practiced</Text>
+              <Text style={styles.statLabel}>{t("history.stats.minutesPracticed")}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{completedCount}</Text>
-              <Text style={styles.statLabel}>completed</Text>
+              <Text style={styles.statLabel}>{t("history.stats.completed")}</Text>
             </View>
           </View>
           <View style={styles.statsAccentLine} />
@@ -173,23 +182,23 @@ export default function HistoryScreen() {
         {isLoading && (
           <View style={styles.stateCard}>
             <View style={styles.stateIconWrap}>
-              <Feather name="loader" size={22} color="rgba(255,255,255,0.4)" />
+              <Feather name="loader" size={22} color={palette.textTertiary} />
             </View>
-            <Text style={styles.stateTitle}>Loading sessions…</Text>
-            <Text style={styles.stateBody}>Pulling your conversation history.</Text>
+            <Text style={styles.stateTitle}>{t("history.state.loadingTitle")}</Text>
+            <Text style={styles.stateBody}>{t("history.state.loadingBody")}</Text>
           </View>
         )}
 
         {/* ── Error ── */}
         {!isLoading && errorMessage && sessions.length === 0 && (
           <View style={styles.stateCard}>
-            <View style={[styles.stateIconWrap, { backgroundColor: "rgba(255,80,80,0.12)" }]}>
-              <Feather name="alert-circle" size={22} color="#FF6B6B" />
+            <View style={[styles.stateIconWrap, { backgroundColor: palette.dangerLight }]}>
+              <Feather name="alert-circle" size={22} color={palette.danger} />
             </View>
-            <Text style={styles.stateTitle}>Could not load history</Text>
+            <Text style={styles.stateTitle}>{t("history.state.errorTitle")}</Text>
             <Text style={styles.stateBody}>{errorMessage}</Text>
             <Pressable style={styles.retryBtn} onPress={() => void loadSessions({ force: true })}>
-              <Text style={styles.retryBtnText}>Try again</Text>
+              <Text style={styles.retryBtnText}>{t("common.actions.tryAgain")}</Text>
             </Pressable>
           </View>
         )}
@@ -198,11 +207,11 @@ export default function HistoryScreen() {
         {!isLoading && !errorMessage && sessions.length === 0 && (
           <View style={styles.stateCard}>
             <View style={styles.stateIconWrap}>
-              <Feather name="mic-off" size={22} color="rgba(255,255,255,0.4)" />
+              <Feather name="mic-off" size={22} color={palette.textTertiary} />
             </View>
-            <Text style={styles.stateTitle}>No sessions yet</Text>
+            <Text style={styles.stateTitle}>{t("history.state.emptyTitle")}</Text>
             <Text style={styles.stateBody}>
-              Start a conversation in Live and end it to see it appear here.
+              {t("history.state.emptyBody")}
             </Text>
           </View>
         )}
@@ -220,24 +229,28 @@ export default function HistoryScreen() {
                 <View style={styles.cardInner}>
                   <View style={styles.cardTopRow}>
                     <Text style={styles.cardTitle} numberOfLines={1}>
-                      {formatSceneLabel(session)}
+                      {formatSceneLabel(session, t)}
                     </Text>
                     <View style={[styles.statusPill, { borderColor: `${accent}40`, backgroundColor: `${accent}14` }]}>
                       <View style={[styles.statusDot, { backgroundColor: accent }]} />
                       <Text style={[styles.statusText, { color: accent }]}>
-                        {session.status}
+                        {session.status === "ended"
+                          ? t("history.sessionStatus.ended")
+                          : session.status === "paused"
+                            ? t("history.sessionStatus.paused")
+                            : t("history.sessionStatus.active")}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardMetaRow}>
-                    <Feather name="clock" size={12} color="rgba(255,255,255,0.35)" />
+                    <Feather name="clock" size={12} color={palette.textTertiary} />
                     <Text style={styles.cardMeta}>
-                      {formatDuration(session.duration_seconds)}
+                      {formatDuration(session.duration_seconds, t)}
                     </Text>
                     <Text style={styles.cardMetaDot}>·</Text>
                     <Text style={styles.cardMeta}>
-                      {formatSessionDate(session.started_at)}
+                      {formatSessionDate(session.started_at, i18n.language)}
                     </Text>
                   </View>
                 </View>
@@ -252,35 +265,37 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#0A0A0A",
+    backgroundColor: palette.bgBase,
   },
   header: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: palette.accentBorder,
+    backgroundColor: palette.bgBase,
   },
   headerEyebrow: {
-    fontSize: 10,
-    fontWeight: "800",
+    ...typography.eyebrow,
     letterSpacing: 2.5,
-    color: "#D2F45C",
-    marginBottom: 4,
+    color: palette.textAccent,
+    marginBottom: spacing.xs,
   },
   headerTitle: {
+    ...typography.displayLg,
     fontSize: 30,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
     lineHeight: 34,
   },
   refreshBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -288,17 +303,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 12,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    gap: spacing.md,
   },
   statsBanner: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
     marginBottom: 4,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(210,244,92,0.12)",
+    borderColor: palette.accentBorder,
+    ...shadows.card,
   },
   statsRow: {
     flexDirection: "row",
@@ -307,24 +323,23 @@ const styles = StyleSheet.create({
   },
   statItem: {
     alignItems: "center",
-    gap: 4,
+    gap: spacing.xs,
   },
   statValue: {
-    fontSize: 32,
+    ...typography.displayLg,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
   },
   statLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.45)",
+    ...typography.caption,
+    color: palette.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
   statDivider: {
     width: 1,
     height: 36,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: palette.accentBorder,
   },
   statsAccentLine: {
     position: "absolute",
@@ -332,90 +347,91 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: "#D2F45C",
+    backgroundColor: palette.accent,
     opacity: 0.35,
   },
   stateCard: {
-    borderRadius: 20,
-    padding: 24,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radii.lg,
+    padding: spacing.xxl,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: palette.accentBorder,
     alignItems: "center",
-    gap: 10,
-    marginTop: 8,
+    gap: spacing.sm + 2,
+    marginTop: spacing.sm,
+    ...shadows.card,
   },
   stateIconWrap: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   stateTitle: {
-    fontSize: 16,
+    ...typography.bodyLg,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
   },
   stateBody: {
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 21,
-    color: "rgba(255,255,255,0.5)",
+    color: palette.textSecondary,
     textAlign: "center",
   },
   retryBtn: {
     marginTop: 6,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.accent,
   },
   retryBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
+    ...typography.labelLg,
+    color: palette.textOnAccent,
   },
   card: {
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radii.lg,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: palette.accentBorder,
     flexDirection: "row",
     overflow: "hidden",
+    ...shadows.cardSm,
   },
   cardAccentBar: {
     width: 3,
     borderRadius: 2,
-    margin: 14,
+    margin: spacing.md + 2,
     marginRight: 0,
     opacity: 0.8,
   },
   cardInner: {
     flex: 1,
-    padding: 14,
-    gap: 8,
+    padding: spacing.md + 2,
+    gap: spacing.sm,
   },
   cardTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10,
+    gap: spacing.sm + 2,
   },
   cardTitle: {
     flex: 1,
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
   },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
+    gap: spacing.xs + 1,
+    paddingHorizontal: spacing.md - 2,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     borderWidth: 1,
   },
   statusDot: {
@@ -424,21 +440,21 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusText: {
-    fontSize: 11,
+    ...typography.labelSm,
     fontWeight: "700",
     textTransform: "capitalize",
   },
   cardMetaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: spacing.xs + 1,
   },
   cardMeta: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.4)",
+    ...typography.labelMd,
+    color: palette.textSecondary,
   },
   cardMetaDot: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.2)",
+    ...typography.labelMd,
+    color: palette.textTertiary,
   },
 });

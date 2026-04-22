@@ -1,6 +1,8 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 type ReviewIssue = {
   type: string;
@@ -22,24 +24,26 @@ type Props = {
 };
 
 const SCORE_COLORS: Record<string, string> = {
-  green: '#34C759',
-  yellow: '#FF9500',
-  red: '#FF3B30',
-};
-
-const SCORE_LABELS: Record<string, string> = {
-  green: 'Pass',
-  yellow: 'Warn',
-  red: 'Error',
-};
-
-const SCORE_HELP_TEXT: Record<string, string> = {
-  green: 'This sentence is okay.',
-  yellow: 'A small fix or cleaner phrasing will sound better.',
-  red: 'There is a clear issue worth fixing.',
+  green: palette.accentDark,
+  yellow: '#B45309',
+  red: palette.danger,
 };
 
 export default function ReviewDetailCard({ review, onClose }: Props) {
+  const { t } = useTranslation();
+  const scoreLabel =
+    review.overallScore === 'green'
+      ? t('live.reviewIndicator.pass')
+      : review.overallScore === 'yellow'
+        ? t('live.reviewIndicator.warn')
+        : t('live.reviewIndicator.error');
+  const scoreHelpText =
+    review.overallScore === 'green'
+      ? t('live.reviewDetail.scoreHelpPass')
+      : review.overallScore === 'yellow'
+        ? t('live.reviewDetail.scoreHelpWarn')
+        : t('live.reviewDetail.scoreHelpError');
+
   return (
     <View style={styles.overlay}>
       <View style={styles.card}>
@@ -47,29 +51,29 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
           <View style={styles.headerLeft}>
             <View style={[styles.scoreDot, { backgroundColor: SCORE_COLORS[review.overallScore] }]} />
             <View>
-              <Text style={styles.headerTitle}>{SCORE_LABELS[review.overallScore]}</Text>
-              <Text style={styles.headerSubtitle}>{SCORE_HELP_TEXT[review.overallScore]}</Text>
+              <Text style={styles.headerTitle}>{scoreLabel}</Text>
+              <Text style={styles.headerSubtitle}>{scoreHelpText}</Text>
             </View>
           </View>
           <Pressable onPress={onClose} hitSlop={8}>
-            <Feather name="x" size={18} color="#1A1A1A" />
+            <Feather name="x" size={18} color={palette.textPrimary} />
           </Pressable>
         </View>
 
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
           {review.issues.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Main issue</Text>
+              <Text style={styles.sectionTitle}>{t('live.reviewDetail.mainIssue')}</Text>
               {review.issues.slice(0, 2).map((issue, index) => (
                 <View key={index} style={styles.issueItem}>
                   <View style={styles.issueTypeBadge}>
                     <Text style={styles.issueTypeText}>{issue.type}</Text>
                   </View>
-                  <Text style={styles.microLabel}>You said</Text>
+                  <Text style={styles.microLabel}>{t('live.reviewDetail.youSaid')}</Text>
                   <View style={styles.sourceBox}>
                     <Text style={styles.sourceText}>{issue.original}</Text>
                   </View>
-                  <Text style={styles.microLabel}>Say instead</Text>
+                  <Text style={styles.microLabel}>{t('live.reviewDetail.sayInstead')}</Text>
                   <View style={styles.correctionRow}>
                     <Text style={styles.corrected}>{issue.corrected}</Text>
                   </View>
@@ -81,7 +85,9 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
 
           {review.betterExpression !== null && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recommended wording</Text>
+              <Text style={styles.sectionTitle}>
+                {t('live.reviewDetail.recommendedWording')}
+              </Text>
               <View style={styles.expressionBox}>
                 <Text style={styles.expressionText}>{review.betterExpression}</Text>
               </View>
@@ -90,14 +96,14 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
 
           {review.praise !== null && review.issues.length === 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Good part</Text>
+              <Text style={styles.sectionTitle}>{t('live.reviewDetail.goodPart')}</Text>
               <Text style={styles.praiseText}>{review.praise}</Text>
             </View>
           )}
 
           {review.issues.length === 0 && review.betterExpression === null && review.praise === null && (
             <View style={styles.section}>
-              <Text style={styles.emptyStateText}>No detailed issue was returned for this sentence.</Text>
+              <Text style={styles.emptyStateText}>{t('live.reviewDetail.empty')}</Text>
             </View>
           )}
         </ScrollView>
@@ -109,29 +115,32 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: palette.overlayDark,
     justifyContent: 'flex-end',
-    padding: 16,
+    padding: spacing.lg,
   },
   card: {
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radii.xl,
+    backgroundColor: palette.bgCardSolid,
     maxHeight: '70%',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: palette.accentBorderStrong,
+    ...shadows.cardLg,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(21,22,25,0.08)',
+    borderBottomColor: palette.accentBorder,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: spacing.sm,
     flex: 1,
   },
   scoreDot: {
@@ -140,99 +149,102 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   headerTitle: {
+    ...typography.displaySm,
     fontSize: 17,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: palette.textPrimary,
   },
   headerSubtitle: {
     marginTop: 2,
-    fontSize: 12,
+    ...typography.labelMd,
     lineHeight: 17,
-    color: 'rgba(26,26,26,0.56)',
+    color: palette.textSecondary,
   },
   body: {
-    padding: 20,
+    padding: spacing.xl,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
-    fontSize: 14,
+    ...typography.bodySm,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
+    color: palette.textPrimary,
+    marginBottom: spacing.sm,
   },
   issueItem: {
-    marginBottom: 16,
-    gap: 6,
+    marginBottom: spacing.lg,
+    gap: spacing.sm - 2,
   },
   issueTypeBadge: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: '#F5F2ED',
+    borderRadius: radii.xs - 2,
+    backgroundColor: palette.accentMuted,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
   },
   issueTypeText: {
-    fontSize: 11,
+    ...typography.labelSm,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: palette.textPrimary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   microLabel: {
-    fontSize: 11,
+    ...typography.caption,
     fontWeight: '700',
-    color: 'rgba(26,26,26,0.42)',
+    color: palette.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   sourceBox: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: 10,
-    backgroundColor: '#FAF7F3',
+    backgroundColor: palette.dangerLight,
   },
   sourceText: {
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 20,
-    color: '#7C2D12',
+    color: palette.danger,
   },
   correctionRow: {
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: 10,
-    backgroundColor: '#EEF9F0',
+    backgroundColor: palette.accentMuted,
   },
   corrected: {
-    fontSize: 15,
+    ...typography.bodyMd,
     fontWeight: '700',
     lineHeight: 21,
-    color: '#1F7A36',
+    color: palette.textAccent,
   },
   explanation: {
-    fontSize: 13,
+    ...typography.bodySm,
     lineHeight: 19,
-    color: 'rgba(26,26,26,0.68)',
+    color: palette.textSecondary,
   },
   expressionBox: {
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: '#F5F2ED',
+    borderRadius: radii.sm + 2,
+    padding: spacing.md + 2,
+    backgroundColor: palette.bgGhostButton,
   },
   expressionText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     lineHeight: 22,
-    color: '#1A1A1A',
+    color: palette.textPrimary,
   },
   praiseText: {
-    fontSize: 15,
+    ...typography.bodyMd,
     lineHeight: 22,
-    color: '#1A1A1A',
+    color: palette.textPrimary,
   },
   emptyStateText: {
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 20,
-    color: 'rgba(26,26,26,0.58)',
+    color: palette.textSecondary,
   },
 });

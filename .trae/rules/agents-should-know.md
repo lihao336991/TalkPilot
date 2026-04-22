@@ -75,6 +75,35 @@
 - 大体积原始数据与脚本生成产物优先放到 `data/`
 - 实时音频流的通用 WebSocket 传输层位于 `src/features/live/services/StreamingWebSocketClient.ts`，负责连接、状态同步、发送、暂停保活与断开；具体协议解析与业务副作用继续留在各 provider service 中
 
+### i18n 约定
+
+- 当前 UI 国际化基础设施位于 `src/shared/i18n/`
+- 语言偏好持久化位于 `src/shared/store/localeStore.ts`
+- 当前首批接入语言为 `en` 与 `zh-CN`
+- 当前产品语言模型已收敛为两层：
+  - `uiLocale`：当前承载母语文案，也就是产品上的 `nativeLanguage`
+  - `learningLanguage`：当前承载学习语言，也就是产品上的 `learningLanguage`
+- 当前设置入口位于 `app/settings.tsx` / `src/features/settings/screens/SettingsScreen.tsx`
+- 设置页当前已提供两个可见选项：
+  - `App language`
+  - `Learning language`
+- 其中：
+  - `uiLocale` 已真实驱动界面文案
+  - `learningLanguage` 已持久化并作为后续多语学习能力的基础偏好
+- 当前双语言职责：
+  - 主 websocket 监听 `learningLanguage`
+  - assist websocket 监听 `uiLocale`
+  - `suggest` = 母语文案 + 学习语言内容
+  - `review` = 母语文案 + 学习语言内容
+  - `assist` = 母语识别 -> 学习语言翻译 -> 学习语言 TTS
+- 不要再把当前产品抽象成统一的 `helpLocale`
+- 新增用户可见文案时，必须先加到 `src/shared/i18n/locales/en.ts`，再补其他语言，不要直接在页面里写死字符串
+- 第一版资源文件当前按“每种语言一个文件”维护；如果后续页面和语言继续增长，再按业务域拆分
+- `app/_layout.tsx` 通过 `useI18nBootstrap()` 在启动时同步当前语言；如新增语言设置页，应继续复用这条链路
+- 详细维护说明收敛在 `.trae/documents/i18n维护说明.md`
+- 双语言实现说明收敛在 `.trae/documents/双语言模型说明.md`
+- Coach / Scene recommendation 方案收敛在 `.trae/documents/Coach与Scene Recommendation方案.md`
+
 ### LLM 约定
 
 - 实时会话相关的 LLM 能力由 Supabase Edge Functions `supabase/functions/review` 与 `supabase/functions/suggest` 提供

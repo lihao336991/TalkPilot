@@ -1,5 +1,7 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 
 type SuggestionStyle = "formal" | "casual" | "simple";
 
@@ -12,10 +14,12 @@ type Props = {
 };
 
 export default function SuggestionCard({ suggestion, onPress }: Props) {
+  const { t } = useTranslation();
+
   return (
     <View style={styles.wrapper}>
       <Pressable style={styles.bubble} onPress={onPress}>
-        <Text style={styles.label}>{suggestion.style}</Text>
+        <Text style={styles.label}>{t(`live.suggestionStyle.${suggestion.style}`)}</Text>
         <Text style={styles.text}>{suggestion.text}</Text>
       </Pressable>
       <View style={styles.tailShadow} />
@@ -31,32 +35,27 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
   bubble: {
-    borderRadius: 24,
+    borderRadius: radii.xl,
     borderBottomLeftRadius: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingVertical: 13,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.bgCardSolid,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
     gap: 6,
-    shadowColor: "#151619",
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    elevation: 8,
+    ...shadows.card,
   },
   label: {
-    fontSize: 10,
+    ...typography.tabLabel,
     fontWeight: "700",
     letterSpacing: 0.7,
     textTransform: "uppercase",
-    color: "rgba(21,22,25,0.4)",
+    color: palette.textTertiary,
   },
   text: {
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 20,
-    color: "#1A1A1A",
+    color: palette.textPrimary,
   },
   tailShadow: {
     position: "absolute",
@@ -64,8 +63,8 @@ const styles = StyleSheet.create({
     bottom: 4,
     width: 16,
     height: 16,
-    borderRadius: 4,
-    backgroundColor: "rgba(21,22,25,0.06)",
+    borderRadius: radii.xs / 2,
+    backgroundColor: palette.accentMuted,
     transform: [{ rotate: "45deg" }],
   },
   tail: {
@@ -74,8 +73,8 @@ const styles = StyleSheet.create({
     bottom: 6,
     width: 16,
     height: 16,
-    borderBottomLeftRadius: 4,
-    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: radii.xs / 2,
+    backgroundColor: palette.bgCardSolid,
     transform: [{ rotate: "45deg" }],
   },
 });

@@ -1,10 +1,11 @@
 import { translationService } from '@/features/live/services/TranslationService';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
+import { useLocaleStore } from '@/shared/store/localeStore';
 
 export type AssistReplyResult = {
   sourceText: string;
-  englishReply: string;
+  learningReply: string;
   hint: string | null;
 };
 
@@ -19,6 +20,7 @@ class AssistReplyService {
     }
 
     const accessToken = await getValidAccessToken();
+    const learningLanguage = useLocaleStore.getState().learningLanguage;
     const { data } = await invokeEdgeFunction<{
       source_text?: string;
       translated_text?: string;
@@ -30,30 +32,31 @@ class AssistReplyService {
       body: {
         transcript: sourceText,
         scene_hint: sceneHint,
-        direction: 'to_en',
-        target_language: 'en',
+        direction: 'to_learning',
+        target_language: learningLanguage,
+        learning_language: learningLanguage,
         tts_mode: 'none',
       },
     });
 
-    const englishReply =
+    const learningReply =
       data.translated_text?.trim() || data.english_reply?.trim() || '';
-    if (!englishReply) {
-      throw new Error('Failed to generate English reply');
+    if (!learningReply) {
+      throw new Error('Failed to generate reply in learning language');
     }
 
     return {
       sourceText: data.source_text?.trim() || sourceText,
-      englishReply,
+      learningReply,
       hint: data.hint ?? null,
     };
   }
 
   async playReply(result: AssistReplyResult): Promise<void> {
-    if (!result.englishReply.trim()) {
+    if (!result.learningReply.trim()) {
       return;
     }
-    await translationService.speakEnglish(result.englishReply);
+    await translationService.speakLearning(result.learningReply);
   }
 
   async stopPlayback(): Promise<void> {

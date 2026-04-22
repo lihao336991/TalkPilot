@@ -1,8 +1,11 @@
 import { CustomTabBar } from '@/features/navigation/components/CustomTabBar';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
+
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -12,13 +15,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Live',
+          title: t('navigation.tabs.live'),
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
-          title: 'History',
+          title: t('navigation.tabs.history'),
         }}
       />
       {/* <Tabs.Screen
@@ -31,7 +34,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('navigation.tabs.profile'),
         }}
       />
     </Tabs>

@@ -84,6 +84,25 @@ AI 在每次完成复杂调试或发现新的认知盲区后，必须**自觉、
   2. 首轮联调目标是先跑通闭环时，可以优先做最小验证：临时移除 Apple native 登录链路里的 `nonce`。
   3. 在确认业务跑通后，再决定是等待上游修复，还是切换到 OAuth 流程重建更严格的 nonce 校验。
 
+### 1.11 用 `typeof baseLocale` 做 i18n schema 时，要避免把“文案值字面量”错误地锁成类型
+
+- **坑与教训**：第一版本地 i18n 接入时，直接把英文资源 `en` 用 `as const` 导出，再把 `typeof en` 当成其他语言包的 schema。结果 TS 会把每一个 value 推成精确字符串字面量，例如 `"Profile"`、`"Choose your plan"`，导致中文语言包全部报类型错误，看起来像“结构不匹配”，本质却是“值字面量被锁死”。
+- **行动指南**：
+  1. 需要“同构校验”时，不要直接把 `typeof en` 原样给其他语言实现使用。
+  2. 应该先做一层递归映射，把所有叶子节点从字符串字面量放宽为 `string`，例如 `DeepStringify<typeof en>`。
+  3. 判断 i18n 类型问题时，先分清是“key 结构不一致”还是“literal type 过窄”，避免误以为翻译文件本身写错了。
+
+### 1.12 不要把所有 AI 输出语言抽象成一个统一的 `helpLocale`
+
+- **坑与教训**：在多语言设置设计里，容易为了“概念统一”先抽一个 `helpLocale`，然后默认把所有 AI 生成内容都塞到这个维度里。但 TalkPilot 的 `suggest` 和 `review` 实际承担的是两种不同任务：`suggest` 是“给用户一个可直接说出口的目标语言回复”，`review` 则是“用用户当前界面语言解释问题，同时保留目标语言修正句”。如果把两者强行绑定到同一个输出语言，会很快违背真实学习体验。
+- **行动指南**：
+  1. 先按任务类型定义语言规则，再决定是否需要抽象层，不要先抽象再硬套场景。
+  2. 对 TalkPilot 当前策略：
+     - `suggest` 跟随 `Learning language`
+     - `review` 的解释/表扬跟随 `App language`
+     - `review` 的 corrected / better expression 保留 `Learning language`
+  3. `helpLocale` 可以保留为未来扩展位，但不要在当前阶段把它包装成 `suggest/review` 的统一开关。
+
 ## 2. 合作与迭代约定 (Collaboration Rules)
 
 - **避免过度推演**：遇到错误日志时，不要一口气给出 5 个大重构方案。先给 1 个最简单的验证方案。

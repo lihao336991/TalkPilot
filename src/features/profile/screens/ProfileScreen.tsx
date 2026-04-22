@@ -1,20 +1,34 @@
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
 import { refreshProfileFromSession, signOut } from "@/shared/api/supabase";
-import { useAuthStore } from "@/shared/store/authStore";
+import {
+    type AuthProviderName,
+    type SubscriptionStatus,
+    type SubscriptionTier,
+    useAuthStore,
+} from "@/shared/store/authStore";
+import { useLocaleStore } from "@/shared/store/localeStore";
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  Alert,
-  Animated,
-  Easing,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Animated,
+    Easing,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -34,13 +48,47 @@ function DetailRow({ label, value, accent }: RowProps) {
   );
 }
 
+function getSubscriptionTierLabel(
+  tier: SubscriptionTier | "freePreview",
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  if (tier === "freePreview") {
+    return t("common.subscriptionTier.freePreview");
+  }
+
+  return t(`common.subscriptionTier.${tier}`);
+}
+
+function getSubscriptionStatusLabel(
+  status: SubscriptionStatus,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  switch (status) {
+    case "billing_issue":
+      return t("common.subscriptionStatus.billingIssue");
+    default:
+      return t(`common.subscriptionStatus.${status}`);
+  }
+}
+
+function getAuthProviderLabel(
+  provider: AuthProviderName,
+  t: ReturnType<typeof useTranslation>["t"],
+) {
+  if (!provider) {
+    return t("common.authProvider.unknown");
+  }
+
+  return t(`common.authProvider.${provider}`);
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabBarHeight = getTabBarHeight(insets.bottom);
+  const { i18n, t } = useTranslation();
 
   const authMode = useAuthStore((s) => s.authMode);
-  const canManageSubscription = useAuthStore((s) => s.canManageSubscription);
   const displayName = useAuthStore((s) => s.displayName);
   const provider = useAuthStore((s) => s.provider);
   const subscriptionExpiresAt = useAuthStore((s) => s.subscriptionExpiresAt);
@@ -50,6 +98,9 @@ export default function ProfileScreen() {
   const subscriptionTier = useAuthStore((s) => s.subscriptionTier);
   const userId = useAuthStore((s) => s.userId);
   const userEmail = useAuthStore((s) => s.userEmail);
+  const uiLocale = useLocaleStore((s) => s.uiLocale);
+  const learningLanguage = useLocaleStore((s) => s.learningLanguage);
+  const followSystemUiLocale = useLocaleStore((s) => s.followSystemUiLocale);
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -95,7 +146,9 @@ export default function ProfileScreen() {
     try {
       await signOut();
     } catch (e) {
-      setSignOutError(e instanceof Error ? e.message : "Sign out failed.");
+      setSignOutError(
+        e instanceof Error ? e.message : t("profile.signOutFailed"),
+      );
     } finally {
       setIsSigningOut(false);
     }
@@ -104,11 +157,15 @@ export default function ProfileScreen() {
   function handleSignOut() {
     if (!isAuthenticated || isSigningOut) return;
     Alert.alert(
-      "Log out?",
-      "You'll return to guest mode. Sign in again anytime.",
+      t("profile.signOutConfirmTitle"),
+      t("profile.signOutConfirmMessage"),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Log out", style: "destructive", onPress: () => void performSignOut() },
+        { text: t("common.actions.cancel"), style: "cancel" },
+        {
+          text: t("common.actions.logOut"),
+          style: "destructive",
+          onPress: () => void performSignOut(),
+        },
       ],
     );
   }
@@ -123,26 +180,31 @@ export default function ProfileScreen() {
     router.push(isAuthenticated ? ("/paywall" as Href) : "/login");
   }
 
-  function handleManageBilling() {
-    if (!canManageSubscription) { router.push("/login"); return; }
-    router.push("/customer-center" as Href);
+  function handleOpenSettings() {
+    router.push("/settings" as Href);
   }
 
   const displayTitle = isAuthenticated
-    ? displayName || userEmail || "TalkPilot Member"
-    : "Guest account";
+    ? displayName || userEmail || t("profile.talkPilotMember")
+    : t("profile.guestAccount");
 
   const membershipStatusLabel = isAuthenticated
-    ? subscriptionStatus === "syncing" ? "syncing" : subscriptionStatus.replace("_", " ")
-    : "login required";
+    ? getSubscriptionStatusLabel(subscriptionStatus, t)
+    : t("common.status.loginRequired");
 
   const membershipExpiresLabel = subscriptionExpiresAt
-    ? new Date(subscriptionExpiresAt).toLocaleDateString()
+    ? new Date(subscriptionExpiresAt).toLocaleDateString(i18n.language)
     : "—";
 
   const membershipSyncLabel = isAuthenticated
-    ? subscriptionSyncState === "syncing" ? "Syncing…" : "Synced"
-    : "login required";
+    ? subscriptionSyncState === "syncing"
+      ? t("common.status.syncing")
+      : t("common.status.synced")
+    : t("common.status.loginRequired");
+  const appLanguageLabel = followSystemUiLocale
+    ? `${t("common.actions.useSystem")} / ${t(`common.languageName.${uiLocale}`)}`
+    : t(`common.languageName.${uiLocale}`);
+  const learningLanguageLabel = t(`common.languageName.${learningLanguage}`);
 
   const initials = (displayName || userEmail || "G")
     .split(" ")
@@ -156,36 +218,64 @@ export default function ProfileScreen() {
       {/* ── Header ── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
-          <Text style={styles.headerEyebrow}>ACCOUNT</Text>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerEyebrow}>{t("profile.headerEyebrow")}</Text>
+          <Text style={styles.headerTitle}>{t("profile.headerTitle")}</Text>
         </View>
         <Pressable
           onPress={handleHeaderAction}
-          style={[styles.headerActionBtn, isAuthenticated && styles.headerActionBtnDestructive]}
-          accessibilityLabel={isAuthenticated ? "Sign out" : "Sign in"}
+          style={[
+            styles.headerActionBtn,
+            isAuthenticated && styles.headerActionBtnDestructive,
+          ]}
+          accessibilityLabel={
+            isAuthenticated
+              ? t("common.actions.logOut")
+              : t("common.actions.logIn")
+          }
         >
           <Feather
             name={isAuthenticated ? "log-out" : "log-in"}
             size={16}
-            color={isAuthenticated ? "#FF6B6B" : "#D2F45C"}
+            color={isAuthenticated ? palette.danger : palette.textAccent}
           />
-          <Text style={[styles.headerActionText, isAuthenticated && styles.headerActionTextDestructive]}>
-            {isSigningOut ? "Signing out…" : isAuthenticated ? "Log out" : "Log in"}
+          <Text
+            style={[
+              styles.headerActionText,
+              isAuthenticated && styles.headerActionTextDestructive,
+            ]}
+          >
+            {isSigningOut
+              ? t("common.status.signingOut")
+              : isAuthenticated
+                ? t("common.actions.logOut")
+                : t("common.actions.logIn")}
           </Text>
         </Pressable>
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: tabBarHeight + 80 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarHeight + 80 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], gap: 14 }}>
-
+        <Animated.View
+          style={{
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+            gap: 14,
+          }}
+        >
           {/* ── Identity card ── */}
           <View style={styles.identityCard}>
             <LinearGradient
-              colors={isPaidUser ? ["#1A2600", "#0A0A0A"] : ["#141414", "#0A0A0A"]}
+              colors={
+                isPaidUser
+                  ? [palette.accentDeep, palette.textPrimary]
+                  : [palette.textPrimary, palette.accentDeep]
+              }
               style={styles.identityGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -195,9 +285,13 @@ export default function ProfileScreen() {
                   <Text style={styles.avatarText}>{initials}</Text>
                 </View>
                 <View style={styles.identityInfo}>
-                  <Text style={styles.identityName} numberOfLines={1}>{displayTitle}</Text>
+                  <Text style={styles.identityName} numberOfLines={1}>
+                    {displayTitle}
+                  </Text>
                   <Text style={styles.identityEmail} numberOfLines={1}>
-                    {isAuthenticated ? userEmail || "Email unavailable" : "Not signed in"}
+                    {isAuthenticated
+                      ? userEmail || t("common.labels.emailUnavailable")
+                      : t("common.labels.notSignedIn")}
                   </Text>
                 </View>
                 {isPaidUser && (
@@ -209,22 +303,45 @@ export default function ProfileScreen() {
 
               <View style={styles.identityMeta}>
                 <View style={styles.identityMetaItem}>
-                  <Feather name="shield" size={12} color="rgba(255,255,255,0.4)" />
+                  <Feather
+                    name="shield"
+                    size={12}
+                    color={palette.textTertiary}
+                  />
                   <Text style={styles.identityMetaText}>
-                    {isAuthenticated ? provider || "account" : "guest"}
+                    {isAuthenticated
+                      ? getAuthProviderLabel(provider, t)
+                      : t("common.labels.guest")}
                   </Text>
                 </View>
                 <View style={styles.identityMetaDot} />
                 <View style={styles.identityMetaItem}>
-                  <Feather name="star" size={12} color={isPaidUser ? "#D2F45C" : "rgba(255,255,255,0.4)"} />
-                  <Text style={[styles.identityMetaText, isPaidUser && { color: "#D2F45C" }]}>
-                    {subscriptionTier}
+                  <Feather
+                    name="star"
+                    size={12}
+                    color={
+                      isPaidUser ? palette.textAccent : palette.textTertiary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.identityMetaText,
+                      isPaidUser && { color: palette.textAccent },
+                    ]}
+                  >
+                    {getSubscriptionTierLabel(subscriptionTier, t)}
                   </Text>
                 </View>
                 <View style={styles.identityMetaDot} />
                 <View style={styles.identityMetaItem}>
-                  <Feather name="activity" size={12} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.identityMetaText}>{membershipStatusLabel}</Text>
+                  <Feather
+                    name="activity"
+                    size={12}
+                    color={palette.textTertiary}
+                  />
+                  <Text style={styles.identityMetaText}>
+                    {membershipStatusLabel}
+                  </Text>
                 </View>
               </View>
             </LinearGradient>
@@ -233,35 +350,86 @@ export default function ProfileScreen() {
           {/* ── Plan card ── */}
           <View style={styles.planCard}>
             <View style={styles.planHeader}>
-              <Text style={styles.planTitle}>Membership</Text>
-              <View style={[styles.planTierPill, isPaidUser && styles.planTierPillPro]}>
-                <Text style={[styles.planTierText, isPaidUser && styles.planTierTextPro]}>
-                  {isAuthenticated ? subscriptionTier : "free preview"}
+              <View
+                style={[
+                  styles.planTierPill,
+                  isPaidUser && styles.planTierPillPro,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.planTierText,
+                    isPaidUser && styles.planTierTextPro,
+                  ]}
+                >
+                  {getSubscriptionTierLabel(
+                    isAuthenticated ? subscriptionTier : "freePreview",
+                    t,
+                  )}
                 </Text>
               </View>
+              <Pressable onPress={handleUpgrade} style={styles.upgradeBtn}>
+                <Feather
+                  name="arrow-up-circle"
+                  size={14}
+                  color={palette.textOnAccent}
+                />
+                <Text style={styles.upgradeBtnText}>
+                  {isPaidUser
+                    ? t("common.actions.viewPlans")
+                    : t("common.actions.upgradeToPro")}
+                </Text>
+              </Pressable>
             </View>
 
             <Text style={styles.planBody}>
               {isAuthenticated
                 ? subscriptionSyncState === "syncing"
-                  ? "Purchase confirmed — Pro access is already active while we finish syncing."
+                  ? t("profile.membershipBody.syncing")
                   : isPaidUser
-                    ? "Pro is active. Manage billing or restore purchases anytime below."
-                    : "Free includes 10 live min, 100 reviews, and 100 suggestions per day."
-                : "Sign in before purchasing so your subscription stays synced across devices."}
+                    ? t("profile.membershipBody.active")
+                    : t("profile.membershipBody.free")
+                : t("profile.membershipBody.guest")}
             </Text>
 
             {/* Limits grid */}
             <View style={styles.limitsGrid}>
               {[
-                { icon: "mic" as const, label: "Live", free: "10 min/day", pro: "120 min/day" },
-                { icon: "check-circle" as const, label: "Review", free: "100/day", pro: "Unlimited" },
-                { icon: "zap" as const, label: "Suggest", free: "100/day", pro: "Unlimited" },
+                {
+                  icon: "mic" as const,
+                  label: t("profile.limits.live"),
+                  free: t("profile.limits.liveFree"),
+                  pro: t("profile.limits.livePro"),
+                },
+                {
+                  icon: "check-circle" as const,
+                  label: t("profile.limits.review"),
+                  free: t("profile.limits.reviewFree"),
+                  pro: t("profile.limits.reviewPro"),
+                },
+                {
+                  icon: "zap" as const,
+                  label: t("profile.limits.suggest"),
+                  free: t("profile.limits.suggestFree"),
+                  pro: t("profile.limits.suggestPro"),
+                },
               ].map((item) => (
-                <View key={item.label} style={[styles.limitItem, isPaidUser && styles.limitItemPro]}>
-                  <Feather name={item.icon} size={16} color={isPaidUser ? "#D2F45C" : "rgba(255,255,255,0.5)"} />
+                <View
+                  key={item.label}
+                  style={[styles.limitItem, isPaidUser && styles.limitItemPro]}
+                >
+                  <Feather
+                    name={item.icon}
+                    size={16}
+                    color={isPaidUser ? "#D2F45C" : "rgba(255,255,255,0.5)"}
+                  />
                   <Text style={styles.limitLabel}>{item.label}</Text>
-                  <Text style={[styles.limitValue, isPaidUser && styles.limitValuePro]}>
+                  <Text
+                    style={[
+                      styles.limitValue,
+                      isPaidUser && styles.limitValuePro,
+                    ]}
+                  >
                     {isPaidUser ? item.pro : item.free}
                   </Text>
                 </View>
@@ -270,33 +438,71 @@ export default function ProfileScreen() {
 
             {/* Detail rows */}
             <View style={styles.detailBlock}>
-              <DetailRow label="Status" value={membershipStatusLabel} />
-              <DetailRow label="Sync" value={membershipSyncLabel} />
-              <DetailRow label="Billing" value={subscriptionProvider || "app"} />
-              <DetailRow label="Expires" value={membershipExpiresLabel} />
-              <DetailRow label="Email" value={userEmail || (isAuthenticated ? "Unavailable" : "—")} />
+              <DetailRow
+                label={t("profile.detail.status")}
+                value={membershipStatusLabel}
+              />
+              <DetailRow
+                label={t("profile.detail.sync")}
+                value={membershipSyncLabel}
+              />
+              <DetailRow
+                label={t("profile.detail.billing")}
+                value={subscriptionProvider || t("common.labels.app")}
+              />
+              <DetailRow
+                label={t("profile.detail.expires")}
+                value={membershipExpiresLabel}
+              />
+              <DetailRow
+                label={t("profile.detail.email")}
+                value={
+                  userEmail ||
+                  (isAuthenticated ? t("common.labels.unavailable") : "—")
+                }
+              />
             </View>
 
             {signOutError ? (
               <Text style={styles.errorText}>{signOutError}</Text>
             ) : null}
 
-            {/* CTA buttons */}
-            <View style={styles.ctaRow}>
-              <Pressable onPress={handleUpgrade} style={styles.ctaPrimary}>
-                <Feather name="arrow-up-circle" size={15} color="#050505" />
-                <Text style={styles.ctaPrimaryText}>
-                  {isPaidUser ? "View plans" : "Upgrade to Pro"}
-                </Text>
-              </Pressable>
-              <Pressable onPress={handleManageBilling} style={styles.ctaSecondary}>
-                <Text style={styles.ctaSecondaryText}>
-                  {isAuthenticated ? "Manage billing" : "Log in first"}
-                </Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={handleOpenSettings}
+              style={styles.preferenceCard}
+            >
+              <View style={styles.preferenceHeader}>
+                <View style={styles.preferenceTitleWrap}>
+                  <Feather
+                    name="settings"
+                    size={16}
+                    color={palette.textAccent}
+                  />
+                  <Text style={styles.preferenceTitle}>
+                    {t("profile.preferences.title")}
+                  </Text>
+                </View>
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={palette.textTertiary}
+                />
+              </View>
+              <Text style={styles.preferenceBody}>
+                {t("profile.preferences.body")}
+              </Text>
+              <View style={styles.preferenceMetaBlock}>
+                <DetailRow
+                  label={t("profile.preferences.appLanguage")}
+                  value={appLanguageLabel}
+                />
+                <DetailRow
+                  label={t("profile.preferences.learningLanguage")}
+                  value={learningLanguageLabel}
+                />
+              </View>
+            </Pressable>
           </View>
-
         </Animated.View>
       </ScrollView>
     </View>
@@ -306,146 +512,146 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#0A0A0A",
+    backgroundColor: palette.bgBase,
   },
   header: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: palette.accentBorder,
+    backgroundColor: palette.bgBase,
   },
   headerEyebrow: {
-    fontSize: 10,
-    fontWeight: "800",
+    ...typography.eyebrow,
     letterSpacing: 2.5,
-    color: "#D2F45C",
-    marginBottom: 4,
+    color: palette.textAccent,
+    marginBottom: spacing.xs,
   },
   headerTitle: {
+    ...typography.displayLg,
     fontSize: 30,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
     lineHeight: 34,
   },
   headerActionBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
+    gap: spacing.sm - 2,
+    paddingHorizontal: spacing.md + 2,
     paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: "rgba(210,244,92,0.1)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: "rgba(210,244,92,0.2)",
+    borderColor: palette.accentBorder,
   },
   headerActionBtnDestructive: {
-    backgroundColor: "rgba(255,107,107,0.1)",
-    borderColor: "rgba(255,107,107,0.2)",
+    backgroundColor: palette.dangerLight,
+    borderColor: palette.dangerBorder,
   },
   headerActionText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#D2F45C",
+    ...typography.labelLg,
+    color: palette.textAccent,
   },
   headerActionTextDestructive: {
-    color: "#FF6B6B",
+    color: palette.danger,
   },
   scroll: { flex: 1 },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   // Identity card
   identityCard: {
-    borderRadius: 22,
+    borderRadius: radii.xl,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: palette.accentBorder,
+    ...shadows.card,
   },
   identityGradient: {
-    padding: 20,
-    gap: 16,
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
   identityTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: spacing.md + 2,
   },
   avatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgCard,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: palette.accentBorder,
   },
   avatarPro: {
-    borderColor: "#D2F45C",
-    backgroundColor: "rgba(210,244,92,0.12)",
+    borderColor: palette.accent,
+    backgroundColor: palette.accentMuted,
   },
   avatarText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#FFFFFF",
+    ...typography.displaySm,
+    color: palette.textPrimary,
   },
   identityInfo: { flex: 1 },
   identityName: {
-    fontSize: 18,
+    ...typography.bodyLg,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.bgCardSolid,
     marginBottom: 3,
   },
   identityEmail: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
+    ...typography.bodySm,
+    color: "rgba(255,255,255,0.7)",
   },
   proBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: spacing.md - 2,
     paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: "#D2F45C",
+    borderRadius: radii.xs,
+    backgroundColor: palette.accent,
   },
   proBadgeText: {
-    fontSize: 11,
+    ...typography.labelSm,
     fontWeight: "900",
-    color: "#0A0A0A",
+    color: palette.textOnAccent,
     letterSpacing: 1,
   },
   identityMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
     flexWrap: "wrap",
   },
   identityMetaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: spacing.xs + 1,
   },
   identityMetaText: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.45)",
+    ...typography.labelMd,
+    color: "rgba(255,255,255,0.72)",
     textTransform: "capitalize",
   },
   identityMetaDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.4)",
   },
   // Plan card
   planCard: {
-    borderRadius: 22,
-    padding: 20,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-    gap: 14,
+    borderColor: palette.accentBorder,
+    gap: spacing.md + 2,
+    ...shadows.card,
   },
   planHeader: {
     flexDirection: "row",
@@ -453,136 +659,181 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   planTitle: {
-    fontSize: 18,
+    ...typography.bodyLg,
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: palette.textPrimary,
   },
   planTierPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: spacing.md,
     paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: palette.accentBorder,
   },
   planTierPillPro: {
-    backgroundColor: "rgba(210,244,92,0.12)",
-    borderColor: "rgba(210,244,92,0.3)",
+    backgroundColor: palette.accentMuted,
+    borderColor: palette.accentBorderStrong,
   },
   planTierText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.6)",
+    ...typography.labelMd,
+    color: palette.textSecondary,
     textTransform: "capitalize",
   },
   planTierTextPro: {
-    color: "#D2F45C",
+    color: palette.textAccent,
   },
   planBody: {
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 21,
-    color: "rgba(255,255,255,0.5)",
+    color: palette.textSecondary,
   },
   limitsGrid: {
     flexDirection: "row",
-    gap: 10,
+    gap: spacing.sm + 2,
   },
   limitItem: {
     flex: 1,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: radii.sm + 2,
+    padding: spacing.md,
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderColor: palette.accentBorder,
     alignItems: "center",
-    gap: 6,
+    gap: spacing.sm - 2,
   },
   limitItemPro: {
-    backgroundColor: "rgba(210,244,92,0.06)",
-    borderColor: "rgba(210,244,92,0.15)",
+    backgroundColor: palette.accentMuted,
+    borderColor: palette.accentBorderStrong,
   },
   limitLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.45)",
+    ...typography.caption,
+    color: palette.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   limitValue: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.7)",
+    ...typography.labelSm,
+    color: palette.textPrimary,
     textAlign: "center",
   },
   limitValuePro: {
-    color: "#D2F45C",
+    color: palette.textAccent,
   },
   detailBlock: {
-    borderRadius: 16,
-    padding: 14,
-    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radii.md,
+    padding: spacing.md + 2,
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    gap: 10,
+    borderColor: palette.accentBorder,
+    gap: spacing.sm + 2,
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: spacing.md,
   },
   detailLabel: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.4)",
+    ...typography.bodySm,
+    color: palette.textSecondary,
   },
   detailValue: {
-    fontSize: 13,
+    ...typography.bodySm,
     fontWeight: "700",
-    color: "rgba(255,255,255,0.75)",
+    color: palette.textPrimary,
     textTransform: "capitalize",
     textAlign: "right",
     flex: 1,
   },
   detailValueAccent: {
-    color: "#D2F45C",
+    color: palette.textAccent,
   },
   errorText: {
-    fontSize: 13,
-    color: "#FF6B6B",
+    ...typography.bodySm,
+    color: palette.danger,
     lineHeight: 20,
   },
-  ctaRow: {
+  preferenceCard: {
+    borderRadius: radii.md,
+    padding: spacing.md + 2,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    gap: spacing.sm,
+  },
+  preferenceHeader: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  preferenceTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs + 2,
+  },
+  preferenceTitle: {
+    ...typography.bodySm,
+    fontWeight: "800",
+    color: palette.textPrimary,
+  },
+  preferenceBody: {
+    ...typography.bodySm,
+    color: palette.textSecondary,
+    lineHeight: 20,
+  },
+  preferenceMetaBlock: {
+    gap: spacing.sm,
+  },
+  ctaRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  ctaSecondary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm - 1,
+    paddingVertical: 14,
+    borderRadius: radii.sm + 2,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+  },
+  ctaSecondaryText: {
+    ...typography.bodySm,
+    fontWeight: "800",
+    color: palette.textPrimary,
   },
   ctaPrimary: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    gap: spacing.sm - 1,
     paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: "#D2F45C",
+    borderRadius: radii.sm + 2,
+    backgroundColor: palette.accent,
   },
   ctaPrimaryText: {
-    fontSize: 14,
+    ...typography.bodySm,
     fontWeight: "800",
-    color: "#050505",
+    color: palette.textOnAccent,
   },
-  ctaSecondary: {
-    flex: 1,
+  upgradeBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    gap: spacing.sm - 2,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radii.sm,
+    backgroundColor: palette.accent,
   },
-  ctaSecondaryText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.75)",
+  upgradeBtnText: {
+    ...typography.labelMd,
+    fontWeight: "800",
+    color: palette.textOnAccent,
   },
 });

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { StreamingConnectionStatus } from '@/features/live/services/StreamingWebSocketClient';
 import type { ReviewResult } from '@/features/live/store/reviewStore';
 
-export type TranslationDirection = 'to_en' | 'to_native';
+export type TranslationDirection = 'to_learning' | 'to_native';
 export type TranslationStatus = 'idle' | 'loading' | 'done' | 'error';
 
 export type Turn = {

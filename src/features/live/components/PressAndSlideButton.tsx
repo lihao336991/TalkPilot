@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
 import { Dimensions, Modal, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useTranslation } from "react-i18next";
 import Animated, {
   Easing,
   FadeIn,
@@ -20,7 +21,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export type PressAndSlideAction = "cancel" | "send" | "text";
 
 type PressAndSlideButtonProps = {
-  icon: keyof typeof Feather.glyphMap;
+  icon?: keyof typeof Feather.glyphMap;
+  label?: string;
   defaultColor: string;
   activeColor: string;
   defaultBg: string;
@@ -36,6 +38,7 @@ type PressAndSlideButtonProps = {
 
 export function PressAndSlideButton({
   icon,
+  label,
   defaultColor,
   activeColor,
   defaultBg,
@@ -48,6 +51,7 @@ export function PressAndSlideButton({
   slideThresholdLeft = -60,
   slideThresholdRight = 60,
 }: PressAndSlideButtonProps) {
+  const { t } = useTranslation();
   const [isActive, setIsActive] = useState(false);
   const [actionState, setActionState] = useState<"neutral" | "cancel" | "text">(
     "neutral",
@@ -133,11 +137,11 @@ export function PressAndSlideButton({
   const bubbleText = useMemo(() => {
     if (actionState === "text") {
       const trimmed = previewText?.trim();
-      return trimmed || "松手后转成文字，可继续编辑";
+      return trimmed || t("live.pressAndSlide.editDraftFallback");
     }
 
     return "";
-  }, [actionState, previewText]);
+  }, [actionState, previewText, t]);
 
   useEffect(() => {
     if (overlayVisible) {
@@ -224,7 +228,7 @@ export function PressAndSlideButton({
                     actionState !== "cancel" && { opacity: 0 },
                   ]}
                 >
-                  松手 取消
+                  {t("live.pressAndSlide.releaseCancel")}
                 </Text>
                 <View
                   style={[
@@ -238,7 +242,7 @@ export function PressAndSlideButton({
                       actionState === "cancel" && styles.actionPillTextActive,
                     ]}
                   >
-                    取消
+                    {t("live.pressAndSlide.cancel")}
                   </Text>
                 </View>
               </View>
@@ -250,7 +254,7 @@ export function PressAndSlideButton({
                     actionState !== "text" && { opacity: 0 },
                   ]}
                 >
-                  松手 编辑文字
+                  {t("live.pressAndSlide.releaseEditText")}
                 </Text>
                 <View
                   style={[
@@ -264,7 +268,7 @@ export function PressAndSlideButton({
                       actionState === "text" && styles.actionPillTextActive,
                     ]}
                   >
-                    滑到这里 转文字
+                    {t("live.pressAndSlide.slideToText")}
                   </Text>
                 </View>
               </View>
@@ -281,7 +285,7 @@ export function PressAndSlideButton({
                   actionState !== "neutral" && { opacity: 0 },
                 ]}
               >
-                松开 发送
+                {t("live.pressAndSlide.releaseSend")}
               </Text>
             </Animated.View>
           </View>
@@ -290,7 +294,11 @@ export function PressAndSlideButton({
 
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[styles.button, animatedButtonStyle]}>
-          <Feather name={icon} size={24} color={iconColor} />
+          {label ? (
+            <Text style={[styles.buttonLabel, { color: iconColor }]}>{label}</Text>
+          ) : icon ? (
+            <Feather name={icon} size={24} color={iconColor} />
+          ) : null}
         </Animated.View>
       </GestureDetector>
     </View>
@@ -343,6 +351,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(21,22,25,0.08)",
+  },
+  buttonLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.2,
   },
   overlay: {
     flex: 1,

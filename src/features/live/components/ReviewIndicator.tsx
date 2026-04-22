@@ -1,7 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { ReviewResult } from '@/features/live/store/reviewStore';
+import { palette, radii, spacing, typography } from '@/shared/theme/tokens';
 
 type Props = {
   review: ReviewResult;
@@ -9,50 +11,64 @@ type Props = {
 };
 
 const SCORE_META = {
+  green: {
+    color: palette.accentDark,
+    backgroundColor: palette.accentMuted,
+  },
   yellow: {
-    label: 'Warn',
-    color: '#FF9500',
-    backgroundColor: 'rgba(255,149,0,0.12)',
+    color: '#B45309',
+    backgroundColor: 'rgba(245,158,11,0.12)',
   },
   red: {
-    label: 'Error',
-    color: '#FF3B30',
-    backgroundColor: 'rgba(255,59,48,0.12)',
+    color: palette.danger,
+    backgroundColor: palette.dangerLight,
   },
 } as const;
 
-function getSummary(review: ReviewResult) {
+function getSummary(
+  review: ReviewResult,
+  t: (key: string, params?: Record<string, string>) => string,
+) {
   if (review.issues.length > 0) {
     const primaryIssue = review.issues[0];
     const recommendation = review.betterExpression ?? primaryIssue?.corrected ?? null;
     const issueLabel =
       primaryIssue?.type === 'grammar'
-        ? 'Grammar'
+        ? t('live.reviewIndicator.grammar')
         : primaryIssue?.type === 'vocabulary'
-          ? 'Wording'
-          : 'Naturalness';
+          ? t('live.reviewIndicator.wording')
+          : t('live.reviewIndicator.naturalness');
     return {
       title: issueLabel,
-      subtitle: recommendation ? `Try: ${recommendation}` : 'Tap to review details',
+      subtitle: recommendation
+        ? t('live.reviewIndicator.tryTemplate', { text: recommendation })
+        : t('live.reviewIndicator.tapReviewDetails'),
     };
   }
 
   if (review.betterExpression) {
     return {
-      title: 'More natural option',
+      title: t('live.reviewIndicator.moreNaturalOption'),
       subtitle: review.betterExpression,
     };
   }
 
   return {
-    title: 'Suggestion',
-    subtitle: 'Tap to see feedback',
+    title: t('live.reviewIndicator.suggestion'),
+    subtitle: t('live.reviewIndicator.tapSeeFeedback'),
   };
 }
 
 export default function ReviewIndicator({ review, onPress }: Props) {
+  const { t } = useTranslation();
   const meta = SCORE_META[review.overallScore];
-  const summary = getSummary(review);
+  const scoreLabel =
+    review.overallScore === 'green'
+      ? t('live.reviewIndicator.pass')
+      : review.overallScore === 'yellow'
+        ? t('live.reviewIndicator.warn')
+        : t('live.reviewIndicator.error');
+  const summary = getSummary(review, t);
 
   return (
     <Pressable
@@ -63,7 +79,7 @@ export default function ReviewIndicator({ review, onPress }: Props) {
         <View style={[styles.dot, { backgroundColor: meta.color }]} />
         <View style={styles.textWrap}>
           <View style={styles.titleRow}>
-            <Text style={[styles.scoreLabel, { color: meta.color }]}>{meta.label}</Text>
+            <Text style={[styles.scoreLabel, { color: meta.color }]}>{scoreLabel}</Text>
             <Text style={styles.title}>{summary.title}</Text>
           </View>
           <Text style={styles.subtitle} numberOfLines={2}>
@@ -71,33 +87,33 @@ export default function ReviewIndicator({ review, onPress }: Props) {
           </Text>
         </View>
       </View>
-      <Feather name="chevron-right" size={15} color="rgba(21,22,25,0.34)" />
+      <Feather name="chevron-right" size={15} color={palette.textTertiary} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 6,
+    marginTop: spacing.sm - 2,
     maxWidth: '88%',
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    borderRadius: radii.sm + 2,
+    paddingHorizontal: spacing.md,
     paddingVertical: 9,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: spacing.sm + 2,
   },
   left: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: spacing.sm,
     flex: 1,
   },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radii.xs / 2,
     marginTop: 5,
   },
   textWrap: {
@@ -106,23 +122,23 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.sm - 2,
   },
   scoreLabel: {
-    fontSize: 11,
+    ...typography.labelSm,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   title: {
-    fontSize: 12,
+    ...typography.labelMd,
     fontWeight: '700',
-    color: '#151619',
+    color: palette.textPrimary,
   },
   subtitle: {
     marginTop: 2,
-    fontSize: 12,
+    ...typography.labelMd,
     lineHeight: 16,
-    color: 'rgba(21,22,25,0.72)',
+    color: palette.textSecondary,
   },
 });

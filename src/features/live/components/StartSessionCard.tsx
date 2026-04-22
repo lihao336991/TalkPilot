@@ -2,6 +2,7 @@ import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tok
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
@@ -27,6 +28,7 @@ export function StartSessionCard({
   isLimitReached,
   selectedScene,
 }: StartSessionCardProps) {
+  const { t } = useTranslation();
   const scale = useSharedValue(1);
   const ringScale = useSharedValue(1);
   const ringOpacity = useSharedValue(0.7);
@@ -78,12 +80,16 @@ export function StartSessionCard({
 
   return (
     <Animated.View style={[styles.wrapper, mountStyle]}>
-      {/* Scene badge */}
-      <View style={styles.sceneBadge}>
-        <View style={styles.sceneDot} />
-        <Feather name="compass" size={12} color={palette.accentDark} />
-        <Text style={styles.sceneText}>{selectedScene}</Text>
-      </View>
+      {/* TODO 二期：Scene Recommendation — 接入 sceneCatalog 推荐结果后恢复场景选择 UI
+          参考文档：.trae/documents/Coach与Scene Recommendation方案.md
+      */}
+      {false && (
+        <View style={styles.sceneBadge}>
+          <View style={styles.sceneDot} />
+          <Feather name="compass" size={12} color={palette.accentDark} />
+          <Text style={styles.sceneText}>{selectedScene}</Text>
+        </View>
+      )}
 
       {/* Mic button with glow rings */}
       <View style={styles.micArea}>
@@ -96,7 +102,11 @@ export function StartSessionCard({
         <View style={[styles.glowRing, styles.glowRingOuter]} />
         <View style={[styles.glowRing, styles.glowRingMid]} />
 
-        <Pressable onPress={onStart} accessibilityLabel="Start conversation" disabled={isLimitReached}>
+        <Pressable
+          onPress={onStart}
+          accessibilityLabel={t("live.startSession.accessibilityLabel")}
+          disabled={isLimitReached}
+        >
           <Animated.View style={[!isLimitReached && pulseStyle]}>
             <View style={[styles.micButton, isLimitReached && styles.micButtonDisabled]}>
               <LinearGradient
@@ -119,11 +129,11 @@ export function StartSessionCard({
           <>
             <View style={[styles.floatingTag, styles.floatingTagLeft]}>
               <View style={styles.floatingTagDot} />
-              <Text style={styles.floatingTagText}>AI-powered</Text>
+              <Text style={styles.floatingTagText}>{t("common.labels.aiPowered")}</Text>
             </View>
             <View style={[styles.floatingTag, styles.floatingTagRight]}>
               <View style={styles.floatingTagDot} />
-              <Text style={styles.floatingTagText}>Real-time</Text>
+              <Text style={styles.floatingTagText}>{t("common.labels.realTime")}</Text>
             </View>
           </>
         )}
@@ -132,10 +142,14 @@ export function StartSessionCard({
       {/* Label */}
       <View style={styles.labelBlock}>
         <Text style={styles.title}>
-          {isLimitReached ? "Daily limit reached" : "Start Conversation"}
+          {isLimitReached
+            ? t("live.startSession.titleLimit")
+            : t("live.startSession.titleReady")}
         </Text>
         <Text style={styles.subtitle}>
-          {isLimitReached ? "Upgrade to Pro for 120 min/day" : "Tap to begin your live session"}
+          {isLimitReached
+            ? t("live.startSession.subtitleLimit")
+            : t("live.startSession.subtitleReady")}
         </Text>
       </View>
 
@@ -144,10 +158,12 @@ export function StartSessionCard({
         <View style={styles.usageRow}>
           <View style={styles.usageLabelRow}>
             <Feather name="clock" size={12} color={palette.textSecondary} />
-            <Text style={styles.usageLabel}>Daily usage</Text>
+            <Text style={styles.usageLabel}>{t("live.startSession.usageLabel")}</Text>
           </View>
           <Text style={[styles.usageValue, isLimitReached && styles.usageValueLimit]}>
-            {isLimitReached ? "Limit reached" : `${remaining} min left`}
+            {isLimitReached
+              ? t("live.startSession.usageLimitReached")
+              : t("live.startSession.usageRemaining", { count: remaining })}
           </Text>
         </View>
         <View style={styles.progressTrack}>
@@ -159,7 +175,10 @@ export function StartSessionCard({
           />
         </View>
         <Text style={styles.usageSub}>
-          {dailyMinutesUsed} / {dailyMinutesLimit} min used today
+          {t("live.startSession.usageSummary", {
+            used: dailyMinutesUsed,
+            limit: dailyMinutesLimit,
+          })}
         </Text>
       </View>
     </Animated.View>

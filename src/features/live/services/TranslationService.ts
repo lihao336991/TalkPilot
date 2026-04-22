@@ -1,14 +1,11 @@
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { useConversationStore } from '@/features/live/store/conversationStore';
-import {
-  getDeepgramLanguage,
-  getDeviceLanguageTag,
-} from '@/shared/locale/deviceLanguage';
+import { useLocaleStore } from '@/shared/store/localeStore';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 
-export type TranslationDirection = 'to_en' | 'to_native';
+export type TranslationDirection = 'to_learning' | 'to_native';
 
 type TranslatePayload = {
   turnId: string;
@@ -27,6 +24,14 @@ type TranslationResponse = {
   audio_mime_type?: string | null;
 };
 
+function getNativeLanguageTag(): string {
+  return useLocaleStore.getState().uiLocale;
+}
+
+function getLearningLanguageTag(): string {
+  return useLocaleStore.getState().learningLanguage;
+}
+
 const SpeechModule = (() => {
   try {
     return require('expo-speech') as
@@ -43,6 +48,9 @@ const SpeechModule = (() => {
             },
           ) => void;
           stop?: () => void;
+          getAvailableVoicesAsync?: () => Promise<
+            Array<{ identifier: string; language: string; name?: string }>
+          >;
         }
       | null;
   } catch {
@@ -53,6 +61,33 @@ const SpeechModule = (() => {
 class TranslationService {
   private sound: Audio.Sound | null = null;
   private outputFileUri = `${FileSystem.cacheDirectory ?? ''}translation-reply.mp3`;
+  private voiceCache = new Map<string, boolean>();
+
+  private async hasVoiceForLanguage(languageTag: string): Promise<boolean> {
+    if (this.voiceCache.has(languageTag)) {
+      return this.voiceCache.get(languageTag)!;
+    }
+
+    if (!SpeechModule?.getAvailableVoicesAsync) {
+      this.voiceCache.set(languageTag, true);
+      return true;
+    }
+
+    try {
+      const voices = await SpeechModule.getAvailableVoicesAsync();
+      const primary = languageTag.split('-')[0].toLowerCase();
+      const hasVoice = voices.some((v) => {
+        const voicePrimary = v.language.split('-')[0].toLowerCase();
+        return voicePrimary === primary;
+      });
+      this.voiceCache.set(languageTag, hasVoice);
+      console.log(`[TTS] Voice check for ${languageTag}: ${hasVoice ? 'available' : 'missing'}`);
+      return hasVoice;
+    } catch {
+      this.voiceCache.set(languageTag, true);
+      return true;
+    }
+  }
 
   /**
    * Translate a turn's text and attach the result to that turn in the store.
@@ -79,7 +114,9 @@ class TranslationService {
     try {
       const accessToken = await getValidAccessToken();
       const targetLanguage =
-        direction === 'to_native' ? getDeepgramLanguage() : 'en';
+        direction === 'to_native'
+          ? getNativeLanguageTag()
+          : getLearningLanguageTag();
 
       const { data } = await invokeEdgeFunction<TranslationResponse>({
         functionName: 'assist-reply',
@@ -89,6 +126,8 @@ class TranslationService {
           scene_hint: sceneHint ?? '',
           direction,
           target_language: targetLanguage,
+          learning_language: getLearningLanguageTag(),
+          native_language: getNativeLanguageTag(),
           tts_mode: 'none',
         },
       });
@@ -117,12 +156,19 @@ class TranslationService {
   }
 
   /**
-   * Speak an English string aloud so the other party can hear it.
-   * Prefers on-device TTS (free, offline) and falls back silently if unavailable.
+   * Speak a learning-language string aloud so the other party can hear it.
+   * Prefers on-device TTS (free, offline) and skips silently if no voice pack is available.
    */
-  async speakEnglish(text: string): Promise<void> {
+  async speakLearning(text: string): Promise<void> {
     const spoken = text.trim();
     if (!spoken) return;
+
+    const learningLanguageTag = getLearningLanguageTag();
+    const hasVoice = await this.hasVoiceForLanguage(learningLanguageTag);
+    if (!hasVoice) {
+      console.log('[TTS] Skipping speakLearning: no system voice for', learningLanguageTag);
+      return;
+    }
 
     await this.stopPlayback();
 
@@ -142,7 +188,7 @@ class TranslationService {
     if (SpeechModule?.speak) {
       await new Promise<void>((resolve) => {
         SpeechModule.speak(spoken, {
-          language: 'en-US',
+          language: learningLanguageTag,
           rate: 0.98,
           pitch: 1,
           onDone: resolve,
@@ -158,14 +204,21 @@ class TranslationService {
 
   /**
    * Speak arbitrary text in the user's native language (for translating other->native playback, rare use).
+   * Skips silently if no system voice pack is available.
    */
   async speakNative(text: string): Promise<void> {
     const spoken = text.trim();
     if (!spoken || !SpeechModule?.speak) return;
 
+    const lang = getNativeLanguageTag();
+    const hasVoice = await this.hasVoiceForLanguage(lang);
+    if (!hasVoice) {
+      console.log('[TTS] Skipping speakNative: no system voice for', lang);
+      return;
+    }
+
     await this.stopPlayback();
 
-    const lang = getDeviceLanguageTag();
     await new Promise<void>((resolve) => {
       SpeechModule.speak(spoken, {
         language: lang,

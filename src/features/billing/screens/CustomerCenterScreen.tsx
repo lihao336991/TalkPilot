@@ -1,7 +1,9 @@
 import { useAuthStore } from '@/shared/store/authStore';
+import { palette } from '@/shared/theme/tokens';
 import { Feather } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import RevenueCatUI from 'react-native-purchases-ui';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +13,7 @@ import { revenueCatService } from '../services/RevenueCatService';
 export default function CustomerCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const authMode = useAuthStore((state) => state.authMode);
   const userId = useAuthStore((state) => state.userId);
 
@@ -38,12 +41,14 @@ export default function CustomerCenterScreen() {
       <>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.unsupportedContainer}>
-          <Text style={styles.unsupportedTitle}>Customer center is mobile-only</Text>
+          <Text style={styles.unsupportedTitle}>
+            {t('billing.customerCenter.unsupportedTitle')}
+          </Text>
           <Text style={styles.unsupportedBody}>
-            Open the iOS or Android build to manage subscriptions with RevenueCat UI.
+            {t('billing.customerCenter.unsupportedBody')}
           </Text>
           <Pressable onPress={closeScreen} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>{t('common.actions.close')}</Text>
           </Pressable>
         </View>
       </>
@@ -64,15 +69,15 @@ export default function CustomerCenterScreen() {
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close customer center"
+            accessibilityLabel={t('billing.customerCenter.closeAccessibilityLabel')}
             onPress={closeScreen}
             style={styles.iconButton}>
-            <Feather name="arrow-left" size={20} color="#FFFFFF" />
+            <Feather name="arrow-left" size={20} color={palette.textPrimary} />
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Manage subscription</Text>
+            <Text style={styles.title}>{t('billing.customerCenter.title')}</Text>
             <Text style={styles.subtitle}>
-              Review your plan, restore purchases, or manage billing actions from RevenueCat Customer Center.
+              {t('billing.customerCenter.subtitle')}
             </Text>
           </View>
         </View>
@@ -92,40 +97,41 @@ export default function CustomerCenterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050505',
+    backgroundColor: palette.bgBase,
   },
   unsupportedContainer: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
-    backgroundColor: '#050505',
+    backgroundColor: palette.bgBase,
     gap: 16,
   },
   unsupportedTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   unsupportedBody: {
     fontSize: 15,
     lineHeight: 24,
-    color: 'rgba(255,255,255,0.7)',
+    color: palette.textSecondary,
   },
   closeButton: {
     minHeight: 50,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: palette.textPrimary,
   },
   closeButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#050505',
+    color: '#FFFFFF',
   },
   header: {
     paddingHorizontal: 20,
     gap: 14,
+    paddingBottom: 16,
   },
   iconButton: {
     width: 40,
@@ -133,7 +139,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(15,23,42,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.08)',
   },
   headerCopy: {
     gap: 6,
@@ -141,16 +149,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: palette.textPrimary,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 22,
-    color: 'rgba(255,255,255,0.68)',
+    color: palette.textSecondary,
   },
   content: {
     flex: 1,
-    paddingTop: 16,
+    backgroundColor: '#FFFFFF',
   },
   customerCenter: {
     flex: 1,

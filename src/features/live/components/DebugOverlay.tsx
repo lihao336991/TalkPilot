@@ -1,6 +1,8 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getDeepgramLanguageForTag } from '@/shared/locale/deviceLanguage';
+import { useLocaleStore } from '@/shared/store/localeStore';
 import { useDebugStore, type DebugTurnTrace } from '../store/debugStore';
 
 function StatusIcon({ status }: { status: 'running' | 'done' | 'error' }) {
@@ -24,13 +26,14 @@ function formatDurationMs(ms?: number) {
 function buildCollapsedLabel(
   latestStep: ReturnType<typeof useDebugStore.getState>['steps'][number] | undefined,
   latestTrace: DebugTurnTrace | undefined,
+  languageSummary: string,
 ) {
   if (latestStep) {
     return latestStep.label;
   }
 
   if (!latestTrace) {
-    return '暂无调试数据';
+    return languageSummary;
   }
 
   return `Turn ${latestTrace.turnId.slice(-4)} ${latestTrace.llmKind ?? 'asr'}`;
@@ -136,38 +139,30 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
   );
 }
 
-type DebugPanelProps = {
-  inline?: boolean;
-};
-
-function DebugOverlayContent({ inline = false }: DebugPanelProps) {
+function DebugOverlayContent() {
   const steps = useDebugStore((s) => s.steps);
   const turnTraces = useDebugStore((s) => s.turnTraces);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const uiLocale = useLocaleStore((s) => s.uiLocale);
+  const learningLanguage = useLocaleStore((s) => s.learningLanguage);
+  const [collapsed, setCollapsed] = React.useState(true);
   const insets = useSafeAreaInsets();
   const hasDebugData = steps.length > 0 || turnTraces.length > 0;
-
-  if (!inline && !hasDebugData) return null;
-
   const latestStep = steps[steps.length - 1];
   const latestTrace = turnTraces[turnTraces.length - 1];
+  const mainAsrLanguage = getDeepgramLanguageForTag(learningLanguage);
+  const assistAsrLanguage = getDeepgramLanguageForTag(uiLocale);
+  const languageSummary = `Main ${mainAsrLanguage} · Assist ${assistAsrLanguage}`;
 
   if (collapsed) {
     return (
       <Pressable
-        style={
-          inline
-            ? styles.inlineCollapsedPill
-            : [styles.collapsedPill, { top: Math.max(8, insets.top + 8) }]
-        }
+        style={[styles.collapsedPill, { top: Math.max(8, insets.top + 8) }]}
         onPress={() => setCollapsed(false)}
       >
         <StatusIcon status={getCollapsedStatus(latestStep, latestTrace)} />
-        <Text style={styles.collapsedTitle}>
-          {inline ? "Live 调试" : "主流程调试"}
-        </Text>
+        <Text style={styles.collapsedTitle}>Live 调试</Text>
         <Text style={styles.collapsedLabel} numberOfLines={1}>
-          {buildCollapsedLabel(latestStep, latestTrace)}
+          {buildCollapsedLabel(latestStep, latestTrace, languageSummary)}
         </Text>
         <Text style={styles.collapsedAction}>展开</Text>
       </Pressable>
@@ -175,39 +170,45 @@ function DebugOverlayContent({ inline = false }: DebugPanelProps) {
   }
 
   return (
-    <View
-      style={[
-        inline ? styles.inlineContainer : styles.container,
-        !inline && { top: insets.top },
-      ]}
-    >
+    <View style={[styles.container, { top: Math.max(8, insets.top + 8) }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>主流程调试</Text>
-        {!inline ? (
-          <Pressable
-            onPress={() => setCollapsed(true)}
-            accessibilityRole="button"
-            accessibilityLabel="隐藏调试面板"
-            hitSlop={16}
-          >
-            <Text style={styles.headerAction}>隐藏</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.inlineHeaderRight}>
-            <Text style={styles.inlineHint}>Live 页面实时展示</Text>
-            <Pressable
-              onPress={() => setCollapsed(true)}
-              accessibilityRole="button"
-              accessibilityLabel="收起调试面板"
-              hitSlop={16}
-            >
-              <Text style={styles.headerAction}>收起</Text>
-            </Pressable>
-          </View>
-        )}
+        <View>
+          <Text style={styles.title}>主流程调试</Text>
+          <Text style={styles.inlineHint}>顶部浮层，默认收起</Text>
+        </View>
+        <Pressable
+          onPress={() => setCollapsed(true)}
+          accessibilityRole="button"
+          accessibilityLabel="收起调试面板"
+          hitSlop={16}
+        >
+          <Text style={styles.headerAction}>收起</Text>
+        </Pressable>
       </View>
       <ScrollView style={styles.scroll} nestedScrollEnabled>
-        {!hasDebugData && inline ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>语言</Text>
+          <View style={styles.languageCard}>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>App / 母语</Text>
+              <Text style={styles.metricValue}>{uiLocale}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Learning</Text>
+              <Text style={styles.metricValue}>{learningLanguage}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Main ASR</Text>
+              <Text style={styles.metricValue}>{mainAsrLanguage}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Assist ASR</Text>
+              <Text style={styles.metricValue}>{assistAsrLanguage}</Text>
+            </View>
+          </View>
+        </View>
+
+        {!hasDebugData ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>等待连接与转写链路数据</Text>
             <Text style={styles.emptyBody}>
@@ -270,53 +271,28 @@ function DebugOverlayContent({ inline = false }: DebugPanelProps) {
   );
 }
 
-export function DebugOverlay(props: DebugPanelProps) {
+export function DebugOverlay() {
   if (!__DEV__) return null;
-  return <DebugOverlayContent {...props} />;
+  return <DebugOverlayContent />;
 }
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    left: 12,
+    right: 12,
     zIndex: 9999,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    maxHeight: 420,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inlineContainer: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
     borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    maxHeight: 320,
+    maxHeight: 420,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   collapsedPill: {
     position: 'absolute',
-    top: 8,
+    left: 12,
     right: 12,
     zIndex: 9999,
-    maxWidth: 240,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  inlineCollapsedPill: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -361,16 +337,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(255,255,255,0.58)',
   },
-  inlineHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
   emptyState: {
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 12,
     paddingVertical: 10,
+    marginBottom: 10,
   },
   emptyTitle: {
     fontSize: 12,
@@ -506,5 +478,11 @@ const styles = StyleSheet.create({
   },
   traceDetailError: {
     color: '#FCA5A5',
+  },
+  languageCard: {
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
 });

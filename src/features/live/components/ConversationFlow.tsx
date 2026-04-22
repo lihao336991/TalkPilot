@@ -1,9 +1,11 @@
 import React, { useCallback, useRef } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Turn, useConversationStore } from '@/features/live/store/conversationStore';
 import { TranscriptBubble } from '@/features/live/components/TranscriptBubble';
 
 export function ConversationFlow() {
+  const { t } = useTranslation();
   const turns = useConversationStore((s) => s.turns);
   const currentInterimText = useConversationStore((s) => s.currentInterimText);
   const currentInterimSpeaker = useConversationStore((s) => s.currentInterimSpeaker);
@@ -61,7 +63,7 @@ export function ConversationFlow() {
       {showListening && (
         <View style={styles.listeningContainer}>
           <View style={styles.listeningDot} />
-          <Text style={styles.listeningText}>Listening...</Text>
+          <Text style={styles.listeningText}>{t('live.conversationFlow.listening')}</Text>
         </View>
       )}
     </View>

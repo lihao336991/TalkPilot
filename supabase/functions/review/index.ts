@@ -9,6 +9,36 @@ import {
     withLlmDefaults,
 } from "../_shared/llm.ts";
 
+function languageDisplayName(tag: string): string {
+  const primary = tag.split("-")[0].toLowerCase();
+  const map: Record<string, string> = {
+    zh: "Chinese (Simplified)",
+    ja: "Japanese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    ru: "Russian",
+    nl: "Dutch",
+    hi: "Hindi",
+    id: "Indonesian",
+    tr: "Turkish",
+    pl: "Polish",
+    sv: "Swedish",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+    uk: "Ukrainian",
+    th: "Thai",
+    vi: "Vietnamese",
+    ar: "Arabic",
+    en: "English",
+  };
+  return map[primary] ?? tag;
+}
+
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -49,6 +79,14 @@ serve(async (req: Request) => {
   const sessionId = body.session_id ?? body.sessionId;
   const userUtterance = body.user_utterance ?? body.userUtterance;
   const scene = body.scene;
+  const targetLanguage = typeof (body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage) === "string" &&
+      String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    ? String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    : "en";
+  const reviewLocale = typeof (body.native_language ?? body.nativeLanguage ?? body.review_locale ?? body.reviewLocale) === "string" &&
+      String(body.native_language ?? body.nativeLanguage ?? body.review_locale ?? body.reviewLocale).trim()
+    ? String(body.native_language ?? body.nativeLanguage ?? body.review_locale ?? body.reviewLocale).trim()
+    : "en";
 
   if (typeof sessionId !== "string" || typeof userUtterance !== "string") {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
@@ -102,7 +140,10 @@ serve(async (req: Request) => {
     .map((t: { speaker: string; text: string }) => `${t.speaker}: ${t.text}`)
     .join("\n");
 
-  const systemPrompt = `You are an English language reviewer. The user is practicing English in a "${scene || "general"}" scenario.
+  const targetLanguageName = languageDisplayName(targetLanguage);
+  const reviewLocaleName = languageDisplayName(reviewLocale);
+
+  const systemPrompt = `You are a ${targetLanguageName} language reviewer. The user is practicing ${targetLanguageName} in a "${scene || "general"}" scenario.
 
 Review the user's utterance for grammar, vocabulary, and naturalness issues. Focus on at most 2 most important issues.
 
@@ -117,8 +158,10 @@ Output your review wrapped in XML-like tags exactly as follows. Do not use JSON.
 
 - score: "green" = good, "yellow" = minor issues, "red" = significant issues
 - issues: Provide at most 2 issues. If you have a second issue, output another block of <issue_type>, <issue_original>, <issue_corrected>, and <issue_explanation>.
-- better_expression: a more natural way to say the same thing
-- praise: brief positive feedback on what the user did well`;
+- issue_original and issue_corrected MUST stay in ${targetLanguageName}
+- issue_explanation MUST be written in ${reviewLocaleName}
+- better_expression: a more natural way to say the same thing, written in ${targetLanguageName}
+- praise: brief positive feedback on what the user did well, written in ${reviewLocaleName}`;
 
   const userPrompt = `Recent conversation context:
 ${conversationContext}

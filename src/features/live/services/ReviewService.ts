@@ -8,6 +8,7 @@ import {
 } from '@/shared/billing/access';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import type { FeatureAccessEnvelope } from '@/shared/billing/accessTypes';
+import { useLocaleStore } from '@/shared/store/localeStore';
 import { useAuthStore } from '@/shared/store/authStore';
 
 function getLlmMetaDetail(headers: Headers): string {
@@ -40,6 +41,7 @@ export class ReviewService {
     const store = useReviewStore.getState();
     const accessToken = useAuthStore.getState().accessToken;
     const conversationStore = useConversationStore.getState();
+    const { learningLanguage, uiLocale } = useLocaleStore.getState();
 
     store.setLoading(true);
 
@@ -48,7 +50,14 @@ export class ReviewService {
       const { data: rawResult, headers } = await invokeEdgeFunction<ReviewApiResponse>({
         functionName: 'review',
         accessToken,
-        body: { sessionId, userUtterance, scene, turnId },
+        body: {
+          sessionId,
+          userUtterance,
+          scene,
+          turnId,
+          learningLanguage,
+          nativeLanguage: uiLocale,
+        },
       });
       const access = normalizeFeatureAccess(rawResult, 'review');
       if (access) {

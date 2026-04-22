@@ -1,4 +1,5 @@
 import OnboardingScreen from "@/features/onboarding/screens/OnboardingScreen";
+import { useI18nBootstrap } from "@/shared/i18n";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
   DarkTheme,
@@ -36,6 +37,7 @@ function RootLayout() {
     ...FontAwesome.font,
   });
   const [authReady, setAuthReady] = useState(false);
+  const i18nReady = useI18nBootstrap();
 
   useEffect(() => {
     if (error) throw error;
@@ -61,12 +63,12 @@ function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (loaded && authReady) {
+    if (loaded && authReady && i18nReady) {
       SplashScreen.hideAsync();
     }
-  }, [loaded, authReady]);
+  }, [loaded, authReady, i18nReady]);
 
-  if (!loaded || !authReady) {
+  if (!loaded || !authReady || !i18nReady) {
     return null;
   }
 
@@ -162,6 +164,15 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="privacy"
+          options={{
+            headerShown: false,
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="settings"
           options={{
             headerShown: false,
             presentation: "card",

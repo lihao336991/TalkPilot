@@ -4,6 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export const getTabBarHeight = (bottomInset: number) =>
@@ -14,6 +15,7 @@ export function CustomTabBar({
   descriptors,
   navigation,
 }: BottomTabBarProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const sessionStatus = useSessionStore((s) => s.status);
   const isImmersiveLive =
@@ -82,7 +84,7 @@ export function CustomTabBar({
                     color={isFocused ? palette.accentDeep : palette.accentDark}
                   />
                   <Text style={[styles.livePillLabel, isFocused && styles.livePillLabelActive]}>
-                    Live
+                    {typeof label === "string" ? label : t("navigation.tabs.live")}
                   </Text>
                 </View>
               ) : (

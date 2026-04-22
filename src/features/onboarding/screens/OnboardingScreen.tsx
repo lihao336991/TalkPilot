@@ -1,6 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useLocaleStore } from "@/shared/store/localeStore";
 import {
   Dimensions,
   FlatList,
@@ -30,9 +32,6 @@ type Slide = {
   id: string;
   accentColor: string;
   bgGradient: readonly [string, string, string];
-  eyebrow: string;
-  headline: string;
-  body: string;
   iconName: keyof typeof Feather.glyphMap;
   // 设计素材说明（给设计师看）
   illustrationNote: string;
@@ -43,9 +42,6 @@ const SLIDES: Slide[] = [
     id: "realtime",
     accentColor: "#D2F45C",
     bgGradient: ["#0A0A0A", "#111A00", "#0A0A0A"],
-    eyebrow: "REAL-TIME",
-    headline: "Your AI co-pilot\nin every conversation",
-    body: "TalkPilot listens as you speak and gives you instant feedback — grammar, vocabulary, and natural expression, all in the moment.",
     iconName: "mic",
     illustrationNote:
       "【设计素材需求 1/4】深色背景上，一个手机屏幕展示实时对话气泡流，左侧气泡（对方）右侧气泡（自己），自己的气泡上有绿色/黄色评分光晕。整体风格：暗黑科技感，主色 #D2F45C 荧光绿点缀。尺寸建议 600×500px PNG，透明背景。",
@@ -54,9 +50,6 @@ const SLIDES: Slide[] = [
     id: "review",
     accentColor: "#8EC5FF",
     bgGradient: ["#050A14", "#0A1628", "#050A14"],
-    eyebrow: "INSTANT REVIEW",
-    headline: "Know exactly what\nto fix, right now",
-    body: "Every sentence you speak gets scored. Tap any bubble to see what went wrong, the corrected version, and a better way to say it.",
     iconName: "check-circle",
     illustrationNote:
       "【设计素材需求 2/4】展示一个对话气泡被点击后弹出 Review 卡片的场景。卡片上有：评分颜色（黄色=minor issue）、原句划线、修正句、简短解释。风格：蓝色调，卡片有轻微毛玻璃质感。尺寸建议 600×500px PNG，透明背景。",
@@ -65,9 +58,6 @@ const SLIDES: Slide[] = [
     id: "suggest",
     accentColor: "#FF9F6B",
     bgGradient: ["#140800", "#1A0E00", "#140800"],
-    eyebrow: "AI SUGGESTIONS",
-    headline: "Never get stuck\nfor words again",
-    body: "When you don't know what to say next, TalkPilot generates a natural reply suggestion based on the full conversation context.",
     iconName: "zap",
     illustrationNote:
       "【设计素材需求 3/4】展示底部弹出的 Suggestion 面板，上面有一条建议回复文字，旁边有「Use this」按钮。背景是模糊的对话界面。风格：暖橙色调，有轻微发光效果。尺寸建议 600×500px PNG，透明背景。",
@@ -76,9 +66,6 @@ const SLIDES: Slide[] = [
     id: "getstarted",
     accentColor: "#D2F45C",
     bgGradient: ["#0A0A0A", "#0F1400", "#0A0A0A"],
-    eyebrow: "LET'S GO",
-    headline: "Start your first\nconversation",
-    body: "Tap the mic, start talking. TalkPilot works in the background — no setup, no interruptions. Just speak naturally.",
     iconName: "play-circle",
     illustrationNote:
       "【设计素材需求 4/4】一个大号脉冲动画麦克风按钮居中，周围有声波扩散圆环（3层，由内到外透明度递减）。背景纯黑。风格：极简，主色 #D2F45C。尺寸建议 600×500px PNG，透明背景。",
@@ -117,6 +104,7 @@ function SlideItem({
   scrollX: SharedValue<number>;
   index: number;
 }) {
+  const { t } = useTranslation();
   const inputRange = [
     (index - 1) * SCREEN_WIDTH,
     index * SCREEN_WIDTH,
@@ -195,21 +183,21 @@ function SlideItem({
         {/* 装饰浮动标签 */}
         <View style={[styles.floatingTag, styles.floatingTagLeft, { borderColor: `${slide.accentColor}30` }]}>
           <View style={[styles.floatingTagDot, { backgroundColor: slide.accentColor }]} />
-          <Text style={styles.floatingTagText}>AI-powered</Text>
+          <Text style={styles.floatingTagText}>{t("common.labels.aiPowered")}</Text>
         </View>
         <View style={[styles.floatingTag, styles.floatingTagRight, { borderColor: `${slide.accentColor}30` }]}>
           <View style={[styles.floatingTagDot, { backgroundColor: slide.accentColor }]} />
-          <Text style={styles.floatingTagText}>Real-time</Text>
+          <Text style={styles.floatingTagText}>{t("common.labels.realTime")}</Text>
         </View>
       </Animated.View>
 
       {/* 文字区域 */}
       <Animated.View style={[styles.copyArea, textAnimStyle]}>
         <Text style={[styles.eyebrow, { color: slide.accentColor }]}>
-          {slide.eyebrow}
+          {t(`onboarding.slides.${slide.id}.eyebrow`)}
         </Text>
-        <Text style={styles.headline}>{slide.headline}</Text>
-        <Text style={styles.body}>{slide.body}</Text>
+        <Text style={styles.headline}>{t(`onboarding.slides.${slide.id}.headline`)}</Text>
+        <Text style={styles.body}>{t(`onboarding.slides.${slide.id}.body`)}</Text>
       </Animated.View>
     </LinearGradient>
   );
@@ -222,12 +210,16 @@ type OnboardingScreenProps = {
 };
 
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const learningLanguage = useLocaleStore((state) => state.learningLanguage);
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useSharedValue(0);
   const isLast = activeIndex === SLIDES.length - 1;
   const currentSlide = SLIDES[activeIndex];
+  const slideKeys = useMemo(() => SLIDES.map((item) => item.id), []);
+  const targetLanguageName = t(`common.languageName.${learningLanguage}`);
 
   const ctaBgStyle = useAnimatedStyle(() => ({
     backgroundColor: withTiming(currentSlide.accentColor, { duration: 400 }),
@@ -279,7 +271,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         {/* 分页点 */}
         <View style={styles.pagination}>
-          {SLIDES.map((_, i) => (
+          {slideKeys.map((_, i) => (
             <PaginationDot
               key={i}
               index={i}
@@ -293,7 +285,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
         <View style={styles.buttonRow}>
           {!isLast ? (
             <Pressable onPress={handleSkip} style={styles.skipButton}>
-              <Text style={styles.skipText}>Skip</Text>
+              <Text style={styles.skipText}>{t("common.actions.skip")}</Text>
             </Pressable>
           ) : (
             <View style={styles.skipButton} />
@@ -302,7 +294,7 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
           <Pressable onPress={handleNext} accessibilityRole="button">
             <Animated.View style={[styles.ctaButton, ctaBgStyle]}>
               <Text style={styles.ctaText}>
-                {isLast ? "Get Started" : "Next"}
+                {isLast ? t("common.actions.getStarted") : t("common.actions.next")}
               </Text>
               <Feather
                 name={isLast ? "arrow-right" : "chevron-right"}
@@ -311,6 +303,17 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
               />
             </Animated.View>
           </Pressable>
+        </View>
+
+        <View style={styles.learningLanguageHint}>
+          <Text style={styles.learningLanguageTitle}>
+            {t("onboarding.currentLearningLanguage", {
+              language: targetLanguageName,
+            })}
+          </Text>
+          <Text style={styles.learningLanguageBody}>
+            {t("onboarding.changeInSettings")}
+          </Text>
         </View>
       </View>
     </View>
@@ -428,6 +431,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  learningLanguageHint: {
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    gap: 4,
+  },
+  learningLanguageTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  learningLanguageBody: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.62)",
   },
   skipButton: {
     paddingVertical: 8,

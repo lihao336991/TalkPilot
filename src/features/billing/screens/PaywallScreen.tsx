@@ -2,27 +2,29 @@ import { refreshProfileFromSession } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
 import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
+import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import type {
-  PurchasesOffering,
-  PurchasesPackage,
+    PurchasesOffering,
+    PurchasesPackage,
 } from "react-native-purchases";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { legalContent } from "../legal/legalContent";
 import {
-  type BillingSyncSummary,
-  revenueCatService,
+    type BillingSyncSummary,
+    revenueCatService,
 } from "../services/RevenueCatService";
 
 function getPackageRawLabel(pkg: PurchasesPackage) {
@@ -32,29 +34,29 @@ function getPackageRawLabel(pkg: PurchasesPackage) {
 function getPackagePeriodLabel(pkg: PurchasesPackage) {
   const raw = getPackageRawLabel(pkg);
   if (raw.includes("annual") || raw.includes("year")) {
-    return "per year";
+    return "periodYear";
   }
   if (raw.includes("monthly") || raw.includes("month")) {
-    return "per month";
+    return "periodMonth";
   }
   if (raw.includes("week")) {
-    return "per week";
+    return "periodWeek";
   }
-  return "subscription";
+  return "periodSubscription";
 }
 
-function getPackageCycleText(pkg: PurchasesPackage) {
+function getPackageCycleTextKey(pkg: PurchasesPackage) {
   const raw = getPackageRawLabel(pkg);
   if (raw.includes("annual") || raw.includes("year")) {
-    return "Annual billing";
+    return "cycleAnnual";
   }
   if (raw.includes("monthly") || raw.includes("month")) {
-    return "Monthly billing";
+    return "cycleMonthly";
   }
   if (raw.includes("week")) {
-    return "Weekly billing";
+    return "cycleWeekly";
   }
-  return "Recurring billing";
+  return "cycleRecurring";
 }
 
 function getPackageMonths(pkg: PurchasesPackage) {
@@ -81,13 +83,17 @@ function getMonthlyEquivalentPrice(pkg: PurchasesPackage) {
   return price / months;
 }
 
-function formatPriceValue(value: number, pkg: PurchasesPackage) {
+function formatPriceValue(
+  value: number,
+  pkg: PurchasesPackage,
+  locale: string,
+) {
   const currencyCode = (pkg.product as unknown as { currencyCode?: unknown })
     .currencyCode;
 
   if (typeof currencyCode === "string" && currencyCode.length > 0) {
     try {
-      return new Intl.NumberFormat(undefined, {
+      return new Intl.NumberFormat(locale, {
         style: "currency",
         currency: currencyCode,
         maximumFractionDigits: value % 1 === 0 ? 0 : 2,
@@ -130,38 +136,44 @@ function getSavingsSummary(
   );
   return {
     percent: savingsPercent,
-    absolute: formatPriceValue(savingsValue, selected),
+    absoluteValue: savingsValue,
   };
 }
 
-function getPurchaseSummaryMessage(args: {
-  unlocked: boolean;
-  webhookSynced: boolean;
-}) {
+function getPurchaseSummaryMessage(
+  args: {
+    unlocked: boolean;
+    webhookSynced: boolean;
+  },
+  t: TFunction,
+) {
   if (args.unlocked && args.webhookSynced) {
-    return "You're all set. Pro is active on this account now.";
+    return t("billing.paywall.summary.purchaseReady");
   }
 
   if (args.unlocked) {
-    return "Purchase confirmed. Pro is already active, and we're finishing account sync in the background.";
+    return t("billing.paywall.summary.purchaseSyncing");
   }
 
-  return "Purchase completed, but activation is taking a little longer than expected.";
+  return t("billing.paywall.summary.purchaseDelayed");
 }
 
-function getRestoreSummaryMessage(args: {
-  unlocked: boolean;
-  webhookSynced: boolean;
-}) {
+function getRestoreSummaryMessage(
+  args: {
+    unlocked: boolean;
+    webhookSynced: boolean;
+  },
+  t: TFunction,
+) {
   if (args.unlocked && args.webhookSynced) {
-    return "Your subscription has been restored and is ready to use.";
+    return t("billing.paywall.summary.restoreReady");
   }
 
   if (args.unlocked) {
-    return "Restore succeeded. Pro is available now, and account sync is still finishing.";
+    return t("billing.paywall.summary.restoreSyncing");
   }
 
-  return "No active subscription was found to restore for this account.";
+  return t("billing.paywall.summary.restoreMissing");
 }
 
 function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
@@ -171,6 +183,7 @@ function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
 export default function PaywallScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { i18n, t } = useTranslation();
   const authMode = useAuthStore((state) => state.authMode);
   const userId = useAuthStore((state) => state.userId);
   const subscriptionSyncState = useAuthStore(
@@ -231,9 +244,20 @@ export default function PaywallScreen() {
     null;
 
   const selectedCtaLabel = selectedPackage
-    ? `Continue for ${selectedPackage.product.priceString}`
-    : "Choose a plan";
+    ? t("billing.paywall.continueForPrice", {
+        price: selectedPackage.product.priceString,
+      })
+    : t("billing.paywall.choosePlanFallback");
   const isPaidUser = hasPaidAccess(subscriptionTier);
+  const benefitItems = useMemo(
+    () => [
+      t("billing.paywall.benefits.live"),
+      t("billing.paywall.benefits.review"),
+      t("billing.paywall.benefits.suggest"),
+      t("billing.paywall.benefits.sync"),
+    ],
+    [t],
+  );
 
   const loadPaywall = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -267,7 +291,9 @@ export default function PaywallScreen() {
         });
       } catch (error) {
         setErrorMessage(
-          error instanceof Error ? error.message : "Failed to load paywall.",
+          error instanceof Error
+            ? error.message
+            : t("billing.paywall.unavailableFallback"),
         );
       } finally {
         if (!silent) {
@@ -275,7 +301,7 @@ export default function PaywallScreen() {
         }
       }
     },
-    [authMode, router, userId],
+    [authMode, router, t, userId],
   );
 
   useEffect(() => {
@@ -304,14 +330,14 @@ export default function PaywallScreen() {
     if (isPaidUser) {
       setStatusMessage(
         subscriptionSyncState === "syncing"
-          ? "Pro is already active. We're just finishing the account sync."
-          : "This account already has Pro access.",
+          ? t("billing.paywall.activeStatusSyncing")
+          : t("billing.paywall.activeStatusReady"),
       );
       return;
     }
 
     setStatusMessage(null);
-  }, [isPaidUser, subscriptionSyncState]);
+  }, [isPaidUser, subscriptionSyncState, t]);
 
   async function handleRestorePress() {
     if (!userId) {
@@ -321,33 +347,33 @@ export default function PaywallScreen() {
 
     try {
       setIsRestoring(true);
-      setStatusMessage("Checking this account for existing purchases...");
+      setStatusMessage(t("billing.paywall.restoreChecking"));
       await revenueCatService.configureForAuthenticatedUser(userId);
       const restoreResult = await revenueCatService.restorePurchases();
-      const message = getRestoreSummaryMessage(restoreResult.summary);
+      const message = getRestoreSummaryMessage(restoreResult.summary, t);
       setStatusMessage(message);
 
       if (restoreResult.summary.unlocked) {
-        Alert.alert("Restore complete", message, [
+        Alert.alert(t("billing.paywall.restoreCompleteTitle"), message, [
           {
-            text: "Go to Profile",
+            text: t("common.actions.goToProfile"),
             onPress: goToProfile,
           },
           {
-            text: "Stay here",
+            text: t("common.actions.stayHere"),
             style: "cancel",
           },
         ]);
         return;
       }
 
-      Alert.alert("Nothing to restore", message);
+      Alert.alert(t("billing.paywall.restoreMissingTitle"), message);
     } catch (error) {
       Alert.alert(
-        "Restore failed",
+        t("billing.paywall.restoreFailedTitle"),
         error instanceof Error
           ? error.message
-          : "We couldn't restore purchases right now. Please try again later.",
+          : t("billing.paywall.restoreFailedFallback"),
       );
       setStatusMessage(null);
     } finally {
@@ -356,51 +382,51 @@ export default function PaywallScreen() {
   }
 
   async function handlePurchaseCompleted(summary: BillingSyncSummary) {
-    const message = getPurchaseSummaryMessage(summary);
+    const message = getPurchaseSummaryMessage(summary, t);
     setStatusMessage(message);
 
     if (summary.unlocked) {
-      Alert.alert("Purchase complete", message, [
+      Alert.alert(t("billing.paywall.purchaseCompleteTitle"), message, [
         {
-          text: "Go to Profile",
+          text: t("common.actions.goToProfile"),
           onPress: goToProfile,
         },
       ]);
       return;
     }
 
-    Alert.alert("Purchase received", message);
+    Alert.alert(t("billing.paywall.purchaseReceivedTitle"), message);
   }
 
   function getPackageTitle(pkg: PurchasesPackage) {
     const raw = getPackageRawLabel(pkg);
     if (raw.includes("annual") || raw.includes("year")) {
-      return "Yearly Pro";
+      return t("billing.paywall.package.titleYearly");
     }
     if (raw.includes("monthly") || raw.includes("month")) {
-      return "Monthly Pro";
+      return t("billing.paywall.package.titleMonthly");
     }
-    return pkg.product.title || "Pro Plan";
+    return pkg.product.title || t("billing.paywall.package.titleFallback");
   }
 
   function getPackageCaption(pkg: PurchasesPackage) {
     const raw = getPackageRawLabel(pkg);
     if (raw.includes("annual") || raw.includes("year")) {
-      return "Best value";
+      return t("billing.paywall.package.captionYearly");
     }
     if (raw.includes("monthly") || raw.includes("month")) {
-      return "Most flexible";
+      return t("billing.paywall.package.captionMonthly");
     }
-    return "Premium access";
+    return t("billing.paywall.package.captionFallback");
   }
 
   function getPackageBadge(pkg: PurchasesPackage) {
     const raw = getPackageRawLabel(pkg);
     if (raw.includes("annual") || raw.includes("year")) {
-      return "Best Value";
+      return t("billing.paywall.package.badgeYearly");
     }
     if (raw.includes("monthly") || raw.includes("month")) {
-      return "Most Flexible";
+      return t("billing.paywall.package.badgeMonthly");
     }
     return null;
   }
@@ -412,7 +438,7 @@ export default function PaywallScreen() {
 
     try {
       setIsPurchasing(true);
-      setStatusMessage(`Finishing ${getPackageTitle(selectedPackage)}...`);
+      setStatusMessage(t("billing.paywall.purchaseProcessing"));
       await revenueCatService.configureForAuthenticatedUser(userId!);
       const purchaseResult =
         await revenueCatService.purchasePackage(selectedPackage);
@@ -423,16 +449,16 @@ export default function PaywallScreen() {
         message?: string;
       };
       if (maybePurchaseError?.userCancelled) {
-        setStatusMessage("Purchase cancelled. No changes were made.");
+        setStatusMessage(t("billing.paywall.purchaseCancelled"));
         return;
       }
 
       setStatusMessage(null);
       Alert.alert(
-        "Purchase failed",
+        t("billing.paywall.purchaseFailedTitle"),
         error instanceof Error
           ? error.message
-          : "Please try again in a moment.",
+          : t("billing.paywall.purchaseFailedFallback"),
       );
     } finally {
       setIsPurchasing(false);
@@ -445,14 +471,15 @@ export default function PaywallScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.unsupportedContainer}>
           <Text style={styles.unsupportedTitle}>
-            Purchases are not available on web
+            {t("billing.paywall.webUnsupportedTitle")}
           </Text>
           <Text style={styles.unsupportedBody}>
-            Open the iOS or Android development build to test RevenueCat
-            paywalls.
+            {t("billing.paywall.webUnsupportedBody")}
           </Text>
           <Pressable onPress={closeScreen} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Close</Text>
+            <Text style={styles.secondaryButtonText}>
+              {t("common.actions.close")}
+            </Text>
           </Pressable>
         </View>
       </>
@@ -476,16 +503,20 @@ export default function PaywallScreen() {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close paywall"
+            accessibilityLabel={t("billing.paywall.closeAccessibilityLabel")}
             onPress={closeScreen}
             style={styles.iconButton}
           >
             <Feather name="x" size={20} color="#FFFFFF" />
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>TalkPilot Pro</Text>
+            <Text style={styles.eyebrow}>
+              {t("billing.paywall.titleEyebrow")}
+            </Text>
             <Text style={styles.title}>
-              {isPaidUser ? "You're already Pro" : "Choose your plan"}
+              {isPaidUser
+                ? t("billing.paywall.titleAlreadyPro")
+                : t("billing.paywall.titleChoosePlan")}
             </Text>
           </View>
         </View>
@@ -500,11 +531,15 @@ export default function PaywallScreen() {
           {isLoading ? (
             <View style={styles.loadingCard}>
               <ActivityIndicator color="#FFFFFF" />
-              <Text style={styles.loadingText}>Loading paywall...</Text>
+              <Text style={styles.loadingText}>
+                {t("billing.paywall.loading")}
+              </Text>
             </View>
           ) : errorMessage ? (
             <View style={styles.messageCard}>
-              <Text style={styles.messageTitle}>Paywall unavailable</Text>
+              <Text style={styles.messageTitle}>
+                {t("billing.paywall.unavailableTitle")}
+              </Text>
               <Text style={styles.messageBody}>{errorMessage}</Text>
               <Pressable
                 onPress={() => {
@@ -516,7 +551,9 @@ export default function PaywallScreen() {
                 }}
                 style={styles.retryButton}
               >
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>
+                  {t("common.actions.retry")}
+                </Text>
               </Pressable>
             </View>
           ) : offering && packages.length > 0 ? (
@@ -525,20 +562,22 @@ export default function PaywallScreen() {
                 <View style={styles.statusCard}>
                   <Text style={styles.statusCardTitle}>
                     {subscriptionSyncState === "syncing"
-                      ? "Pro is active and still syncing"
-                      : "Pro is already active"}
+                      ? t("billing.paywall.statusCard.syncingTitle")
+                      : t("billing.paywall.statusCard.activeTitle")}
                   </Text>
                   <Text style={styles.statusCardBody}>
                     {subscriptionSyncState === "syncing"
-                      ? "Your purchase has already gone through. You can keep using Pro while we finish syncing this account."
-                      : "This account already has Pro. You can manage billing below or review other plans if you want to switch later."}
+                      ? t("billing.paywall.statusCard.syncingBody")
+                      : t("billing.paywall.statusCard.activeBody")}
                   </Text>
                 </View>
               ) : null}
 
               <View style={styles.plansSection}>
                 <Text style={styles.sectionTitle}>
-                  {isPaidUser ? "Available plans" : "Plans"}
+                  {isPaidUser
+                    ? t("billing.paywall.sectionTitleAvailablePlans")
+                    : t("billing.paywall.sectionTitlePlans")}
                 </Text>
                 <View style={styles.packageList}>
                   {packages.map((pkg) => {
@@ -579,7 +618,9 @@ export default function PaywallScreen() {
                           {selected && pkgSavings ? (
                             <View style={styles.packageBadge}>
                               <Text style={styles.packageBadgeText}>
-                                Save {pkgSavings.percent}%
+                                {t("billing.paywall.package.savePercent", {
+                                  percent: pkgSavings.percent,
+                                })}
                               </Text>
                             </View>
                           ) : selected && badge ? (
@@ -595,30 +636,42 @@ export default function PaywallScreen() {
                             {pkg.product.priceString}
                           </Text>
                           <Text style={styles.packageMeta}>
-                            {getPackagePeriodLabel(pkg)}
+                            {t(
+                              `billing.paywall.package.${getPackagePeriodLabel(pkg)}`,
+                            )}
                           </Text>
                           {selected ? (
                             <View style={styles.packagePills}>
                               <View style={styles.packagePill}>
                                 <Text style={styles.packagePillText}>
-                                  {getPackageCycleText(pkg)}
+                                  {t(
+                                    `billing.paywall.package.${getPackageCycleTextKey(pkg)}`,
+                                  )}
                                 </Text>
                               </View>
                               {pkgMonthlyEquivalent ? (
                                 <View style={styles.packagePill}>
                                   <Text style={styles.packagePillText}>
-                                    {formatPriceValue(
-                                      pkgMonthlyEquivalent,
-                                      pkg,
-                                    )}{" "}
-                                    / month
+                                    {t("billing.paywall.package.perMonth", {
+                                      price: formatPriceValue(
+                                        pkgMonthlyEquivalent,
+                                        pkg,
+                                        i18n.language,
+                                      ),
+                                    })}
                                   </Text>
                                 </View>
                               ) : null}
                               {pkgSavings ? (
                                 <View style={styles.packagePill}>
                                   <Text style={styles.packagePillText}>
-                                    Save {pkgSavings.absolute}
+                                    {t("billing.paywall.package.saveAmount", {
+                                      amount: formatPriceValue(
+                                        pkgSavings.absoluteValue,
+                                        pkg,
+                                        i18n.language,
+                                      ),
+                                    })}
                                   </Text>
                                 </View>
                               ) : null}
@@ -632,13 +685,10 @@ export default function PaywallScreen() {
               </View>
 
               <View style={styles.benefitsCard}>
-                <Text style={styles.sectionTitle}>Pro details</Text>
-                {[
-                  "120 live speaking minutes every day instead of 10",
-                  "Unlimited AI review instead of the free 100/day cap",
-                  "Unlimited AI reply suggestions instead of the free 100/day cap",
-                  "Purchase restore and account sync",
-                ].map((item) => (
+                <Text style={styles.sectionTitle}>
+                  {t("billing.paywall.sectionTitleProDetails")}
+                </Text>
+                {benefitItems.map((item) => (
                   <View key={item} style={styles.benefitRow}>
                     <View style={styles.benefitDot} />
                     <Text style={styles.benefitText}>{item}</Text>
@@ -664,23 +714,28 @@ export default function PaywallScreen() {
                     onPress={() => router.push("/terms" as Href)}
                     style={styles.inlineActionButton}
                   >
-                    <Text style={styles.inlineActionText}>Terms</Text>
+                    <Text style={styles.inlineActionText}>
+                      {t("billing.paywall.inlineActionTerms")}
+                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => router.push("/privacy" as Href)}
                     style={styles.inlineActionButton}
                   >
-                    <Text style={styles.inlineActionText}>Privacy</Text>
+                    <Text style={styles.inlineActionText}>
+                      {t("billing.paywall.inlineActionPrivacy")}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
             </>
           ) : (
             <View style={styles.messageCard}>
-              <Text style={styles.messageTitle}>No offering configured</Text>
+              <Text style={styles.messageTitle}>
+                {t("billing.paywall.noOfferingTitle")}
+              </Text>
               <Text style={styles.messageBody}>
-                RevenueCat did not return a current offering. Check your default
-                offering in the dashboard.
+                {t("billing.paywall.noOfferingBody")}
               </Text>
             </View>
           )}
@@ -716,10 +771,10 @@ export default function PaywallScreen() {
             <Text style={styles.primaryButtonText}>
               {isPaidUser
                 ? subscriptionSyncState === "syncing"
-                  ? "Pro active, manage billing"
-                  : "Manage subscription"
+                  ? t("billing.paywall.footerManageBillingSyncing")
+                  : t("billing.paywall.footerManageSubscription")
                 : isPurchasing
-                  ? "Processing purchase..."
+                  ? t("billing.paywall.purchaseProcessing")
                   : selectedCtaLabel}
             </Text>
           </Pressable>
@@ -733,7 +788,9 @@ export default function PaywallScreen() {
               style={styles.footerTextButton}
             >
               <Text style={styles.footerTextButtonLabel}>
-                {isRestoring ? "Restoring..." : "Restore Purchases"}
+                {isRestoring
+                  ? t("billing.paywall.footerRestoring")
+                  : t("billing.paywall.footerRestorePurchases")}
               </Text>
             </Pressable>
             {!isPaidUser ? (
@@ -742,7 +799,7 @@ export default function PaywallScreen() {
                 style={styles.footerTextButton}
               >
                 <Text style={styles.footerTextButtonLabel}>
-                  Manage Subscription
+                  {t("billing.paywall.footerManageSubscription")}
                 </Text>
               </Pressable>
             ) : null}
