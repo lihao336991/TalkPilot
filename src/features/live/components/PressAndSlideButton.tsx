@@ -1,10 +1,20 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useMemo, useState } from "react";
-import { Dimensions, Modal, StyleSheet, Text, View } from "react-native";
+import {
+  Dimensions,
+  Modal,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useTranslation } from "react-i18next";
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeIn,
   FadeOut,
@@ -13,12 +23,15 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withRepeat,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-export type PressAndSlideAction = "cancel" | "send" | "text";
+export type PressAndSlideAction = "cancel" | "send" | "speak";
 
 type PressAndSlideButtonProps = {
   icon?: keyof typeof Feather.glyphMap;
@@ -34,6 +47,13 @@ type PressAndSlideButtonProps = {
   previewText?: string;
   slideThresholdLeft?: number;
   slideThresholdRight?: number;
+  buttonStyle?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
+  neutralHint?: string;
+  showHoldRipple?: boolean;
+  rippleColor?: string;
+  overlayTitle?: string;
+  overlaySubtitle?: string;
 };
 
 export function PressAndSlideButton({
@@ -50,14 +70,23 @@ export function PressAndSlideButton({
   previewText,
   slideThresholdLeft = -60,
   slideThresholdRight = 60,
+  buttonStyle,
+  labelStyle,
+  neutralHint,
+  showHoldRipple = false,
+  rippleColor = "rgba(194,234,69,0.34)",
+  overlayTitle,
+  overlaySubtitle,
 }: PressAndSlideButtonProps) {
   const { t } = useTranslation();
   const [isActive, setIsActive] = useState(false);
-  const [actionState, setActionState] = useState<"neutral" | "cancel" | "text">(
+  const [actionState, setActionState] = useState<"neutral" | "cancel" | "speak">(
     "neutral",
   );
 
   const dragX = useSharedValue(0);
+  const rippleProgress = useSharedValue(0);
+  const rippleProgressSecondary = useSharedValue(0);
   const overlayVisible = isActive;
 
   const iconColor = useMemo(() => {
@@ -65,12 +94,12 @@ export function PressAndSlideButton({
     return activeColor;
   }, [activeColor, defaultColor, isActive]);
 
-  const handleRelease = (finalAction: "neutral" | "cancel" | "text") => {
+  const handleRelease = (finalAction: "neutral" | "cancel" | "speak") => {
     if (finalAction === "cancel") {
       onPressOut("cancel");
       return;
     }
-    onPressOut(finalAction === "text" ? "text" : "send");
+    onPressOut(finalAction === "speak" ? "speak" : "send");
   };
 
   const panGesture = Gesture.Pan()
@@ -85,15 +114,15 @@ export function PressAndSlideButton({
       if (event.translationX < slideThresholdLeft) {
         runOnJS(setActionState)("cancel");
       } else if (event.translationX > slideThresholdRight) {
-        runOnJS(setActionState)("text");
+        runOnJS(setActionState)("speak");
       } else {
         runOnJS(setActionState)("neutral");
       }
     })
     .onEnd(() => {
-      let finalAction: "neutral" | "cancel" | "text" = "neutral";
+      let finalAction: "neutral" | "cancel" | "speak" = "neutral";
       if (dragX.value < slideThresholdLeft) finalAction = "cancel";
-      else if (dragX.value > slideThresholdRight) finalAction = "text";
+      else if (dragX.value > slideThresholdRight) finalAction = "speak";
 
       runOnJS(handleRelease)(finalAction);
     })
@@ -112,7 +141,7 @@ export function PressAndSlideButton({
 
     let bgColor = activeBg;
     if (actionState === "cancel") bgColor = cancelBg;
-    if (actionState === "text") bgColor = sendBg;
+    if (actionState === "speak") bgColor = sendBg;
 
     const bubbleScale = actionState === "neutral" ? 1 : 1.05;
 
@@ -127,19 +156,19 @@ export function PressAndSlideButton({
       return styles.voiceBubbleCancel;
     }
 
-    if (actionState === "text") {
-      return styles.voiceBubbleText;
-    }
-
-    return styles.voiceBubbleSend;
+    return actionState === "speak" || actionState === "neutral"
+      ? styles.voiceBubbleText
+      : styles.voiceBubbleSend;
   }, [actionState]);
 
   const bubbleText = useMemo(() => {
-    if (actionState === "text") {
-      const trimmed = previewText?.trim();
-      return trimmed || t("live.pressAndSlide.editDraftFallback");
+    const trimmed = previewText?.trim();
+    if (trimmed) {
+      return trimmed;
     }
-
+    if (actionState === "speak") {
+      return t("live.pressAndSlide.speakReplyFallback");
+    }
     return "";
   }, [actionState, previewText, t]);
 
@@ -148,6 +177,49 @@ export function PressAndSlideButton({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
   }, [overlayVisible]);
+
+  useEffect(() => {
+    if (isActive && showHoldRipple) {
+      rippleProgress.value = 0;
+      rippleProgressSecondary.value = 0;
+      rippleProgress.value = withRepeat(
+        withTiming(1, {
+          duration: 1400,
+          easing: Easing.out(Easing.quad),
+        }),
+        -1,
+        false,
+      );
+      rippleProgressSecondary.value = withDelay(
+        240,
+        withRepeat(
+          withTiming(1, {
+            duration: 1400,
+            easing: Easing.out(Easing.quad),
+          }),
+          -1,
+          false,
+        ),
+      );
+      return;
+    }
+
+    cancelAnimation(rippleProgress);
+    cancelAnimation(rippleProgressSecondary);
+    rippleProgress.value = 0;
+    rippleProgressSecondary.value = 0;
+  }, [isActive, rippleProgress, rippleProgressSecondary, showHoldRipple]);
+
+  const rippleStyle = useAnimatedStyle(() => ({
+    opacity: showHoldRipple && isActive ? 0.2 * (1 - rippleProgress.value) : 0,
+    transform: [{ scale: 0.92 + rippleProgress.value * 0.95 }],
+  }));
+
+  const rippleSecondaryStyle = useAnimatedStyle(() => ({
+    opacity:
+      showHoldRipple && isActive ? 0.14 * (1 - rippleProgressSecondary.value) : 0,
+    transform: [{ scale: 0.92 + rippleProgressSecondary.value * 1.1 }],
+  }));
 
   return (
     <View style={[styles.container, overlayVisible && styles.containerActive]}>
@@ -166,22 +238,43 @@ export function PressAndSlideButton({
           <View style={styles.scrim} />
 
           <Animated.View
-            style={styles.voiceBubbleWrap}
+            style={styles.overlayContentWrap}
             entering={SlideInDown.duration(300)
               .withInitialValues({ transform: [{ translateY: 6 }], opacity: 0 })
               .easing(Easing.out(Easing.ease))}
             exiting={SlideOutDown.duration(150)}
           >
+            {(overlayTitle || overlaySubtitle) && actionState === "neutral" ? (
+              <View style={styles.overlayHeaderCard}>
+                {overlayTitle ? (
+                  <Text style={styles.overlayHeaderTitle}>{overlayTitle}</Text>
+                ) : null}
+                {overlaySubtitle ? (
+                  <Text style={styles.overlayHeaderSubtitle}>{overlaySubtitle}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
             <Animated.View
               style={[styles.voiceBubble, bubbleStyle, animatedBubbleStyle]}
             >
-              {actionState === "text" ? (
+              {actionState !== "cancel" && bubbleText ? (
                 <>
-                  <Text style={styles.voiceBubbleTextContent} numberOfLines={3}>
+                  <Text
+                    style={styles.voiceBubbleTextContent}
+                    numberOfLines={actionState === "neutral" ? 4 : 3}
+                  >
                     {bubbleText}
                   </Text>
-                  <View style={styles.waveformCorner}>
-                    <WaveformBars color="rgba(32,72,17,0.8)" compact />
+                  <View style={styles.voiceBubbleMetaRow}>
+                    <View style={styles.waveformCornerInline}>
+                      <WaveformBars color="rgba(32,72,17,0.72)" compact />
+                    </View>
+                    {actionState === "speak" ? (
+                      <View style={styles.speakBadge}>
+                        <Feather name="volume-2" size={14} color="#173300" />
+                      </View>
+                    ) : null}
                   </View>
                 </>
               ) : (
@@ -251,24 +344,24 @@ export function PressAndSlideButton({
                 <Text
                   style={[
                     styles.actionHint,
-                    actionState !== "text" && { opacity: 0 },
+                    actionState !== "speak" && { opacity: 0 },
                   ]}
                 >
-                  {t("live.pressAndSlide.releaseEditText")}
+                  {t("live.pressAndSlide.releaseSpeakReply")}
                 </Text>
                 <View
                   style={[
                     styles.actionPill,
-                    actionState === "text" && styles.actionPillActive,
+                    actionState === "speak" && styles.actionPillActive,
                   ]}
                 >
                   <Text
                     style={[
                       styles.actionPillText,
-                      actionState === "text" && styles.actionPillTextActive,
+                      actionState === "speak" && styles.actionPillTextActive,
                     ]}
                   >
-                    {t("live.pressAndSlide.slideToText")}
+                    {t("live.pressAndSlide.slideToSpeak")}
                   </Text>
                 </View>
               </View>
@@ -285,7 +378,7 @@ export function PressAndSlideButton({
                   actionState !== "neutral" && { opacity: 0 },
                 ]}
               >
-                {t("live.pressAndSlide.releaseSend")}
+                {neutralHint ?? t("live.pressAndSlide.releaseSend")}
               </Text>
             </Animated.View>
           </View>
@@ -293,9 +386,30 @@ export function PressAndSlideButton({
       </Modal>
 
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.button, animatedButtonStyle]}>
+        <Animated.View style={[styles.button, animatedButtonStyle, buttonStyle]}>
+          {showHoldRipple ? (
+            <>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.holdRipple,
+                  { backgroundColor: rippleColor },
+                  rippleStyle,
+                ]}
+              />
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.holdRipple,
+                  styles.holdRippleSecondary,
+                  { borderColor: rippleColor },
+                  rippleSecondaryStyle,
+                ]}
+              />
+            </>
+          ) : null}
           {label ? (
-            <Text style={[styles.buttonLabel, { color: iconColor }]}>{label}</Text>
+            <Text style={[styles.buttonLabel, { color: iconColor }, labelStyle]}>{label}</Text>
           ) : icon ? (
             <Feather name={icon} size={24} color={iconColor} />
           ) : null}
@@ -347,10 +461,21 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(21,22,25,0.08)",
+  },
+  holdRipple: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    borderRadius: 999,
+  },
+  holdRippleSecondary: {
+    borderWidth: 1,
+    backgroundColor: "transparent",
   },
   buttonLabel: {
     fontSize: 12,
@@ -366,12 +491,38 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(20,20,22,0.62)",
   },
-  voiceBubbleWrap: {
+  overlayContentWrap: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 270,
+    bottom: 262,
     alignItems: "center",
+    gap: 14,
+  },
+  overlayHeaderCard: {
+    width: SCREEN_WIDTH - 56,
+    maxWidth: 360,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  overlayHeaderTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  overlayHeaderSubtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.72)",
+    textAlign: "center",
   },
   voiceBubble: {
     minWidth: 140,
@@ -410,6 +561,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 24,
     minWidth: 140,
+    minHeight: 88,
   },
   voiceBubbleTail: {
     position: "absolute",
@@ -433,13 +585,26 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: "500",
     color: "#0F1808",
-    paddingRight: 40,
-    paddingBottom: 16,
+    maxWidth: SCREEN_WIDTH - 110,
   },
-  waveformCorner: {
-    position: "absolute",
-    right: 16,
-    bottom: 16,
+  voiceBubbleMetaRow: {
+    width: "100%",
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  waveformCornerInline: {
+    minHeight: 16,
+    justifyContent: "center",
+  },
+  speakBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,24,8,0.1)",
   },
   bottomPanel: {
     position: "absolute",

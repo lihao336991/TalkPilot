@@ -109,32 +109,31 @@ export const en = {
     },
   },
   onboarding: {
-    currentLearningLanguage: "Current learning language: {{language}}",
-    changeInSettings: "You can change this anytime in Settings.",
     slides: {
-      realtime: {
+      speak: {
         eyebrow: "REAL-TIME",
-        headline: "Your AI co-pilot\nin every conversation",
-        body:
-          "TalkPilot listens as you speak and gives you instant feedback - grammar, vocabulary, and natural expression, all in the moment.",
+        headline: "No prep.\nJust start speaking",
+        body: "Tap once and say it.",
+      },
+      reply: {
+        eyebrow: "AI SUGGESTIONS",
+        headline: "When they finish,\nyou know what to say",
+        body: "AI gives you a reply that fits.",
+        sourceLabel: "They said",
+        sourceTextLine1: "Are you free this weekend?",
+        sourceTextLine2: "你这周末有空吗？",
+        suggestionLabel: "Suggested",
+        suggestionLine1: "I'm free on Sunday.",
+        suggestionLine2: "我周日有空。",
       },
       review: {
         eyebrow: "INSTANT REVIEW",
-        headline: "Know exactly what\nto fix, right now",
-        body:
-          "Every sentence you speak gets scored. Tap any bubble to see what went wrong, the corrected version, and a better way to say it.",
-      },
-      suggest: {
-        eyebrow: "AI SUGGESTIONS",
-        headline: "Never get stuck\nfor words again",
-        body:
-          "When you don't know what to say next, TalkPilot generates a natural reply suggestion based on the full conversation context.",
-      },
-      getstarted: {
-        eyebrow: "LET'S GO",
-        headline: "Start your first\nconversation",
-        body:
-          "Tap the mic, start talking. TalkPilot works in the background - no setup, no interruptions. Just speak naturally.",
+        headline: "Turns out,\nit can sound more natural",
+        body: "Tap once and refine it.",
+        originalLabel: "Your version",
+        originalText: "I very like this movie.",
+        improvedLabel: "More natural",
+        improvedText: "I really like this movie.",
       },
     },
   },
@@ -229,17 +228,25 @@ export const en = {
       resume: "Resume",
       pause: "Pause",
       holdToSpeak: "Hold to speak",
+      assistOverlayTitle: "Say it in your native language when you get stuck.",
+      assistOverlaySubtitle:
+        "I turn it into the learning language live. Release for text only, or slide right to speak it out.",
       releaseToSend: "Release to send",
+      sosCaption: "Native language assist",
       endConversation: "End conversation",
       end: "End",
     },
     pressAndSlide: {
       editDraftFallback: "Release to turn this into editable text",
+      speakReplyFallback: "Slide right and release to speak the learning-language reply",
       releaseCancel: "Release to cancel",
       cancel: "Cancel",
       releaseEditText: "Release to edit text",
+      releaseSpeakReply: "Release to translate and speak",
       slideToText: "Slide here for text",
+      slideToSpeak: "Slide here to speak",
       releaseSend: "Release to send",
+      releaseTranslateOnly: "Release for text only",
     },
     conversationFlow: {
       listening: "Listening...",
@@ -305,6 +312,7 @@ export const en = {
     section: {
       appLanguage: "App language",
       learningLanguage: "Learning language",
+      debug: "Debug",
     },
     appLanguage: {
       description:
@@ -343,6 +351,13 @@ export const en = {
       resetConfirmTitle: "Reset voice sample?",
       resetConfirmBody:
         "This removes the local enrollment sample. The next Live session will ask you to record a new one.",
+    },
+    debug: {
+      description:
+        "Developer-only tools for testing setup flows. This section is hidden in production builds.",
+      forceOnboardingTitle: "Force onboarding on launch",
+      forceOnboardingDescription:
+        "Always show onboarding on the next cold launch, even if it was already completed.",
     },
   },
   profile: {

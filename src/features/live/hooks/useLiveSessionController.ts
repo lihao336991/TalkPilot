@@ -87,8 +87,6 @@ export function useLiveSessionController() {
   const [showCalibration, setShowCalibration] = useState(false);
   const [assistState, setAssistState] = useState<AssistUiState>("idle");
   const [assistPreviewText, setAssistPreviewText] = useState("");
-  const [assistDraftText, setAssistDraftText] = useState("");
-  const [isAssistDraftVisible, setIsAssistDraftVisible] = useState(false);
 
   const sessionIdRef = useRef<string | null>(null);
   const assistShouldResumeRef = useRef(false);
@@ -580,12 +578,16 @@ export function useLiveSessionController() {
   }, [connectStreamingSocket, learningLanguage, startAudioCapture]);
 
   const processAssistTranscript = useCallback(
-    async (rawTranscript: string) => {
+    async (
+      rawTranscript: string,
+      options?: {
+        speakReply?: boolean;
+      },
+    ) => {
       const transcript = rawTranscript.trim();
+      const speakReply = options?.speakReply ?? false;
       if (!transcript) {
         setAssistState("idle");
-        setAssistDraftText("");
-        setIsAssistDraftVisible(false);
         try {
           await restoreMainConversationCapture();
         } catch (restoreError) {
@@ -600,8 +602,6 @@ export function useLiveSessionController() {
 
       const debug = useDebugStore.getState();
       setAssistState("processing");
-      setIsAssistDraftVisible(false);
-      setAssistDraftText(transcript);
 
       const placeholderTurnId = `assist-${Date.now()}`;
       useConversationStore.getState().addTurn({
@@ -633,10 +633,12 @@ export function useLiveSessionController() {
           useConversationStore.getState().removeTurn(placeholderTurnId);
         }
 
-        setAssistState("playing");
-        debug.startStep("assist-tts", "Playing learning-language reply...");
-        await assistReplyService.playReply(result);
-        debug.completeStep("assist-tts", "done");
+        if (speakReply) {
+          setAssistState("playing");
+          debug.startStep("assist-tts", "Playing learning-language reply...");
+          await assistReplyService.playReply(result);
+          debug.completeStep("assist-tts", "done");
+        }
       } catch (error) {
         useConversationStore.getState().removeTurn(placeholderTurnId);
         if (debug.steps.some((step) => step.id === "assist-translate")) {
@@ -658,7 +660,6 @@ export function useLiveSessionController() {
       } finally {
         setAssistState("idle");
         setAssistPreviewText("");
-        setAssistDraftText("");
         try {
           await restoreMainConversationCapture();
         } catch (restoreError) {
@@ -671,25 +672,6 @@ export function useLiveSessionController() {
     },
     [restoreMainConversationCapture, sceneDescription, scenePreset],
   );
-
-  const dismissAssistDraft = useCallback(async () => {
-    setIsAssistDraftVisible(false);
-    setAssistDraftText("");
-    setAssistPreviewText("");
-    setAssistState("idle");
-    try {
-      await restoreMainConversationCapture();
-    } catch (restoreError) {
-      console.error(
-        "[NativeAssist] Failed to restore live audio after closing draft:",
-        restoreError,
-      );
-    }
-  }, [restoreMainConversationCapture]);
-
-  const submitAssistDraft = useCallback(async () => {
-    await processAssistTranscript(assistDraftText);
-  }, [assistDraftText, processAssistTranscript]);
 
   const handleNativeAssistPressIn = useCallback(async () => {
     if (assistState !== "idle") {
@@ -810,14 +792,9 @@ export function useLiveSessionController() {
         return;
       }
 
-      if (action === "text") {
-        setAssistDraftText(transcript);
-        setIsAssistDraftVisible(true);
-        setAssistState("editing");
-        return;
-      }
-
-      await processAssistTranscript(transcript);
+      await processAssistTranscript(transcript, {
+        speakReply: action === "speak",
+      });
     },
     [assistState, processAssistTranscript, restoreMainConversationCapture],
   );
@@ -854,8 +831,6 @@ export function useLiveSessionController() {
     setShowEnrollment(false);
     setAssistState("idle");
     setAssistPreviewText("");
-    setAssistDraftText("");
-    setIsAssistDraftVisible(false);
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
     useDebugStore.getState().reset();
@@ -887,9 +862,6 @@ export function useLiveSessionController() {
     showCalibration,
     assistState,
     assistPreviewText,
-    assistDraftText,
-    isAssistDraftVisible,
-    setAssistDraftText,
     isIdle,
     isActive,
     mainWsMeta,
@@ -908,7 +880,5 @@ export function useLiveSessionController() {
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
     handleEnd,
-    dismissAssistDraft,
-    submitAssistDraft,
   };
 }

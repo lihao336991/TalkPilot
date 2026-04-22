@@ -1,11 +1,8 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { useTranslation } from "react-i18next";
 import {
-  Modal,
-  Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import {
@@ -40,14 +37,9 @@ export default function LiveScreen() {
     mainWsStatus,
     assistWsStatus,
     forcedSpeaker,
-    duration,
     showEnrollment,
     showCalibration,
-    assistState,
     assistPreviewText,
-    assistDraftText,
-    isAssistDraftVisible,
-    setAssistDraftText,
     isIdle,
     isActive,
     mainWsMeta,
@@ -65,8 +57,6 @@ export default function LiveScreen() {
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
     handleEnd,
-    dismissAssistDraft,
-    submitAssistDraft,
   } = useLiveSessionController();
 
   const bottomPadding = isActive ? 0 : getTabBarHeight(insets.bottom);
@@ -139,9 +129,7 @@ export default function LiveScreen() {
             onNativeAssistPressIn={handleNativeAssistPressIn}
             onNativeAssistPressOut={handleNativeAssistPressOut}
             isPaused={status === "paused"}
-            isNativeAssistActive={assistState === "recording"}
             assistPreviewText={assistPreviewText}
-            duration={duration}
           />
         </View>
       )}
@@ -157,70 +145,6 @@ export default function LiveScreen() {
         onComplete={handleCalibrationComplete}
         onSkip={handleCalibrationSkip}
       />
-
-      <Modal
-        animationType="fade"
-        transparent
-        visible={isAssistDraftVisible}
-        onRequestClose={() => {
-          void dismissAssistDraft();
-        }}
-      >
-        <View style={styles.assistDraftBackdrop}>
-          <View style={styles.assistDraftCard}>
-            <Text style={styles.assistDraftTitle}>{t("live.screen.assistDraftTitle")}</Text>
-            <Text style={styles.assistDraftSubtitle}>
-              {t("live.screen.assistDraftSubtitle")}
-            </Text>
-
-            <TextInput
-              value={assistDraftText}
-              onChangeText={setAssistDraftText}
-              style={styles.assistDraftInput}
-              autoFocus
-              multiline
-              textAlignVertical="top"
-              placeholder={t("live.screen.assistDraftPlaceholder")}
-              placeholderTextColor={palette.textTertiary}
-            />
-
-            <View style={styles.assistDraftActions}>
-              <Pressable
-                style={[
-                  styles.assistDraftButton,
-                  styles.assistDraftGhostButton,
-                ]}
-                onPress={() => {
-                  void dismissAssistDraft();
-                }}
-              >
-                <Text
-                  style={[
-                    styles.assistDraftButtonText,
-                    styles.assistDraftGhostButtonText,
-                  ]}
-                >
-                  {t("common.actions.cancel")}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.assistDraftButton,
-                  styles.assistDraftPrimaryButton,
-                ]}
-                onPress={() => {
-                  void submitAssistDraft();
-                }}
-              >
-                <Text style={styles.assistDraftButtonText}>
-                  {t("common.actions.generateReply")}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -298,69 +222,5 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: palette.textTertiary,
     textTransform: "uppercase",
-  },
-  assistDraftBackdrop: {
-    flex: 1,
-    backgroundColor: palette.overlayDark,
-    justifyContent: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  assistDraftCard: {
-    borderRadius: radii.xl,
-    backgroundColor: palette.bgCardSolid,
-    borderWidth: 1,
-    borderColor: palette.accentBorderStrong,
-    padding: spacing.xl,
-    ...shadows.cardLg,
-  },
-  assistDraftTitle: {
-    ...typography.displaySm,
-    color: palette.textPrimary,
-  },
-  assistDraftSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 19,
-    color: palette.textSecondary,
-  },
-  assistDraftInput: {
-    minHeight: 180,
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: palette.bgInput,
-    borderWidth: 1,
-    borderColor: palette.accentBorder,
-    ...typography.bodyLg,
-    color: palette.textPrimary,
-  },
-  assistDraftActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  assistDraftButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  assistDraftGhostButton: {
-    backgroundColor: palette.bgGhostButton,
-    borderWidth: 1,
-    borderColor: palette.accentBorder,
-  },
-  assistDraftPrimaryButton: {
-    backgroundColor: palette.accent,
-  },
-  assistDraftButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: palette.textOnAccent,
-  },
-  assistDraftGhostButtonText: {
-    color: palette.textPrimary,
   },
 });

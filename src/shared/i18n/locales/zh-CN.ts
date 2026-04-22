@@ -108,32 +108,31 @@ export const zhCN: TranslationSchema = {
     },
   },
   onboarding: {
-    currentLearningLanguage: "当前学习语言：{{language}}",
-    changeInSettings: "你可以稍后在 Settings 中随时修改。",
     slides: {
-      realtime: {
+      speak: {
         eyebrow: "实时辅助",
-        headline: "每一场对话里\n都有你的 AI 副驾",
-        body:
-          "TalkPilot 会在你说话时实时聆听，并即时给出语法、词汇和自然表达反馈，帮助你当场修正。",
+        headline: "不用准备，\n也能开口说",
+        body: "点一下，直接说。",
+      },
+      reply: {
+        eyebrow: "AI 建议",
+        headline: "对方说完，\n你就知道怎么回",
+        body: "AI 给你一句合适的回复",
+        sourceLabel: "对方说",
+        sourceTextLine1: "Are you free this weekend?",
+        sourceTextLine2: "你这周末有空吗？",
+        suggestionLabel: "建议",
+        suggestionLine1: "I'm free on Sunday.",
+        suggestionLine2: "我周日有空。",
       },
       review: {
         eyebrow: "即时复盘",
-        headline: "现在就知道\n哪里需要改",
-        body:
-          "你说出的每一句都会被打分。点开任意气泡，就能看到问题、修正版本和更自然的表达方式。",
-      },
-      suggest: {
-        eyebrow: "AI 建议",
-        headline: "再也不会因为卡词\n而停住",
-        body:
-          "当你不知道下一句该怎么说时，TalkPilot 会结合整段上下文生成自然的回复建议。",
-      },
-      getstarted: {
-        eyebrow: "开始吧",
-        headline: "开启你的第一场\n对话练习",
-        body:
-          "点一下麦克风，直接开口。TalkPilot 会在后台协助你，不打断、不复杂，像平常一样说就好。",
+        headline: "原来，\n还能更自然",
+        body: "点一下，就能改",
+        originalLabel: "你的表达",
+        originalText: "I very like this movie.",
+        improvedLabel: "更自然",
+        improvedText: "I really like this movie.",
       },
     },
   },
@@ -225,17 +224,24 @@ export const zhCN: TranslationSchema = {
       resume: "继续",
       pause: "暂停",
       holdToSpeak: "按住说母语",
+      assistOverlayTitle: "卡住时，直接用母语说出你想表达的意思。",
+      assistOverlaySubtitle: "我会把它即时转成学习语言。松手仅翻译，右滑松手会直接朗读。",
       releaseToSend: "松手发送",
+      sosCaption: "母语救场",
       endConversation: "结束对话",
       end: "结束",
     },
     pressAndSlide: {
       editDraftFallback: "松手后转成可编辑文字",
+      speakReplyFallback: "右滑松手，直接朗读这句学习语言回复",
       releaseCancel: "松手取消",
       cancel: "取消",
       releaseEditText: "松手编辑文字",
+      releaseSpeakReply: "松手翻译并朗读",
       slideToText: "滑到这里转文字",
+      slideToSpeak: "滑到这里朗读",
       releaseSend: "松开发送",
+      releaseTranslateOnly: "松手仅翻译",
     },
     conversationFlow: {
       listening: "聆听中…",
@@ -297,6 +303,7 @@ export const zhCN: TranslationSchema = {
     section: {
       appLanguage: "App 语言",
       learningLanguage: "学习语言",
+      debug: "Debug",
     },
     appLanguage: {
       description: "这会影响导航、按钮、弹窗和其他界面文案。",
@@ -330,6 +337,12 @@ export const zhCN: TranslationSchema = {
       resetConfirmTitle: "重置声音样本？",
       resetConfirmBody:
         "这会删除本地 enrollment 样本。下次进入 Live 时，系统会提示你重新录制。",
+    },
+    debug: {
+      description: "仅供开发包使用的调试项，用来验证首次引导等流程；正式包里不会显示。",
+      forceOnboardingTitle: "下次启动强制走 onboarding",
+      forceOnboardingDescription:
+        "即使已经完成过 onboarding，下次冷启动时仍然优先展示。",
     },
   },
   profile: {

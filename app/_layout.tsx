@@ -1,10 +1,11 @@
+import { useOnboardingState } from "@/features/onboarding/hooks/useOnboardingState";
 import OnboardingScreen from "@/features/onboarding/screens/OnboardingScreen";
 import { useI18nBootstrap } from "@/shared/i18n";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack, useNavigationContainerRef } from "expo-router";
@@ -17,8 +18,8 @@ import { revenueCatService } from "@/features/billing/services/RevenueCatService
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
 import {
-  Sentry,
-  sentryNavigationIntegration,
+    Sentry,
+    sentryNavigationIntegration,
 } from "@/shared/monitoring/sentry";
 import { useAuthStore } from "@/shared/store/authStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -82,12 +83,25 @@ function RootLayout() {
 }
 
 function OnboardingGate({ children }: { children: React.ReactNode }) {
-  // TODO: 接 storage 缓存后改回 useOnboardingState()，目前每次冷启都展示
-  const [done, setDone] = useState(false);
+  const { checked, hasCompleted, forceShowOnboarding, markCompleted } =
+    useOnboardingState();
+  const [dismissedForSession, setDismissedForSession] = useState(false);
 
-  if (!done) {
-    return <OnboardingScreen onComplete={() => setDone(true)} />;
+  if (!checked) {
+    return null;
   }
+
+  if (!dismissedForSession && (forceShowOnboarding || !hasCompleted)) {
+    return (
+      <OnboardingScreen
+        onComplete={() => {
+          setDismissedForSession(true);
+          void markCompleted();
+        }}
+      />
+    );
+  }
+
   return <>{children}</>;
 }
 

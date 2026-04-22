@@ -1,10 +1,16 @@
 import { useSessionStore } from "@/features/live/store/sessionStore";
-import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
+import {
+  palette,
+  radii,
+  shadows,
+  spacing,
+  typography,
+} from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export const getTabBarHeight = (bottomInset: number) =>
@@ -77,24 +83,40 @@ export function CustomTabBar({
             >
               {isLiveTab ? (
                 /* Live tab — pill button */
-                <View style={[styles.livePill, isFocused && styles.livePillActive]}>
+                <View
+                  style={[styles.livePill, isFocused && styles.livePillActive]}
+                >
                   <Feather
                     name="mic"
                     size={18}
                     color={isFocused ? palette.accentDeep : palette.accentDark}
                   />
-                  <Text style={[styles.livePillLabel, isFocused && styles.livePillLabelActive]}>
-                    {typeof label === "string" ? label : t("navigation.tabs.live")}
+                  <Text
+                    style={[
+                      styles.livePillLabel,
+                      isFocused && styles.livePillLabelActive,
+                    ]}
+                  >
+                    {typeof label === "string"
+                      ? label
+                      : t("navigation.tabs.live")}
                   </Text>
                 </View>
               ) : (
                 /* Regular tabs */
                 <View style={styles.tabInner}>
-                  <View style={[styles.iconWrap, isFocused && styles.iconWrapActive]}>
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      isFocused && styles.iconWrapActive,
+                    ]}
+                  >
                     <Feather
                       name={iconName}
                       size={20}
-                      color={isFocused ? palette.accentDark : palette.textTertiary}
+                      color={
+                        isFocused ? palette.accentDark : palette.textTertiary
+                      }
                     />
                   </View>
                   <Text style={[styles.label, isFocused && styles.labelActive]}>

@@ -9,6 +9,7 @@ import {
   useAppLanguage,
 } from "@/shared/i18n";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
+import { useOnboardingState } from "@/features/onboarding/hooks/useOnboardingState";
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -19,6 +20,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
@@ -46,6 +48,40 @@ function LanguageOption({
   );
 }
 
+function ToggleRow({
+  title,
+  description,
+  value,
+  onValueChange,
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  value: boolean;
+  onValueChange: (nextValue: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={[styles.toggleRow, disabled && styles.toggleRowDisabled]}>
+      <View style={styles.toggleCopy}>
+        <Text style={styles.toggleTitle}>{title}</Text>
+        <Text style={styles.toggleDescription}>{description}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{
+          false: "rgba(255,255,255,0.16)",
+          true: palette.textAccent,
+        }}
+        thumbColor={value ? "#08190A" : "#F4F6F8"}
+        ios_backgroundColor="rgba(255,255,255,0.16)"
+      />
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -58,6 +94,11 @@ export default function SettingsScreen() {
     learningLanguage,
     setLearningLanguage,
   } = useAppLanguage();
+  const {
+    checked: onboardingStateChecked,
+    forceShowOnboarding,
+    setForceShowOnboarding,
+  } = useOnboardingState();
   const soundRef = React.useRef<Audio.Sound | null>(null);
   const [hasEnrollment, setHasEnrollment] = React.useState(false);
   const [isEnrollmentLoading, setIsEnrollmentLoading] = React.useState(true);
@@ -340,6 +381,25 @@ export default function SettingsScreen() {
             </Pressable>
           </View>
         </View>
+
+        {__DEV__ ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>{t("settings.section.debug")}</Text>
+            <Text style={styles.sectionDescription}>
+              {t("settings.debug.description")}
+            </Text>
+
+            <ToggleRow
+              title={t("settings.debug.forceOnboardingTitle")}
+              description={t("settings.debug.forceOnboardingDescription")}
+              value={forceShowOnboarding}
+              disabled={!onboardingStateChecked}
+              onValueChange={(nextValue) => {
+                void setForceShowOnboarding(nextValue);
+              }}
+            />
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -408,6 +468,35 @@ const styles = StyleSheet.create({
     color: palette.textSecondary,
     lineHeight: 20,
     marginBottom: spacing.xs,
+  },
+  toggleRow: {
+    marginTop: spacing.xs,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    backgroundColor: palette.bgGhostButton,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  toggleRowDisabled: {
+    opacity: 0.6,
+  },
+  toggleCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  toggleTitle: {
+    ...typography.bodyMd,
+    color: palette.textPrimary,
+    fontWeight: "700",
+  },
+  toggleDescription: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    lineHeight: 18,
   },
   optionRow: {
     minHeight: 44,
