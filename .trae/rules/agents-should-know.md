@@ -107,9 +107,16 @@
 ### LLM 约定
 
 - 实时会话相关的 LLM 能力由 Supabase Edge Functions `supabase/functions/review` 与 `supabase/functions/suggest` 提供
-- 两个函数共享 `supabase/functions/_shared/llm.ts` 的 provider 配置，默认 provider 为 `minimax`，默认模型为 `minimax-2.5`
-- 当前支持 `openai`、`deepseek`、`minimax` 三类 OpenAI-compatible provider，通过 `LLM_PROVIDER` 与 `LLM_MODEL` 环境变量切换
+- `review` / `suggest` 共享 `supabase/functions/_shared/llm.ts` 的 provider 配置
+- 当前默认 provider 为 `gemini`，默认模型为 `gemini-2.5-flash`
+- 当前支持 `openai`、`deepseek`、`minimax`、`gemini`、`groq`、`together` 六类 provider，通过 `LLM_PROVIDER` 与 `LLM_MODEL` 环境变量切换
+- `Together AI` 通过 OpenAI-compatible endpoint 接入，默认基地址为 `https://api.together.xyz/v1`，密钥使用 `TOGETHER_API_KEY`
 - `review` / `suggest` 的请求体兼容 camelCase 与 snake_case 字段，避免客户端与 Edge Function 命名不一致导致调用失败
+- `assist-reply` 当前支持三种翻译后端，通过 `TRANSLATION_PROVIDER` 切换：
+  - `llm`：沿用通用 LLM 翻译，作为当前默认值
+  - `google`：走 Google Translate v2，需提供 `GOOGLE_TRANSLATE_API_KEY`
+  - `azure`：走 Azure Translator Text API，需提供 `AZURE_TRANSLATOR_KEY`、`AZURE_TRANSLATOR_REGION`，可选 `AZURE_TRANSLATOR_ENDPOINT`
+- `assist-reply` 用于主消息流的 `other -> native` 翻译与 SOS 母语救场的 `native -> learning` 翻译
 - `supabase/functions/` 目录按 Deno Edge Functions 维护：工作区通过 `.vscode/settings.json` 的 `deno.enablePaths` 和 `supabase/functions/deno.json` 提供编辑器配置，根 `tsconfig.json` 需排除该目录，避免 Expo/RN 的 TS 工程把远程 `https://` import 与 `Deno` 全局误判为错误
 - 如需在当前工作区里清理 Supabase Edge Function 的单文件 TS 诊断，可复用 `supabase/functions/_shared/editor-shims.d.ts`，并在入口文件顶部加 `/// <reference path="../_shared/editor-shims.d.ts" />`；这仅用于编辑器类型提示，不影响 Deno 运行时行为
 
@@ -159,6 +166,7 @@
   - 两者都复用 `StreamingWebSocketClient` 作为通用传输层
 - `conversationStore` 中的连接状态已拆分为 `mainWsStatus` 与 `assistWsStatus`，不要再把两条链路混用同一个 `wsStatus`
 - 母语救场流程已经不再走本地录音文件上传转写；音频通过母语救场独立 WS 实时识别，`assist-reply` 只负责“文本翻译 + 可选 TTS”
+- 主链路中不再保留 `self -> learning` 的自动翻译；普通主消息流只保留对方说话后的 `other -> native` 翻译，母语转学习语言统一收敛到 SOS 救场链路
 - 母语救场的 debug 步骤当前按 `assist-ws`、`assist-transcript`、`assist-translate`、`assist-tts` 拆分；如果后续继续优化耗时，请优先沿这四段做观测
 - `AssistStreamingService` 的母语救场 WS 在“正常完成一次录音”后可以短暂保活复用
 - 但如果用户是“取消救场录音”，必须清空本地 capture 状态并主动断开 assist WS，不能直接保活复用；否则上一轮未结算的 transcript / 服务端缓冲可能污染下一次录音

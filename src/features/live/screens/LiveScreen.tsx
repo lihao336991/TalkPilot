@@ -1,13 +1,15 @@
-import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
 import { useTranslation } from "react-i18next";
+import { StyleSheet, Text, View } from "react-native";
 import {
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
+    SafeAreaView,
+    useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import { ConversationFlow } from "../components/ConversationFlow";
@@ -40,6 +42,7 @@ export default function LiveScreen() {
     showEnrollment,
     showCalibration,
     assistPreviewText,
+    isSendingSuggestion,
     isIdle,
     isActive,
     mainWsMeta,
@@ -54,6 +57,7 @@ export default function LiveScreen() {
     handleResume,
     handleSimulateOtherPressIn,
     handleSimulateOtherPressOut,
+    handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
     handleEnd,
@@ -114,7 +118,10 @@ export default function LiveScreen() {
             </View>
           </View>
           <ConversationFlow />
-          <SuggestionPanel />
+          <SuggestionPanel
+            onSendSuggestion={handleSendSuggestion}
+            isSendingSuggestion={isSendingSuggestion}
+          />
           <FloatingSimulateButton
             onRecordStart={handleSimulateOtherPressIn}
             onRecordEnd={handleSimulateOtherPressOut}

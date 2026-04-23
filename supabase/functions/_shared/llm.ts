@@ -1,11 +1,20 @@
+/// <reference path="./editor-shims.d.ts" />
+
+// @ts-ignore Deno resolves this remote dependency at runtime.
 import OpenAI from "https://esm.sh/openai@4";
 
-export type SupportedLlmProvider = "openai" | "deepseek" | "minimax" | "gemini" | "groq";
+export type SupportedLlmProvider =
+  | "openai"
+  | "deepseek"
+  | "minimax"
+  | "gemini"
+  | "groq"
+  | "together";
 
 type LlmRuntime = {
   provider: SupportedLlmProvider;
   model: string;
-  client: OpenAI;
+  client: any;
   apiKeyPrefix: string;
 };
 
@@ -17,6 +26,7 @@ const DEFAULT_MODELS: Record<SupportedLlmProvider, string> = {
   minimax: "MiniMax-M2.5-highspeed",
   gemini: "gemini-2.5-flash",
   groq: "llama-3.3-70b-versatile",
+  together: "Qwen/Qwen3.5-9B",
 };
 
 const MINIMAX_MODEL_ALIASES: Record<string, string> = {
@@ -41,6 +51,11 @@ const GROQ_MODEL_ALIASES: Record<string, string> = {
   "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
 };
 
+const TOGETHER_MODEL_ALIASES: Record<string, string> = {
+  "qwen/qwen3.5-9b": "Qwen/Qwen3.5-9B",
+  "qwen3.5-9b": "Qwen/Qwen3.5-9B",
+};
+
 function getRequiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
 
@@ -63,7 +78,8 @@ function normalizeProvider(rawProvider: string | undefined): SupportedLlmProvide
     normalized === "deepseek" ||
     normalized === "minimax" ||
     normalized === "gemini" ||
-    normalized === "groq"
+    normalized === "groq" ||
+    normalized === "together"
   ) {
     return normalized;
   }
@@ -78,17 +94,23 @@ function resolveModel(provider: SupportedLlmProvider, rawModel: string | undefin
     return DEFAULT_MODELS[provider];
   }
 
-  if (provider !== "minimax") {
-    if (provider === "gemini") {
-      return GEMINI_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
-    }
-    if (provider === "groq") {
-      return GROQ_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
-    }
-    return normalizedModel;
+  if (provider === "minimax") {
+    return MINIMAX_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
   }
 
-  return MINIMAX_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+  if (provider === "gemini") {
+    return GEMINI_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+  }
+
+  if (provider === "groq") {
+    return GROQ_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+  }
+
+  if (provider === "together") {
+    return TOGETHER_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
+  }
+
+  return normalizedModel;
 }
 
 export function createLlmRuntime(): LlmRuntime {
@@ -143,6 +165,19 @@ export function createLlmRuntime(): LlmRuntime {
       client: new OpenAI({
         apiKey,
         baseURL: Deno.env.get("GROQ_BASE_URL")?.trim() || "https://api.groq.com/openai/v1",
+      }),
+      apiKeyPrefix: getApiKeyPrefix(apiKey),
+    };
+  }
+
+  if (provider === "together") {
+    const apiKey = getRequiredEnv("TOGETHER_API_KEY");
+    return {
+      provider,
+      model: resolveModel(provider, Deno.env.get("LLM_MODEL")),
+      client: new OpenAI({
+        apiKey,
+        baseURL: Deno.env.get("TOGETHER_BASE_URL")?.trim() || "https://api.together.xyz/v1",
       }),
       apiKeyPrefix: getApiKeyPrefix(apiKey),
     };

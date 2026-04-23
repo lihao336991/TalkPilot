@@ -4,9 +4,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { JSON_HEADERS } from "../_shared/access.ts";
 import {
-  buildLlmResponseHeaders,
-  createLlmRuntime,
-  withLlmDefaults,
+    buildLlmResponseHeaders,
+    createLlmRuntime,
+    withLlmDefaults,
 } from "../_shared/llm.ts";
 
 function languageDisplayName(tag: string): string {
@@ -47,6 +47,15 @@ function sanitizeSuggestionText(text: string): string {
     )
     .replace(/^["']|["']$/g, "")
     .trim();
+}
+
+function limitSuggestionWords(text: string, maxWords = 50): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return text.trim();
+  }
+
+  return words.slice(0, maxWords).join(" ").trim();
 }
 
 serve(async (req: Request) => {
@@ -132,6 +141,8 @@ serve(async (req: Request) => {
 Based on the conversation so far and the last thing the other person said, generate exactly ONE natural reply suggestion for the user. 
 The reply should be 1-2 sentences. 
 The suggestion MUST be written in ${targetLanguageName}.
+Prefer a compact reply that fits naturally in 2-3 lines on a phone screen.
+Hard limit: 50 words maximum.
 
 CRITICAL INSTRUCTIONS:
 - NEVER include any reasoning, thought process, or explanations.
@@ -163,7 +174,7 @@ Last utterance from the other person: "${lastUtterance}"`;
     }));
 
     const rawContent = completion.choices[0]?.message?.content ?? "";
-    const cleanText = sanitizeSuggestionText(rawContent);
+    const cleanText = limitSuggestionWords(sanitizeSuggestionText(rawContent));
     const suggestions = cleanText ? [{ style: "simple", text: cleanText }] : [];
 
     return new Response(JSON.stringify({ suggestions, access }), {

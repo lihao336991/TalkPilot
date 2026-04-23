@@ -2,12 +2,33 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 const ENROLLMENT_FILE_PATH = `${FileSystem.documentDirectory}voice_enrollment.pcm`;
 const ENROLLMENT_PLAYBACK_FILE_PATH = `${FileSystem.cacheDirectory}voice_enrollment.wav`;
+const ENROLLMENT_PROFILE_FILE_PATH = `${FileSystem.documentDirectory}voice_enrollment_profile.json`;
 const ENROLLMENT_DURATION_MS = 5_000;
 const SAMPLE_RATE = 16_000;
 const CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
+const ENROLLMENT_PROFILE_VERSION = 1;
+const VOICEPRINT_MODEL = 'titanet-small-f16-coreml-v1';
+const DEFAULT_TITANET_SELF_HIGH_THRESHOLD = 0.58;
+const DEFAULT_TITANET_SELF_LOW_THRESHOLD = 0.38;
 
 export type EnrollmentStatus = 'idle' | 'recording' | 'done';
+
+export type VoiceEnrollmentProfile = {
+  version: number;
+  createdAt: number;
+  sampleRate: number;
+  durationMs: number;
+  embedding: number[];
+  model: string;
+  thresholdSelfHigh: number;
+  thresholdSelfLow: number;
+};
+
+export type EnrollmentAvailability =
+  | 'missing'
+  | 'legacy_pcm_only'
+  | 'ready';
 
 /**
  * Manages a persisted PCM audio sample used to prime Deepgram speaker diarization.
@@ -64,18 +85,39 @@ class VoiceEnrollmentService {
   }
 
   async hasEnrollment(): Promise<boolean> {
+    const availability = await this.getEnrollmentAvailability();
+    return availability === 'ready';
+  }
+
+  async getEnrollmentAvailability(): Promise<EnrollmentAvailability> {
     try {
-      const info = await FileSystem.getInfoAsync(ENROLLMENT_FILE_PATH);
-      return info.exists && (info as any).size > 0;
+      const pcmInfo = await FileSystem.getInfoAsync(ENROLLMENT_FILE_PATH);
+      const hasPcm = pcmInfo.exists && Number((pcmInfo as any).size ?? 0) > 0;
+      if (!hasPcm) {
+        return 'missing';
+      }
+
+      const profile = await this.loadEnrollmentProfile();
+      return profile ? 'ready' : 'legacy_pcm_only';
     } catch {
-      return false;
+      return 'missing';
     }
   }
 
   async saveEnrollment(base64Chunks: string[]): Promise<void> {
-    // Concatenate all base64 chunks into one base64 string then write as binary
-    const combined = base64Chunks.join('');
-    await FileSystem.writeAsStringAsync(ENROLLMENT_FILE_PATH, combined, {
+    const totalLength = base64Chunks.reduce(
+      (sum, chunk) => sum + this.base64ToBytes(chunk).length,
+      0,
+    );
+    const bytes = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of base64Chunks) {
+      const chunkBytes = this.base64ToBytes(chunk);
+      bytes.set(chunkBytes, offset);
+      offset += chunkBytes.length;
+    }
+
+    await FileSystem.writeAsStringAsync(ENROLLMENT_FILE_PATH, this.bytesToBase64(bytes), {
       encoding: FileSystem.EncodingType.Base64,
     });
     console.log('[VoiceEnrollment] Saved enrollment audio');
@@ -83,9 +125,7 @@ class VoiceEnrollmentService {
 
   async loadEnrollmentChunks(): Promise<string[]> {
     try {
-      const base64 = await FileSystem.readAsStringAsync(ENROLLMENT_FILE_PATH, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const base64 = await this.loadEnrollmentPcmBase64();
       if (!base64) return [];
       // Split into ~64KB chunks to match AudioEngine buffer cadence
       const chunkSize = 87380; // ~64KB in base64 chars
@@ -96,6 +136,76 @@ class VoiceEnrollmentService {
       return chunks;
     } catch {
       return [];
+    }
+  }
+
+  async loadEnrollmentPcmBase64(): Promise<string | null> {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(ENROLLMENT_FILE_PATH, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return base64 || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveEnrollmentProfile(profile: VoiceEnrollmentProfile): Promise<void> {
+    await FileSystem.writeAsStringAsync(
+      ENROLLMENT_PROFILE_FILE_PATH,
+      JSON.stringify(profile),
+      { encoding: FileSystem.EncodingType.UTF8 },
+    );
+  }
+
+  async loadEnrollmentProfile(): Promise<VoiceEnrollmentProfile | null> {
+    try {
+      const raw = await FileSystem.readAsStringAsync(ENROLLMENT_PROFILE_FILE_PATH, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<VoiceEnrollmentProfile>;
+      if (
+        parsed.version !== ENROLLMENT_PROFILE_VERSION ||
+        parsed.model !== VOICEPRINT_MODEL ||
+        !Array.isArray(parsed.embedding) ||
+        parsed.embedding.length === 0
+      ) {
+        return null;
+      }
+
+      return {
+        version: parsed.version,
+        createdAt: parsed.createdAt ?? Date.now(),
+        sampleRate: parsed.sampleRate ?? SAMPLE_RATE,
+        durationMs: parsed.durationMs ?? ENROLLMENT_DURATION_MS,
+        embedding: parsed.embedding,
+        model: parsed.model,
+        thresholdSelfHigh:
+          parsed.thresholdSelfHigh ?? DEFAULT_TITANET_SELF_HIGH_THRESHOLD,
+        thresholdSelfLow:
+          parsed.thresholdSelfLow ?? DEFAULT_TITANET_SELF_LOW_THRESHOLD,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async hasEnrollmentProfile(): Promise<boolean> {
+    return (await this.loadEnrollmentProfile()) !== null;
+  }
+
+  async clearEnrollmentProfile(): Promise<void> {
+    try {
+      const info = await FileSystem.getInfoAsync(ENROLLMENT_PROFILE_FILE_PATH);
+      if (info.exists) {
+        await FileSystem.deleteAsync(ENROLLMENT_PROFILE_FILE_PATH);
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -112,6 +222,7 @@ class VoiceEnrollmentService {
     } catch {
       // ignore
     }
+    await this.clearEnrollmentProfile();
     console.log('[VoiceEnrollment] Cleared enrollment audio');
   }
 
@@ -145,6 +256,35 @@ class VoiceEnrollmentService {
 
   getRecordingDurationMs(): number {
     return ENROLLMENT_DURATION_MS;
+  }
+
+  createProfile(params: {
+    embedding: number[];
+    durationMs: number;
+    thresholdSelfHigh?: number;
+    thresholdSelfLow?: number;
+  }): VoiceEnrollmentProfile {
+    return {
+      version: ENROLLMENT_PROFILE_VERSION,
+      createdAt: Date.now(),
+      sampleRate: SAMPLE_RATE,
+      durationMs: params.durationMs,
+      embedding: params.embedding,
+      model: VOICEPRINT_MODEL,
+      thresholdSelfHigh:
+        params.thresholdSelfHigh ?? DEFAULT_TITANET_SELF_HIGH_THRESHOLD,
+      thresholdSelfLow:
+        params.thresholdSelfLow ?? DEFAULT_TITANET_SELF_LOW_THRESHOLD,
+    };
+  }
+
+  getPcmFormat() {
+    return {
+      sampleRate: SAMPLE_RATE,
+      channels: CHANNELS,
+      bitsPerSample: BITS_PER_SAMPLE,
+      bytesPerSecond: SAMPLE_RATE * CHANNELS * (BITS_PER_SAMPLE / 8),
+    };
   }
 }
 

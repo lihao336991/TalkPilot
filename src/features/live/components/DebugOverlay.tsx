@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useConversationStore } from '../store/conversationStore';
 import { getDeepgramLanguageForTag } from '@/shared/locale/deviceLanguage';
 import { useLocaleStore } from '@/shared/store/localeStore';
 import { useDebugStore, type DebugTurnTrace } from '../store/debugStore';
@@ -21,6 +22,26 @@ function formatDurationMs(ms?: number) {
   }
 
   return `${(ms / 1000).toFixed(2)} s`;
+}
+
+function formatSimilarity(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    return '--';
+  }
+  return value.toFixed(3);
+}
+
+function formatThresholdDistance(
+  similarity: number | null,
+  threshold: number | null,
+) {
+  if (similarity == null || threshold == null) {
+    return '--';
+  }
+
+  const delta = similarity - threshold;
+  const prefix = delta >= 0 ? '+' : '';
+  return `${prefix}${delta.toFixed(3)}`;
 }
 
 function buildCollapsedLabel(
@@ -124,6 +145,26 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
         <Text style={styles.metricLabel}>总耗时</Text>
         <Text style={styles.metricValue}>{formatDurationMs(totalLatency)}</Text>
       </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>声纹相似度</Text>
+        <Text style={styles.metricValue}>
+          {trace.voiceprintSimilarity != null
+            ? trace.voiceprintSimilarity.toFixed(3)
+            : '--'}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>声纹判定</Text>
+        <Text style={styles.metricValue}>
+          {trace.voiceprintDecision ?? '--'}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>来源</Text>
+        <Text style={styles.metricValue}>
+          {trace.speakerDecisionSource ?? '--'}
+        </Text>
+      </View>
 
       {trace.llmDetail ? (
         <Text
@@ -144,6 +185,17 @@ function DebugOverlayContent() {
   const turnTraces = useDebugStore((s) => s.turnTraces);
   const uiLocale = useLocaleStore((s) => s.uiLocale);
   const learningLanguage = useLocaleStore((s) => s.learningLanguage);
+  const voiceprintEnabled = useConversationStore((s) => s.voiceprintEnabled);
+  const voiceprintEnrollmentReady = useConversationStore((s) => s.voiceprintEnrollmentReady);
+  const lastVoiceprintSimilarity = useConversationStore((s) => s.lastVoiceprintSimilarity);
+  const lastVoiceprintDecision = useConversationStore((s) => s.lastVoiceprintDecision);
+  const lastVoiceprintConfidence = useConversationStore((s) => s.lastVoiceprintConfidence);
+  const lastVoiceprintReason = useConversationStore((s) => s.lastVoiceprintReason);
+  const lastVoiceprintThresholdHigh = useConversationStore((s) => s.lastVoiceprintThresholdHigh);
+  const lastVoiceprintThresholdLow = useConversationStore((s) => s.lastVoiceprintThresholdLow);
+  const lastVoiceprintInputDurationMs = useConversationStore((s) => s.lastVoiceprintInputDurationMs);
+  const lastVoiceprintMelFrameCount = useConversationStore((s) => s.lastVoiceprintMelFrameCount);
+  const lastSpeakerDecisionSource = useConversationStore((s) => s.lastSpeakerDecisionSource);
   const [collapsed, setCollapsed] = React.useState(true);
   const insets = useSafeAreaInsets();
   const hasDebugData = steps.length > 0 || turnTraces.length > 0;
@@ -204,6 +256,80 @@ function DebugOverlayContent() {
             <View style={styles.metricRow}>
               <Text style={styles.metricLabel}>Assist ASR</Text>
               <Text style={styles.metricValue}>{assistAsrLanguage}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>声纹</Text>
+          <View style={styles.languageCard}>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Native ready</Text>
+              <Text style={styles.metricValue}>{voiceprintEnabled ? 'yes' : 'no'}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Enrollment ready</Text>
+              <Text style={styles.metricValue}>
+                {voiceprintEnrollmentReady ? 'yes' : 'no'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Last similarity</Text>
+              <Text style={styles.metricValue}>
+                {formatSimilarity(lastVoiceprintSimilarity)}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Threshold band</Text>
+              <Text style={styles.metricValue}>
+                {lastVoiceprintThresholdLow != null && lastVoiceprintThresholdHigh != null
+                  ? `${lastVoiceprintThresholdLow.toFixed(2)} -> ${lastVoiceprintThresholdHigh.toFixed(2)}`
+                  : '--'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>To self gate</Text>
+              <Text style={styles.metricValue}>
+                {formatThresholdDistance(
+                  lastVoiceprintSimilarity,
+                  lastVoiceprintThresholdHigh,
+                )}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>To other gate</Text>
+              <Text style={styles.metricValue}>
+                {formatThresholdDistance(
+                  lastVoiceprintSimilarity,
+                  lastVoiceprintThresholdLow,
+                )}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Last decision</Text>
+              <Text style={styles.metricValue}>{lastVoiceprintDecision ?? '--'}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Confidence / reason</Text>
+              <Text style={styles.metricValue}>
+                {lastVoiceprintConfidence && lastVoiceprintReason
+                  ? `${lastVoiceprintConfidence} · ${lastVoiceprintReason}`
+                  : '--'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Model bucket</Text>
+              <Text style={styles.metricValue}>
+                {lastVoiceprintInputDurationMs != null
+                  ? `${Math.round(lastVoiceprintInputDurationMs / 1000)}s / ${lastVoiceprintMelFrameCount ?? '--'}f`
+                  : '--'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Speaker source</Text>
+              <Text style={styles.metricValue}>
+                {lastSpeakerDecisionSource ?? '--'}
+              </Text>
             </View>
           </View>
         </View>

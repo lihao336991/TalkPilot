@@ -103,6 +103,30 @@ AI 在每次完成复杂调试或发现新的认知盲区后，必须**自觉、
      - `review` 的 corrected / better expression 保留 `Learning language`
   3. `helpLocale` 可以保留为未来扩展位，但不要在当前阶段把它包装成 `suggest/review` 的统一开关。
 
+### 1.13 Google Translate v2 接语言标签时，要先做 provider 兼容映射
+
+- **坑与教训**：TalkPilot 客户端内部语言偏好使用的是 BCP-47 风格标签，例如 `zh-CN`、`pt-BR`。但在把翻译链路切到 Google Translate v2 后，如果不先做 provider 兼容映射，某些语言标签的行为会依赖第三方接口的宽松兼容，后续很容易在多语言扩展时出现隐性问题。
+- **行动指南**：
+  1. 翻译 provider 切换时，不要默认“客户端语言标签可直接原样透传”。
+  2. 对 Google Translate v2，统一先做一层目标语言归一化；例如 `pt-BR` 优先降级为 `pt`，`zh-CN` 则显式映射为 `zh-CN`。
+  3. 这类 provider-specific 兼容逻辑优先收敛到独立 helper，不要散落在多个业务函数里。
+
+### 1.14 Expo/RN 接原生模块时，先验证“文件真实存在 + xcodeproj 已引用”，不要只看对话里的修改记录
+
+- **坑与教训**：在接入 `VoiceprintModule` 这类 iOS 原生模块时，如果没有第一时间回到 `ios/` 目录核实 `*.swift` / `*.m` 文件是否真的落盘，以及 `project.pbxproj` 是否真的出现对应引用，就容易误以为“原生模块已经接好了”，实际运行时却表现为 `NativeModules.SomeModule === undefined`，最终在 JS 层只看到 `Native ... unavailable`。
+- **行动指南**：
+  1. 原生模块接入后，先直接检查 `ios/<App>/` 目录里目标文件是否真实存在。
+  2. 再检查 `ios/<App>.xcodeproj/project.pbxproj` 里是否有对应的 `PBXFileReference`、`PBXBuildFile` 和 `Sources/Resources` 引用。
+  3. 只有在“文件存在 + xcodeproj 已引用 + 重新编译过”这三件事都满足时，才把 `NativeModules.<ModuleName>` 缺失问题归因到别的层。
+
+### 1.15 Debug 面板里的 `false/no`，先区分“初始化未执行”与“真实失败”
+
+- **坑与教训**：像 `voiceprintEnabled` 这类调试状态如果默认值就是 `false`，但实际初始化逻辑只在“开始会话”或其他后置动作里触发，那么用户只是打开页面查看 Debug 面板时，会一直看到 `no`，同时因为初始化方法根本没执行，也不会出现预期中的失败日志。这种现象很容易被误判成“原生模块没接上”或“模型加载失败”。
+- **行动指南**：
+  1. 先确认调试状态的写入时机，不要把默认值直接当成运行时结论。
+  2. 对需要在页面上即时观测的 capability 状态，优先在页面聚焦或初始化阶段就做一次轻量 `hydrate/check`，不要等用户进入完整业务流程后才更新。
+  3. 如果某个失败日志完全没有出现，优先怀疑“调用链没执行到”，而不是直接怀疑底层实现失败。
+
 ## 2. 合作与迭代约定 (Collaboration Rules)
 
 - **避免过度推演**：遇到错误日志时，不要一口气给出 5 个大重构方案。先给 1 个最简单的验证方案。

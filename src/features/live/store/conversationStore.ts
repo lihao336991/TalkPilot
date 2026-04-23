@@ -4,6 +4,21 @@ import type { ReviewResult } from '@/features/live/store/reviewStore';
 
 export type TranslationDirection = 'to_learning' | 'to_native';
 export type TranslationStatus = 'idle' | 'loading' | 'done' | 'error';
+export type VoiceprintDecisionLabel = 'self' | 'other' | 'unknown';
+export type SpeakerDecisionSource =
+  | 'deepgram'
+  | 'voiceprint'
+  | 'hybrid'
+  | 'forced'
+  | null;
+export type VoiceprintDecisionConfidence = 'high' | 'medium' | 'low';
+export type VoiceprintDecisionReason =
+  | 'similarity_high'
+  | 'similarity_low'
+  | 'between_thresholds'
+  | 'insufficient_audio'
+  | 'native_unavailable'
+  | 'profile_unavailable';
 
 export type Turn = {
   id: string;
@@ -38,6 +53,17 @@ type ConversationState = {
   isListening: boolean;
   mainWsStatus: StreamingConnectionStatus;
   assistWsStatus: StreamingConnectionStatus;
+  voiceprintEnabled: boolean;
+  voiceprintEnrollmentReady: boolean;
+  lastVoiceprintSimilarity: number | null;
+  lastVoiceprintDecision: VoiceprintDecisionLabel | null;
+  lastVoiceprintConfidence: VoiceprintDecisionConfidence | null;
+  lastVoiceprintReason: VoiceprintDecisionReason | null;
+  lastVoiceprintThresholdHigh: number | null;
+  lastVoiceprintThresholdLow: number | null;
+  lastVoiceprintInputDurationMs: number | null;
+  lastVoiceprintMelFrameCount: number | null;
+  lastSpeakerDecisionSource: SpeakerDecisionSource;
 
   addTurn: (turn: Turn) => void;
   updateTurn: (turnId: string, updates: Partial<Turn>) => void;
@@ -51,6 +77,24 @@ type ConversationState = {
   setListening: (listening: boolean) => void;
   setMainWsStatus: (status: ConversationState['mainWsStatus']) => void;
   setAssistWsStatus: (status: ConversationState['assistWsStatus']) => void;
+  setVoiceprintState: (
+    state: Partial<
+      Pick<
+        ConversationState,
+        | 'voiceprintEnabled'
+        | 'voiceprintEnrollmentReady'
+        | 'lastVoiceprintSimilarity'
+        | 'lastVoiceprintDecision'
+        | 'lastVoiceprintConfidence'
+        | 'lastVoiceprintReason'
+        | 'lastVoiceprintThresholdHigh'
+        | 'lastVoiceprintThresholdLow'
+        | 'lastVoiceprintInputDurationMs'
+        | 'lastVoiceprintMelFrameCount'
+      >
+    >,
+  ) => void;
+  setSpeakerDecisionSource: (source: SpeakerDecisionSource) => void;
   reset: () => void;
 };
 
@@ -63,6 +107,17 @@ const initialState = {
   isListening: false,
   mainWsStatus: 'idle' as StreamingConnectionStatus,
   assistWsStatus: 'idle' as StreamingConnectionStatus,
+  voiceprintEnabled: false,
+  voiceprintEnrollmentReady: false,
+  lastVoiceprintSimilarity: null,
+  lastVoiceprintDecision: null as VoiceprintDecisionLabel | null,
+  lastVoiceprintConfidence: null as VoiceprintDecisionConfidence | null,
+  lastVoiceprintReason: null as VoiceprintDecisionReason | null,
+  lastVoiceprintThresholdHigh: null,
+  lastVoiceprintThresholdLow: null,
+  lastVoiceprintInputDurationMs: null,
+  lastVoiceprintMelFrameCount: null,
+  lastSpeakerDecisionSource: null as SpeakerDecisionSource,
 };
 
 export const useConversationStore = create<ConversationState>((set) => ({
@@ -134,6 +189,12 @@ export const useConversationStore = create<ConversationState>((set) => ({
 
   setAssistWsStatus: (status) =>
     set({ assistWsStatus: status }),
+
+  setVoiceprintState: (voiceprintState) =>
+    set((state) => ({ ...state, ...voiceprintState })),
+
+  setSpeakerDecisionSource: (source) =>
+    set({ lastSpeakerDecisionSource: source }),
 
   reset: () =>
     set(initialState),

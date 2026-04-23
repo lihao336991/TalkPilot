@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from '@/shared/api/supabase';
 import { useAuthStore } from '@/shared/store/authStore';
 import type { ScenePreset } from '@/features/live/store/sessionStore';
@@ -20,9 +21,126 @@ type EndSessionParams = {
   durationSeconds: number;
 };
 
+type PersistedActiveSession = {
+  sessionId: string;
+  userId: string;
+  startedAt: string;
+};
+
+const ACTIVE_SESSION_STORAGE_KEY = "talkpilot.live.activeSession";
+
 class SessionManager {
   private async sleep(ms: number) {
     await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async getPersistedActiveSession(): Promise<PersistedActiveSession | null> {
+    try {
+      const raw = await AsyncStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as Partial<PersistedActiveSession>;
+      if (
+        !parsed ||
+        typeof parsed.sessionId !== "string" ||
+        typeof parsed.userId !== "string" ||
+        typeof parsed.startedAt !== "string"
+      ) {
+        await AsyncStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+        return null;
+      }
+
+      return {
+        sessionId: parsed.sessionId,
+        userId: parsed.userId,
+        startedAt: parsed.startedAt,
+      };
+    } catch (error) {
+      console.warn("[SessionManager] Failed to read active session cache:", error);
+      return null;
+    }
+  }
+
+  private async persistActiveSession(sessionId: string) {
+    const userId = useAuthStore.getState().userId;
+    if (!sessionId || !userId) {
+      return;
+    }
+
+    try {
+      const payload: PersistedActiveSession = {
+        sessionId,
+        userId,
+        startedAt: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(
+        ACTIVE_SESSION_STORAGE_KEY,
+        JSON.stringify(payload),
+      );
+    } catch (error) {
+      console.warn("[SessionManager] Failed to persist active session:", error);
+    }
+  }
+
+  async clearActiveSession(sessionId?: string) {
+    try {
+      const persisted = await this.getPersistedActiveSession();
+      if (!persisted) {
+        return;
+      }
+
+      if (sessionId && persisted.sessionId !== sessionId) {
+        return;
+      }
+
+      await AsyncStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    } catch (error) {
+      console.warn("[SessionManager] Failed to clear active session cache:", error);
+    }
+  }
+
+  async reconcileDanglingSession() {
+    const persisted = await this.getPersistedActiveSession();
+    const currentUserId = useAuthStore.getState().userId;
+
+    if (!persisted || !currentUserId || persisted.userId !== currentUserId) {
+      return;
+    }
+
+    const startedAtMs = Date.parse(persisted.startedAt);
+    const durationSeconds =
+      Number.isFinite(startedAtMs) && startedAtMs > 0
+        ? Math.max(0, Math.round((Date.now() - startedAtMs) / 1000))
+        : 0;
+
+    console.log("[SessionManager] Reconciling dangling session:", persisted.sessionId);
+    await this.endSession({
+      sessionId: persisted.sessionId,
+      durationSeconds,
+    });
+  }
+
+  async touchSessionActivity(sessionId: string): Promise<boolean> {
+    if (!sessionId) {
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase.rpc("touch_session_activity", {
+        p_session_id: sessionId,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Failed to touch session activity.");
+      }
+
+      return Boolean(data);
+    } catch (error) {
+      console.warn("[SessionManager] Failed to touch session activity:", error);
+      return false;
+    }
   }
 
   async createSession({
@@ -53,6 +171,7 @@ class SessionManager {
       }
 
       console.log('[SessionManager] Session created:', data.id);
+      await this.persistActiveSession(data.id);
       return data.id;
     } catch (error) {
       console.error('[SessionManager] Failed to create session:', error);
@@ -147,6 +266,7 @@ class SessionManager {
       }
 
       console.log('[SessionManager] Session ended:', sessionId);
+      await this.clearActiveSession(sessionId);
     } catch (error) {
       console.error('[SessionManager] Failed to end session:', error);
       throw error;

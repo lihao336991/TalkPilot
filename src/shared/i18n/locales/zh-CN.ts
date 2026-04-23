@@ -139,10 +139,10 @@ export const zhCN: TranslationSchema = {
   live: {
     nativeAssist: {
       listening: "正在聆听你的母语输入…",
-      generating: "正在生成学习语言回复…",
-      ready: "辅助回复已准备好",
+      generating: "正在翻译成学习语言…",
+      ready: "翻译结果已准备好",
       original: "{{language}} 原文",
-      suggestedReply: "建议回复",
+      suggestedReply: "翻译结果",
     },
     screen: {
       wsHintListening: "麦克风正在发送音频",
@@ -170,8 +170,10 @@ export const zhCN: TranslationSchema = {
       skipForNow: "暂时跳过",
       recordingBody: "自然说话就可以，内容不限。",
       countdown: "{{count}} 秒",
-      saving: "正在保存声音样本…",
+      saving: "正在保存声音样本并生成本地声纹…",
       doneBody: "声音样本已保存，后续每场会话都会自动识别你的声音。",
+      errorBody: "本地声纹生成失败，请重新录制一次。",
+      retryAction: "重新录制",
     },
     speakerCalibration: {
       title: "声音识别",
@@ -181,7 +183,10 @@ export const zhCN: TranslationSchema = {
       startAccessibilityLabel: "开始会话",
     },
     suggestionPanel: {
-      title: "快捷回复",
+      title: "回复建议",
+      subtitle: "AI 已帮你组织好一句更自然的回答",
+      actionSendAndPlay: "发送并播放建议",
+      sending: "发送中...",
     },
     suggestionStyle: {
       formal: "正式",
@@ -277,6 +282,25 @@ export const zhCN: TranslationSchema = {
       paused: "已暂停",
       active: "进行中",
     },
+    detail: {
+      conversation: "对话记录",
+      recap: "会话复盘",
+      recapGenerating: "正在分析你的会话…",
+      recapRetry: "生成复盘",
+      recapEmpty: "对话内容不足，无法生成复盘。",
+      highlights: "表达亮点",
+      improvements: "待改进",
+      overallComment: "总评",
+      reviewBadge: {
+        green: "很好",
+        yellow: "不错",
+        red: "需改进",
+      },
+      noTurns: "本次会话没有对话记录。",
+    },
+    card: {
+      recapped: "已复盘",
+    },
   },
   coach: {
     title: "Coach",
@@ -322,9 +346,13 @@ export const zhCN: TranslationSchema = {
       statusLabel: "本地样本",
       loading: "检查中…",
       saved: "已保存在当前设备",
+      enhancedReady: "增强识别已启用",
+      legacyOnly: "仅旧样本可用",
       notSaved: "尚未设置",
       savedHint:
-        "你可以播放这份样本或重置它。重置后，下次进入 Live 会重新提示你录制。",
+        "本地 PCM 样本和声纹特征都已就绪。你可以播放这份样本或重置它。",
+      legacyHint:
+        "当前只有旧的 PCM 样本，可继续用于基础识别。建议重录一次以启用增强识别。",
       emptyHint:
         "当前没有本地声音样本。下次进入 Live 时，系统会提示你重新录制。",
       playAction: "播放样本",

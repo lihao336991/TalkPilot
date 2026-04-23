@@ -1,25 +1,28 @@
 /// <reference path="../_shared/editor-shims.d.ts" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { translateWithAzure } from "../_shared/azureTranslate.ts";
+import { translateWithGoogle } from "../_shared/googleTranslate.ts";
 import {
   buildLlmResponseHeaders,
   createLlmRuntime,
+  extractJsonObject,
   withLlmDefaults,
 } from "../_shared/llm.ts";
 
 type TranslationDirection = "to_learning" | "to_native";
+type TranslationProvider = "llm" | "google" | "azure";
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
+function getTranslationProvider(): TranslationProvider {
+  const raw = Deno.env.get("TRANSLATION_PROVIDER")?.trim().toLowerCase();
+  if (raw === "azure") {
+    return "azure";
+  }
+  if (raw === "google") {
+    return "google";
   }
 
-  return btoa(binary);
+  return "llm";
 }
 
 function normalizeDirection(raw: unknown): TranslationDirection {
@@ -28,6 +31,34 @@ function normalizeDirection(raw: unknown): TranslationDirection {
   }
 
   return "to_learning";
+}
+
+function readLanguageTag(...candidates: unknown[]): string | null {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function sanitizeTranslatedText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return "";
+  }
+
+  return trimmed
+    .replace(/^translation\s*:\s*/i, "")
+    .replace(/^translated[_\s-]*text\s*:\s*/i, "")
+    .replace(/^reply\s*:\s*/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
 }
 
 function languageDisplayName(tag: string): string {
@@ -72,7 +103,7 @@ function buildPrompt(
       {
         role: "system" as const,
         content:
-          `You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken ${targetName} that a native ${targetName} speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).`,
+          `You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken ${targetName} that a native ${targetName} speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output only the translated utterance, with no JSON, no labels, and no explanation.`,
       },
       {
         role: "user" as const,
@@ -85,7 +116,7 @@ function buildPrompt(
   return [
     {
       role: "system" as const,
-      content: `You are a faithful real-time translator for a live conversation. Translate the English utterance into natural, spoken ${targetName}. Preserve the speaker's intent, tone, and register; do not add or omit meaning. Keep it concise. Output valid JSON only with keys translated_text and hint (hint is optional and may be empty).`,
+      content: `You are a faithful real-time translator for a live conversation. Translate the utterance into natural, spoken ${targetName}. Preserve the speaker's intent, tone, and register; do not add or omit meaning. Keep it concise. Output only the translated utterance, with no JSON, no labels, and no explanation.`,
     },
     {
       role: "user" as const,
@@ -93,6 +124,64 @@ function buildPrompt(
     },
   ];
 }
+
+async function translateWithLlm(args: {
+  direction: TranslationDirection;
+  sourceText: string;
+  sceneHint: string;
+  targetLanguage: string;
+}) {
+  const llm = createLlmRuntime();
+  const responseHeaders = buildLlmResponseHeaders(llm, {
+    "Content-Type": "application/json",
+  });
+
+  const translationPrompt = buildPrompt(
+    args.direction,
+    args.sourceText,
+    args.sceneHint,
+    args.targetLanguage,
+  );
+
+  const translationCompletion = await llm.client.chat.completions.create(
+    withLlmDefaults(llm, {
+      messages: translationPrompt,
+      max_tokens: 200,
+      temperature: 0.3,
+    }),
+  );
+
+  const translationRaw = translationCompletion.choices[0]?.message?.content ?? "{}";
+  let translatedText = "";
+  try {
+    const parsed = JSON.parse(extractJsonObject(translationRaw));
+    translatedText =
+      typeof parsed.translated_text === "string"
+        ? parsed.translated_text.trim()
+        : typeof parsed.translation === "string"
+          ? parsed.translation.trim()
+          : typeof parsed.text === "string"
+            ? parsed.text.trim()
+            : typeof parsed.english_reply === "string"
+              ? parsed.english_reply.trim()
+              : "";
+    if (!translatedText) {
+      translatedText = sanitizeTranslatedText(translationRaw);
+    }
+  } catch {
+    translatedText = sanitizeTranslatedText(translationRaw);
+  }
+
+  if (!translatedText) {
+    throw new Error("Failed to translate text");
+  }
+
+  return {
+    translatedText,
+    responseHeaders,
+  };
+}
+
 
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -144,14 +233,25 @@ serve(async (req: Request) => {
     direction = normalizeDirection(
       payload.direction === "to_en" ? "to_learning" : payload.direction,
     );
-    if (typeof payload.learning_language === "string" && payload.learning_language.trim()) {
-      targetLanguage = payload.learning_language.trim();
-    } else if (typeof payload.learningLanguage === "string" && payload.learningLanguage.trim()) {
-      targetLanguage = payload.learningLanguage.trim();
-    } else if (typeof payload.target_language === "string" && payload.target_language.trim()) {
-      targetLanguage = payload.target_language.trim();
-    } else if (typeof payload.targetLanguage === "string" && payload.targetLanguage.trim()) {
-      targetLanguage = payload.targetLanguage.trim();
+    const targetLanguageFromPayload = readLanguageTag(
+      payload.target_language,
+      payload.targetLanguage,
+    );
+    const learningLanguageFromPayload = readLanguageTag(
+      payload.learning_language,
+      payload.learningLanguage,
+    );
+    const nativeLanguageFromPayload = readLanguageTag(
+      payload.native_language,
+      payload.nativeLanguage,
+    );
+
+    if (targetLanguageFromPayload) {
+      targetLanguage = targetLanguageFromPayload;
+    } else if (direction === "to_native" && nativeLanguageFromPayload) {
+      targetLanguage = nativeLanguageFromPayload;
+    } else if (direction === "to_learning" && learningLanguageFromPayload) {
+      targetLanguage = learningLanguageFromPayload;
     }
   } catch {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
@@ -169,110 +269,92 @@ serve(async (req: Request) => {
     });
   }
 
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
+  const translationProvider = getTranslationProvider();
 
-  const translationPrompt = buildPrompt(
-    direction,
-    sourceText,
-    sceneHint,
-    targetLanguage,
-  );
-
-  const translationCompletion = await llm.client.chat.completions.create(
-    withLlmDefaults(llm, {
-      messages: translationPrompt,
-      max_tokens: 200,
-      temperature: 0.3,
-      response_format: { type: "json_object" },
-    }),
-  );
-
-  const translationRaw = translationCompletion.choices[0]?.message?.content ?? "{}";
-  let translatedText = "";
-  let hint = "";
   try {
-    const parsed = JSON.parse(translationRaw);
-    translatedText =
-      typeof parsed.translated_text === "string"
-        ? parsed.translated_text.trim()
-        : typeof parsed.english_reply === "string"
-          ? parsed.english_reply.trim()
-          : "";
-    hint = typeof parsed.hint === "string" ? parsed.hint.trim() : "";
-  } catch {
-    translatedText = translationRaw.trim();
-  }
+    const translated =
+      translationProvider === "google"
+        ? {
+            translatedText: await translateWithGoogle({
+              text: sourceText,
+              targetLanguage,
+            }),
+            responseHeaders: new Headers({
+              "Content-Type": "application/json",
+            }),
+          }
+        : translationProvider === "azure"
+          ? {
+              translatedText: await translateWithAzure({
+                text: sourceText,
+                targetLanguage,
+              }),
+              responseHeaders: new Headers({
+                "Content-Type": "application/json",
+              }),
+            }
+        : await translateWithLlm({
+            direction,
+            sourceText,
+            sceneHint,
+            targetLanguage,
+          });
 
-  if (!translatedText) {
+    translated.responseHeaders.set(
+      "X-Translation-Provider",
+      translationProvider,
+    );
+    translated.responseHeaders.set(
+      "Access-Control-Expose-Headers",
+      [
+        translated.responseHeaders.get("Access-Control-Expose-Headers"),
+        "X-Translation-Provider",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
+
+    // Current clients send `tts_mode: none`; keep the field parsed for compatibility.
+    void ttsMode;
+
     return new Response(
-      JSON.stringify({ error: "Failed to generate translation" }),
-      { status: 502, headers: responseHeaders },
-    );
-  }
-
-  let audioBase64: string | null = null;
-  let audioMimeType: string | null = null;
-
-  if (ttsMode === "cloud" && direction === "to_learning" &&
-    targetLanguage.toLowerCase().startsWith("en")) {
-    const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY");
-    if (!deepgramApiKey) {
-      return new Response(
-        JSON.stringify({ error: "Missing DEEPGRAM_API_KEY for cloud TTS" }),
-        { status: 500, headers: responseHeaders },
-      );
-    }
-
-    const ttsResponse = await fetch(
-      "https://api.deepgram.com/v1/speak?model=aura-asteria-en",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Token ${deepgramApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text: translatedText }),
-      },
-    );
-
-    if (!ttsResponse.ok) {
-      const body = await ttsResponse.text().catch(() => "");
-      return new Response(
-        JSON.stringify({
-          error: "Failed to synthesize English audio",
-          status: ttsResponse.status,
-          body,
-        }),
-        { status: 502, headers: responseHeaders },
-      );
-    }
-
-    const audioBuffer = await ttsResponse.arrayBuffer();
-    audioBase64 = arrayBufferToBase64(audioBuffer);
-    audioMimeType = "audio/mpeg";
-  }
-
-  return new Response(
-    JSON.stringify({
-      source_text: sourceText,
-      direction,
+      JSON.stringify({
+        source_text: sourceText,
+        direction,
         target_language: targetLanguage,
-      translated_text: translatedText,
-        learning_reply: translatedText,
+        translated_text: translated.translatedText,
+        learning_reply: translated.translatedText,
         // Back-compat: old clients expected `english_reply` for English learning.
         english_reply: targetLanguage.toLowerCase().startsWith("en")
-          ? translatedText
+          ? translated.translatedText
           : null,
-      hint: hint || null,
-      audio_base64: audioBase64,
-      audio_mime_type: audioMimeType,
-    }),
-    {
-      status: 200,
-      headers: responseHeaders,
-    },
-  );
+        hint: null,
+        audio_base64: null,
+        audio_mime_type: null,
+      }),
+      {
+        status: 200,
+        headers: translated.responseHeaders,
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to translate text";
+    const isMissingKey =
+      message.includes("Missing GOOGLE_TRANSLATE_API_KEY") ||
+      message.includes("Missing AZURE_TRANSLATOR_KEY") ||
+      message.includes("Missing AZURE_TRANSLATOR_REGION") ||
+      message.includes("Missing required env:");
+    const status = isMissingKey ? 500 : 502;
+    return new Response(
+      JSON.stringify({ error: message }),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Translation-Provider": translationProvider,
+          "Access-Control-Expose-Headers": "X-Translation-Provider",
+        },
+      },
+    );
+  }
 });

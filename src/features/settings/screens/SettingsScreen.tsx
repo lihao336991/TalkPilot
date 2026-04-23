@@ -101,6 +101,9 @@ export default function SettingsScreen() {
   } = useOnboardingState();
   const soundRef = React.useRef<Audio.Sound | null>(null);
   const [hasEnrollment, setHasEnrollment] = React.useState(false);
+  const [enrollmentAvailability, setEnrollmentAvailability] = React.useState<
+    "missing" | "legacy_pcm_only" | "ready"
+  >("missing");
   const [isEnrollmentLoading, setIsEnrollmentLoading] = React.useState(true);
   const [isPlayingEnrollment, setIsPlayingEnrollment] = React.useState(false);
   const [isEnrollmentBusy, setIsEnrollmentBusy] = React.useState(false);
@@ -126,7 +129,9 @@ export default function SettingsScreen() {
   const refreshEnrollmentStatus = React.useCallback(async () => {
     setIsEnrollmentLoading(true);
     try {
-      setHasEnrollment(await voiceEnrollmentService.hasEnrollment());
+      const availability = await voiceEnrollmentService.getEnrollmentAvailability();
+      setEnrollmentAvailability(availability);
+      setHasEnrollment(availability !== "missing");
     } finally {
       setIsEnrollmentLoading(false);
     }
@@ -313,9 +318,11 @@ export default function SettingsScreen() {
               <Text style={styles.enrollmentStatusValue}>
                 {isEnrollmentLoading
                   ? t("settings.voiceEnrollment.loading")
-                  : hasEnrollment
-                    ? t("settings.voiceEnrollment.saved")
-                    : t("settings.voiceEnrollment.notSaved")}
+                  : enrollmentAvailability === "ready"
+                    ? t("settings.voiceEnrollment.enhancedReady")
+                    : enrollmentAvailability === "legacy_pcm_only"
+                      ? t("settings.voiceEnrollment.legacyOnly")
+                      : t("settings.voiceEnrollment.notSaved")}
               </Text>
             </View>
             {isEnrollmentLoading || isEnrollmentBusy ? (
@@ -324,9 +331,11 @@ export default function SettingsScreen() {
           </View>
 
           <Text style={styles.followSystemHint}>
-            {hasEnrollment
+            {enrollmentAvailability === "ready"
               ? t("settings.voiceEnrollment.savedHint")
-              : t("settings.voiceEnrollment.emptyHint")}
+              : enrollmentAvailability === "legacy_pcm_only"
+                ? t("settings.voiceEnrollment.legacyHint")
+                : t("settings.voiceEnrollment.emptyHint")}
           </Text>
 
           <View style={styles.enrollmentActions}>

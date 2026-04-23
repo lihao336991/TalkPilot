@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import type {
+  SpeakerDecisionSource,
+  VoiceprintDecisionLabel,
+} from './conversationStore';
 
 type StepStatus = 'running' | 'done' | 'error';
 type TurnSpeaker = 'self' | 'other';
@@ -27,6 +31,9 @@ export type DebugTurnTrace = {
   llmCompletedAt?: number;
   llmStatus: TurnLlmStatus;
   llmDetail?: string;
+  voiceprintSimilarity?: number | null;
+  voiceprintDecision?: VoiceprintDecisionLabel | null;
+  speakerDecisionSource?: SpeakerDecisionSource;
   createdAt: number;
 };
 
@@ -42,6 +49,9 @@ type DebugState = {
     textPreview: string;
     recordingStartedAt: number;
     asrFinalAt: number;
+    voiceprintSimilarity?: number | null;
+    voiceprintDecision?: VoiceprintDecisionLabel | null;
+    speakerDecisionSource?: SpeakerDecisionSource;
   }) => void;
   markUtteranceEnd: (turnId: string) => void;
   startTurnLlm: (turnId: string, kind: TurnLlmKind) => void;
@@ -130,6 +140,9 @@ export const useDebugStore = create<DebugState>((set) => ({
     textPreview,
     recordingStartedAt,
     asrFinalAt,
+    voiceprintSimilarity,
+    voiceprintDecision,
+    speakerDecisionSource,
   }) =>
     set((state) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
@@ -144,6 +157,12 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: existing?.llmCompletedAt,
         llmStatus: existing?.llmStatus ?? 'idle',
         llmDetail: existing?.llmDetail,
+        voiceprintSimilarity:
+          voiceprintSimilarity ?? existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision:
+          voiceprintDecision ?? existing?.voiceprintDecision ?? null,
+        speakerDecisionSource:
+          speakerDecisionSource ?? existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? asrFinalAt,
       })),
     })),
@@ -162,6 +181,9 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: existing?.llmCompletedAt,
         llmStatus: existing?.llmStatus ?? 'idle',
         llmDetail: existing?.llmDetail,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
     })),
@@ -180,6 +202,9 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: undefined,
         llmStatus: 'running',
         llmDetail: undefined,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
     })),
@@ -198,6 +223,9 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: Date.now(),
         llmStatus: 'done',
         llmDetail: detail,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
     })),
@@ -216,6 +244,9 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: Date.now(),
         llmStatus: 'error',
         llmDetail: errorMessage,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
     })),

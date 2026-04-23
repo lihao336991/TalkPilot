@@ -1,32 +1,22 @@
+import {
+    historyService,
+    type HistorySession,
+} from "@/features/history/services/historyService";
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
-import { supabase } from "@/shared/api/supabase";
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
-
-type HistorySession = {
-  id: string;
-  scene_preset: string | null;
-  scene_description: string | null;
-  started_at: string;
-  ended_at: string | null;
-  duration_seconds: number | null;
-  status: string;
-};
-
-const HISTORY_CACHE_TTL_MS = 30_000;
-let historySessionsCache: HistorySession[] = [];
-let historySessionsCacheAt = 0;
 
 function formatDuration(
   s: number | null,
@@ -49,11 +39,13 @@ function formatSessionDate(iso: string, locale: string): string {
   });
 }
 
-function formatSceneLabel(
+function formatCardTitle(
   session: HistorySession,
   t: (key: string) => string,
 ): string {
-  if (session.scene_description?.trim()) return session.scene_description.trim();
+  if (session.title?.trim()) return session.title.trim();
+  if (session.scene_description?.trim())
+    return session.scene_description.trim();
   if (session.scene_preset) {
     return session.scene_preset
       .split("_")
@@ -72,45 +64,23 @@ function statusColor(status: string): string {
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { i18n, t } = useTranslation();
+  const router = useRouter();
   const tabBarHeight = getTabBarHeight(insets.bottom);
-  const [sessions, setSessions] = useState<HistorySession[]>(historySessionsCache);
-  const [isLoading, setIsLoading] = useState(historySessionsCache.length === 0);
+  const [sessions, setSessions] = useState<HistorySession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadSessions = useCallback(async (opts?: { force?: boolean }) => {
-    const useCache =
-      !opts?.force &&
-      historySessionsCache.length > 0 &&
-      Date.now() - historySessionsCacheAt < HISTORY_CACHE_TTL_MS;
-
-    if (useCache) {
-      setSessions(historySessionsCache);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     setErrorMessage(null);
-
-    const { data, error } = await supabase
-      .from("sessions")
-      .select("id, scene_preset, scene_description, started_at, ended_at, duration_seconds, status")
-      .order("started_at", { ascending: false });
-
+    const { data, error } = await historyService.loadSessions(opts);
     if (error) {
-      setErrorMessage(error.message || t("billing.paywall.unavailableFallback"));
-      if (historySessionsCache.length === 0) setSessions([]);
-      setIsLoading(false);
-      return;
+      setErrorMessage(error);
     }
-
-    const next = data ?? [];
-    historySessionsCache = next;
-    historySessionsCacheAt = Date.now();
-    setSessions(next);
+    setSessions(data);
     setIsLoading(false);
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     void loadSessions();
@@ -123,7 +93,8 @@ export default function HistoryScreen() {
   }
 
   const totalMinutes = Math.round(
-    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0) / 60,
+    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0) /
+      60,
   );
   const completedCount = sessions.filter((s) => s.status === "ended").length;
 
@@ -140,7 +111,11 @@ export default function HistoryScreen() {
           style={styles.refreshBtn}
           accessibilityLabel={t("history.refreshAccessibilityLabel")}
         >
-          <Feather name="refresh-cw" size={18} color={refreshing ? palette.textAccent : palette.textSecondary} />
+          <Feather
+            name="refresh-cw"
+            size={18}
+            color={refreshing ? palette.textAccent : palette.textSecondary}
+          />
         </Pressable>
       </View>
 
@@ -162,17 +137,23 @@ export default function HistoryScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{sessions.length}</Text>
-              <Text style={styles.statLabel}>{t("history.stats.sessions")}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.sessions")}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{totalMinutes}</Text>
-              <Text style={styles.statLabel}>{t("history.stats.minutesPracticed")}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.minutesPracticed")}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{completedCount}</Text>
-              <Text style={styles.statLabel}>{t("history.stats.completed")}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.completed")}
+              </Text>
             </View>
           </View>
           <View style={styles.statsAccentLine} />
@@ -184,21 +165,37 @@ export default function HistoryScreen() {
             <View style={styles.stateIconWrap}>
               <Feather name="loader" size={22} color={palette.textTertiary} />
             </View>
-            <Text style={styles.stateTitle}>{t("history.state.loadingTitle")}</Text>
-            <Text style={styles.stateBody}>{t("history.state.loadingBody")}</Text>
+            <Text style={styles.stateTitle}>
+              {t("history.state.loadingTitle")}
+            </Text>
+            <Text style={styles.stateBody}>
+              {t("history.state.loadingBody")}
+            </Text>
           </View>
         )}
 
         {/* ── Error ── */}
         {!isLoading && errorMessage && sessions.length === 0 && (
           <View style={styles.stateCard}>
-            <View style={[styles.stateIconWrap, { backgroundColor: palette.dangerLight }]}>
+            <View
+              style={[
+                styles.stateIconWrap,
+                { backgroundColor: palette.dangerLight },
+              ]}
+            >
               <Feather name="alert-circle" size={22} color={palette.danger} />
             </View>
-            <Text style={styles.stateTitle}>{t("history.state.errorTitle")}</Text>
+            <Text style={styles.stateTitle}>
+              {t("history.state.errorTitle")}
+            </Text>
             <Text style={styles.stateBody}>{errorMessage}</Text>
-            <Pressable style={styles.retryBtn} onPress={() => void loadSessions({ force: true })}>
-              <Text style={styles.retryBtnText}>{t("common.actions.tryAgain")}</Text>
+            <Pressable
+              style={styles.retryBtn}
+              onPress={() => void loadSessions({ force: true })}
+            >
+              <Text style={styles.retryBtnText}>
+                {t("common.actions.tryAgain")}
+              </Text>
             </Pressable>
           </View>
         )}
@@ -209,10 +206,10 @@ export default function HistoryScreen() {
             <View style={styles.stateIconWrap}>
               <Feather name="mic-off" size={22} color={palette.textTertiary} />
             </View>
-            <Text style={styles.stateTitle}>{t("history.state.emptyTitle")}</Text>
-            <Text style={styles.stateBody}>
-              {t("history.state.emptyBody")}
+            <Text style={styles.stateTitle}>
+              {t("history.state.emptyTitle")}
             </Text>
+            <Text style={styles.stateBody}>{t("history.state.emptyBody")}</Text>
           </View>
         )}
 
@@ -221,18 +218,36 @@ export default function HistoryScreen() {
           !errorMessage &&
           sessions.map((session) => {
             const accent = statusColor(session.status);
+            const hasRecap = !!session.recap;
             return (
-              <View key={session.id} style={styles.card}>
-                {/* left accent bar */}
-                <View style={[styles.cardAccentBar, { backgroundColor: accent }]} />
+              <Pressable
+                key={session.id}
+                style={styles.card}
+                onPress={() =>
+                  router.push(`/session-detail?id=${session.id}` as any)
+                }
+              >
+                <View
+                  style={[styles.cardAccentBar, { backgroundColor: accent }]}
+                />
 
                 <View style={styles.cardInner}>
                   <View style={styles.cardTopRow}>
                     <Text style={styles.cardTitle} numberOfLines={1}>
-                      {formatSceneLabel(session, t)}
+                      {formatCardTitle(session, t)}
                     </Text>
-                    <View style={[styles.statusPill, { borderColor: `${accent}40`, backgroundColor: `${accent}14` }]}>
-                      <View style={[styles.statusDot, { backgroundColor: accent }]} />
+                    <View
+                      style={[
+                        styles.statusPill,
+                        {
+                          borderColor: `${accent}40`,
+                          backgroundColor: `${accent}14`,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[styles.statusDot, { backgroundColor: accent }]}
+                      />
                       <Text style={[styles.statusText, { color: accent }]}>
                         {session.status === "ended"
                           ? t("history.sessionStatus.ended")
@@ -244,7 +259,11 @@ export default function HistoryScreen() {
                   </View>
 
                   <View style={styles.cardMetaRow}>
-                    <Feather name="clock" size={12} color={palette.textTertiary} />
+                    <Feather
+                      name="clock"
+                      size={12}
+                      color={palette.textTertiary}
+                    />
                     <Text style={styles.cardMeta}>
                       {formatDuration(session.duration_seconds, t)}
                     </Text>
@@ -252,9 +271,34 @@ export default function HistoryScreen() {
                     <Text style={styles.cardMeta}>
                       {formatSessionDate(session.started_at, i18n.language)}
                     </Text>
+                    {hasRecap && (
+                      <>
+                        <Text style={styles.cardMetaDot}>·</Text>
+                        <Feather
+                          name="check-circle"
+                          size={11}
+                          color={palette.textAccent}
+                        />
+                        <Text
+                          style={[
+                            styles.cardMeta,
+                            { color: palette.textAccent },
+                          ]}
+                        >
+                          {t("history.card.recapped")}
+                        </Text>
+                      </>
+                    )}
                   </View>
                 </View>
-              </View>
+                <View style={styles.cardChevron}>
+                  <Feather
+                    name="chevron-right"
+                    size={16}
+                    color={palette.textTertiary}
+                  />
+                </View>
+              </Pressable>
             );
           })}
       </ScrollView>
@@ -456,5 +500,9 @@ const styles = StyleSheet.create({
   cardMetaDot: {
     ...typography.labelMd,
     color: palette.textTertiary,
+  },
+  cardChevron: {
+    justifyContent: "center",
+    paddingRight: spacing.md,
   },
 });

@@ -140,7 +140,6 @@ export function TranscriptBubble({
 
           {hasTranslation && (
             <View style={styles.translationContainer}>
-              <View style={styles.translationDivider} />
               <View style={styles.translationRow}>
                 <View style={styles.translationTextWrap}>
                   {translationStatus === "loading" && (
@@ -257,47 +256,40 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
   },
   translationContainer: {
-    marginTop: 8,
-  },
-  translationDivider: {
-    height: 1,
-    backgroundColor: "rgba(21,22,25,0.08)",
-    marginBottom: 6,
+    marginTop: 6,
   },
   translationRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 8,
   },
   translationTextWrap: {
     flex: 1,
   },
   translationText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#174EA6",
-    fontWeight: "500",
+    fontSize: 12,
+    lineHeight: 17,
+    color: "rgba(26,26,26,0.5)",
   },
   textAssist: {
     color: "#174EA6",
     fontWeight: "500",
   },
   translationLoading: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 17,
     color: "rgba(21,22,25,0.5)",
-    fontStyle: "italic",
   },
   translationError: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#B42318",
+    fontSize: 12,
+    lineHeight: 17,
+    color: "rgba(180,35,24,0.72)",
   },
   ttsButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(23,78,166,0.08)",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(21,22,25,0.05)",
     alignItems: "center",
     justifyContent: "center",
   },

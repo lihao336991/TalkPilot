@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 type Props = {
   sourceText: string;
   sourceLanguage?: string;
-  englishText: string;
+  translatedText: string;
   hint?: string | null;
   status: "recording" | "processing" | "ready";
 };
@@ -14,7 +14,7 @@ type Props = {
 export default function NativeAssistCard({
   sourceText,
   sourceLanguage,
-  englishText,
+  translatedText,
   hint,
   status,
 }: Props) {
@@ -41,10 +41,10 @@ export default function NativeAssistCard({
           <Text style={styles.sourceText}>{sourceText}</Text>
         </View>
       ) : null}
-      {englishText ? (
+      {translatedText ? (
         <View style={styles.section}>
           <Text style={styles.label}>{t("live.nativeAssist.suggestedReply")}</Text>
-          <Text style={styles.enText}>{englishText}</Text>
+          <Text style={styles.enText}>{translatedText}</Text>
         </View>
       ) : null}
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}

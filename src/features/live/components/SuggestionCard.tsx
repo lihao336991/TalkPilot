@@ -1,7 +1,15 @@
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 
 type SuggestionStyle = "formal" | "casual" | "simple";
 
@@ -10,71 +18,130 @@ type Props = {
     style: SuggestionStyle;
     text: string;
   };
-  onPress?: () => void;
+  onSend?: () => void;
+  isSending?: boolean;
 };
 
-export default function SuggestionCard({ suggestion, onPress }: Props) {
+export default function SuggestionCard({
+  suggestion,
+  onSend,
+  isSending = false,
+}: Props) {
   const { t } = useTranslation();
+  const wordCount = React.useMemo(
+    () => suggestion.text.trim().split(/\s+/).filter(Boolean).length,
+    [suggestion.text],
+  );
+  const isLongSuggestion = wordCount > 14 || suggestion.text.trim().length > 78;
 
   return (
-    <View style={styles.wrapper}>
-      <Pressable style={styles.bubble} onPress={onPress}>
-        <Text style={styles.label}>{t(`live.suggestionStyle.${suggestion.style}`)}</Text>
-        <Text style={styles.text}>{suggestion.text}</Text>
+    <LinearGradient
+      colors={[
+        "rgba(184,225,50,0.96)",
+        "rgba(168,213,36,0.9)",
+        "rgba(153,199,27,0.84)",
+      ]}
+      start={{ x: 0, y: 0.1 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <View style={styles.glassGlow} />
+      <View style={styles.glassSheen} />
+      <View style={styles.leadingIconWrap}>
+        <Feather name="zap" size={15} color="rgba(255,255,255,0.95)" />
+      </View>
+      <View style={styles.content}>
+        <Text style={[styles.text, isLongSuggestion && styles.textCompact]}>
+          {suggestion.text}
+        </Text>
+      </View>
+      <Pressable
+        style={[styles.actionButton, isSending && styles.actionButtonDisabled]}
+        onPress={onSend}
+        disabled={isSending}
+        accessibilityLabel={t("live.suggestionPanel.actionSendAndPlay")}
+        hitSlop={8}
+      >
+        <Feather
+          name="volume-2"
+          size={18}
+          color={isSending ? palette.textTertiary : palette.textAccent}
+        />
       </Pressable>
-      <View style={styles.tailShadow} />
-      <View style={styles.tail} />
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    maxWidth: 292,
-    paddingBottom: 10,
-    paddingLeft: 10,
-  },
-  bubble: {
-    borderRadius: radii.xl,
-    borderBottomLeftRadius: 10,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 13,
-    backgroundColor: palette.bgCardSolid,
+  container: {
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minHeight: 88,
+    borderRadius: 30,
+    paddingLeft: 16,
+    paddingRight: 14,
+    paddingVertical: 14,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: palette.accentBorder,
-    gap: 6,
-    ...shadows.card,
+    borderColor: "rgba(255,255,255,0.28)",
+    ...shadows.cardLg,
   },
-  label: {
-    ...typography.tabLabel,
-    fontWeight: "700",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: palette.textTertiary,
+  glassGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: radii.circle,
+    left: -42,
+    top: -68,
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  glassSheen: {
+    position: "absolute",
+    left: 32,
+    right: 94,
+    top: 12,
+    height: 26,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  leadingIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  content: {
+    flex: 1,
+    paddingRight: 6,
   },
   text: {
-    ...typography.bodySm,
-    lineHeight: 20,
-    color: palette.textPrimary,
+    ...typography.bodyLg,
+    lineHeight: 26,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.98)",
   },
-  tailShadow: {
-    position: "absolute",
-    left: 12,
-    bottom: 4,
-    width: 16,
-    height: 16,
-    borderRadius: radii.xs / 2,
-    backgroundColor: palette.accentMuted,
-    transform: [{ rotate: "45deg" }],
+  textCompact: {
+    fontSize: 15,
+    lineHeight: 22,
   },
-  tail: {
-    position: "absolute",
-    left: 10,
-    bottom: 6,
-    width: 16,
-    height: 16,
-    borderBottomLeftRadius: radii.xs / 2,
-    backgroundColor: palette.bgCardSolid,
-    transform: [{ rotate: "45deg" }],
+  actionButton: {
+    width: 50,
+    height: 50,
+    borderRadius: radii.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    shadowColor: "#7EAA00",
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
+  },
+  actionButtonDisabled: {
+    backgroundColor: "rgba(255,255,255,0.76)",
   },
 });

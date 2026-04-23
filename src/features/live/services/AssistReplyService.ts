@@ -5,7 +5,7 @@ import { useLocaleStore } from '@/shared/store/localeStore';
 
 export type AssistReplyResult = {
   sourceText: string;
-  learningReply: string;
+  learningTranslation: string;
   hint: string | null;
 };
 
@@ -42,21 +42,21 @@ class AssistReplyService {
     const learningReply =
       data.translated_text?.trim() || data.english_reply?.trim() || '';
     if (!learningReply) {
-      throw new Error('Failed to generate reply in learning language');
+      throw new Error('Failed to translate to the learning language');
     }
 
     return {
       sourceText: data.source_text?.trim() || sourceText,
-      learningReply,
+      learningTranslation: learningReply,
       hint: data.hint ?? null,
     };
   }
 
   async playReply(result: AssistReplyResult): Promise<void> {
-    if (!result.learningReply.trim()) {
+    if (!result.learningTranslation.trim()) {
       return;
     }
-    await translationService.speakLearning(result.learningReply);
+    await translationService.speakLearning(result.learningTranslation);
   }
 
   async stopPlayback(): Promise<void> {

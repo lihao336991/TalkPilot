@@ -13,6 +13,8 @@ import type { StreamingConnectionStatus } from "@/features/live/services/Streami
 import { suggestionService } from "@/features/live/services/SuggestionService";
 import { translationService } from "@/features/live/services/TranslationService";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
+import { voiceprintService } from "@/features/live/services/VoiceprintService";
+import { historyService } from "@/features/history/services/historyService";
 import { useAccessStore } from "@/features/live/store/accessStore";
 import { useConversationStore } from "@/features/live/store/conversationStore";
 import { useDebugStore } from "@/features/live/store/debugStore";
@@ -31,6 +33,7 @@ import { type Href, useRouter } from "expo-router";
 
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 const LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS = 45_000;
+const SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
 
 export function getWsStatusMeta(
   status: StreamingConnectionStatus,
@@ -87,11 +90,13 @@ export function useLiveSessionController() {
   const [showCalibration, setShowCalibration] = useState(false);
   const [assistState, setAssistState] = useState<AssistUiState>("idle");
   const [assistPreviewText, setAssistPreviewText] = useState("");
+  const [isSendingSuggestion, setIsSendingSuggestion] = useState(false);
 
   const sessionIdRef = useRef<string | null>(null);
   const assistShouldResumeRef = useRef(false);
 
   const sendAudioRef = useRef((base64: string) => {
+    voiceprintService.ingestChunk(base64);
     deepgramService.sendAudio(base64);
   });
 
@@ -120,6 +125,25 @@ export function useLiveSessionController() {
     return () => clearInterval(interval);
   }, [assistState]);
 
+  useEffect(() => {
+    if (status !== "active" && status !== "paused") {
+      return;
+    }
+
+    const beat = () => {
+      const currentSessionId = sessionIdRef.current;
+      if (!currentSessionId) {
+        return;
+      }
+
+      void sessionManager.touchSessionActivity(currentSessionId);
+    };
+
+    beat();
+    const interval = setInterval(beat, SESSION_HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [status]);
+
   const handleFeatureAccessDenied = useCallback(
     (error: unknown) => {
       if (!isFeatureAccessError(error)) {
@@ -147,11 +171,13 @@ export function useLiveSessionController() {
       text,
       turnId,
       detectedLanguage,
+      confidence,
     }: {
       speaker: "self" | "other";
       text: string;
       turnId: string;
       detectedLanguage?: string;
+      confidence?: number;
     }): Promise<void> =>
       (async () => {
         const debug = useDebugStore.getState();
@@ -162,10 +188,24 @@ export function useLiveSessionController() {
             speaker +
             ", lang=" +
             (detectedLanguage ?? "?") +
+            ", conf=" +
+            (confidence?.toFixed(3) ?? "?") +
             ", turnId=" +
             turnId,
         );
         if (!sessionIdRef.current || !trimmed) return;
+
+        const MIN_CONFIDENCE = 0.75;
+        const isLowConfidence = confidence != null && confidence < MIN_CONFIDENCE;
+        if (isLowConfidence) {
+          console.log(
+            "[LiveSession] Skipping LLM downstream for low-confidence turn (" +
+              confidence.toFixed(3) +
+              " < " +
+              MIN_CONFIDENCE +
+              ")",
+          );
+        }
 
         const scene = sceneDescription || scenePreset;
         const isLearningLanguage = languageMatchesTag(
@@ -174,21 +214,20 @@ export function useLiveSessionController() {
         );
 
         if (speaker === "other") {
-          // Learning layer: suggest replies in the user's current learning language.
-          debug.startTurnLlm(turnId, "suggest");
-          try {
-            await suggestionService.fetchSuggestions(
-              sessionIdRef.current,
-              trimmed,
-              scene,
-              turnId,
-            );
-          } catch (error) {
-            handleFeatureAccessDenied(error);
+          if (!isLowConfidence) {
+            debug.startTurnLlm(turnId, "suggest");
+            try {
+              await suggestionService.fetchSuggestions(
+                sessionIdRef.current,
+                trimmed,
+                scene,
+                turnId,
+              );
+            } catch (error) {
+              handleFeatureAccessDenied(error);
+            }
           }
 
-          // Translation layer: if the other party spoke the learning language,
-          // translate it back into the user's native language.
           if (isLearningLanguage) {
             void translationService.translate({
               turnId,
@@ -204,28 +243,21 @@ export function useLiveSessionController() {
         suggestionStore.clear();
 
         if (isLearningLanguage) {
-          // Learning layer: grade the user's learning-language speech.
-          debug.startTurnLlm(turnId, "review");
-          try {
-            await reviewService.fetchReview(
-              sessionIdRef.current,
-              trimmed,
-              scene,
-              turnId,
-            );
-          } catch (error) {
-            handleFeatureAccessDenied(error);
+          if (!isLowConfidence) {
+            debug.startTurnLlm(turnId, "review");
+            try {
+              await reviewService.fetchReview(
+                sessionIdRef.current,
+                trimmed,
+                scene,
+                turnId,
+              );
+            } catch (error) {
+              handleFeatureAccessDenied(error);
+            }
           }
           return;
         }
-
-        // Self spoke native language -> translate into the learning language.
-        void translationService.translate({
-          turnId,
-          text: trimmed,
-          direction: "to_learning",
-          sceneHint: scene,
-        });
       })(),
     [handleFeatureAccessDenied, learningLanguage, scenePreset, sceneDescription],
   );
@@ -321,6 +353,8 @@ export function useLiveSessionController() {
       return;
     }
 
+    void voiceprintService.hydrateEnrollmentState();
+
     if (status === "idle" || status === "ended") {
       void preconnectMainSocket();
     }
@@ -347,6 +381,7 @@ export function useLiveSessionController() {
     console.log("[LiveSession] Starting audio engine...");
     deepgramService.markLiveTranscriptBoundary();
     deepgramService.enableLiveTranscripts();
+    voiceprintService.startSessionAnalysis();
     await audioEngine.start(sendAudioRef.current);
     debug.completeStep("record");
     setListening(true);
@@ -355,10 +390,12 @@ export function useLiveSessionController() {
   const startStreaming = useCallback(
     async (speakerId: number | null) => {
       const debug = useDebugStore.getState();
+      let createdSessionId: string | null = null;
       console.log("[LiveSession] Starting streaming...");
       try {
         setSelfSpeakerId(speakerId);
         setShowCalibration(false);
+        await voiceprintService.hydrateEnrollmentState();
 
         if (deepgramService.canResumeWithoutReconnect(learningLanguage)) {
           deepgramService.cancelPausedRetention();
@@ -396,6 +433,7 @@ export function useLiveSessionController() {
           scenePreset,
           sceneDescription,
         });
+        createdSessionId = sessionId;
         debug.completeStep("session", sessionId);
         console.log("[LiveSession] Session created:", sessionId);
         sessionIdRef.current = sessionId;
@@ -411,6 +449,23 @@ export function useLiveSessionController() {
             error instanceof Error ? error.message : String(error),
           );
         }
+        if (createdSessionId) {
+          try {
+            await sessionManager.endSession({
+              sessionId: createdSessionId,
+              durationSeconds: 0,
+            });
+          } catch (sessionCleanupError) {
+            console.error(
+              "[LiveSession] Failed to cleanup partially started session:",
+              sessionCleanupError,
+            );
+          }
+        } else {
+          await sessionManager.clearActiveSession();
+        }
+        sessionIdRef.current = null;
+        endSession();
         deepgramService.disconnect();
         await audioEngine.stop();
         setListening(false);
@@ -424,6 +479,7 @@ export function useLiveSessionController() {
       scenePreset,
       startAudioCapture,
       startSession,
+      endSession,
       setSelfSpeakerId,
       setListening,
       handleFeatureAccessDenied,
@@ -461,8 +517,6 @@ export function useLiveSessionController() {
     setShowCalibration(false);
     setAssistState("idle");
     setAssistPreviewText("");
-    setAssistDraftText("");
-    setIsAssistDraftVisible(false);
     debug.startStep("mic", "Requesting mic permission...");
     console.log("[LiveSession] Requesting mic permission...");
     const granted = await AudioEngine.requestPermission();
@@ -477,11 +531,14 @@ export function useLiveSessionController() {
     debug.startStep("audio-init", "Initializing audio engine...");
     await audioEngine.init();
     debug.completeStep("audio-init");
+    await voiceprintService.hydrateEnrollmentState();
+    voiceprintService.resetSessionState();
     deepgramTokenService.prewarm();
 
     // Show enrollment setup if the user hasn't recorded a voice sample yet
-    const hasEnrollment = await voiceEnrollmentService.hasEnrollment();
-    if (!hasEnrollment) {
+    const enrollmentAvailability =
+      await voiceEnrollmentService.getEnrollmentAvailability();
+    if (enrollmentAvailability === "missing") {
       setShowEnrollment(true);
       return;
     }
@@ -510,6 +567,7 @@ export function useLiveSessionController() {
 
   const handlePause = useCallback(async () => {
     deepgramService.disableLiveTranscripts();
+    voiceprintService.stopSessionAnalysis();
     await audioEngine.stop();
     deepgramService.beginPausedRetention();
     pauseSession();
@@ -577,6 +635,84 @@ export function useLiveSessionController() {
     await startAudioCapture();
   }, [connectStreamingSocket, learningLanguage, startAudioCapture]);
 
+  const handleSendSuggestion = useCallback(
+    async (rawSuggestion: string) => {
+      const suggestion = rawSuggestion.trim();
+      const sessionId = sessionIdRef.current;
+
+      if (!suggestion || !sessionId || isSendingSuggestion) {
+        return;
+      }
+
+      const shouldResumeCapture = isListening;
+      const turnId = `suggestion-${Date.now()}`;
+      let didPersistTurn = false;
+
+      setIsSendingSuggestion(true);
+      assistShouldResumeRef.current = shouldResumeCapture;
+
+      try {
+        if (shouldResumeCapture) {
+          voiceprintService.stopSessionAnalysis();
+          await audioEngine.stop();
+          deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
+          setListening(false);
+        }
+
+        await translationService.stopPlayback();
+
+        useConversationStore.getState().addTurn({
+          id: turnId,
+          turnId,
+          speaker: "self",
+          text: suggestion,
+          isFinal: true,
+          timestamp: Date.now(),
+          detectedLanguage: learningLanguage,
+        });
+
+        await sessionManager.recordTurn({
+          sessionId,
+          turnId,
+          speaker: "self",
+          text: suggestion,
+        });
+        didPersistTurn = true;
+
+        useSuggestionStore.getState().clear();
+        await translationService.speakLearning(suggestion);
+      } catch (error) {
+        if (!didPersistTurn) {
+          useConversationStore.getState().removeTurn(turnId);
+        }
+        console.error("[Suggestion] Failed to send and play suggestion:", error);
+        Alert.alert(
+          "Notice",
+          error instanceof Error
+            ? error.message
+            : "Failed to send and play suggestion. Please try again.",
+        );
+      } finally {
+        try {
+          await restoreMainConversationCapture();
+        } catch (restoreError) {
+          console.error(
+            "[Suggestion] Failed to restore live audio after playback:",
+            restoreError,
+          );
+        }
+        setIsSendingSuggestion(false);
+      }
+    },
+    [
+      isListening,
+      isSendingSuggestion,
+      learningLanguage,
+      restoreMainConversationCapture,
+      setListening,
+    ],
+  );
+
   const processAssistTranscript = useCallback(
     async (
       rawTranscript: string,
@@ -608,7 +744,7 @@ export function useLiveSessionController() {
         id: placeholderTurnId,
         turnId: placeholderTurnId,
         speaker: "self",
-        text: "Translating and generating learning-language reply...",
+        text: "Translating to the learning language...",
         isFinal: false,
         timestamp: Date.now(),
         isAssist: true,
@@ -616,16 +752,16 @@ export function useLiveSessionController() {
       });
 
       try {
-        debug.startStep("assist-translate", "Generating learning-language reply...");
+        debug.startStep("assist-translate", "Translating to learning language...");
         const result = await assistReplyService.translateTranscript(
           transcript,
           sceneDescription || scenePreset,
         );
         debug.completeStep("assist-translate", "done");
 
-        if (result.learningReply) {
+        if (result.learningTranslation) {
           useConversationStore.getState().updateTurn(placeholderTurnId, {
-            text: result.learningReply,
+            text: result.learningTranslation,
             isFinal: true,
             assistSourceText: result.sourceText,
           });
@@ -655,7 +791,7 @@ export function useLiveSessionController() {
           "Notice",
           error instanceof Error
             ? error.message
-            : "Failed to generate a learning-language reply. Please try again.",
+            : "Failed to translate to the learning language. Please try again.",
         );
       } finally {
         setAssistState("idle");
@@ -684,6 +820,7 @@ export function useLiveSessionController() {
       assistShouldResumeRef.current = isListening;
 
       if (isListening) {
+        voiceprintService.stopSessionAnalysis();
         await audioEngine.stop();
         deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
         setListening(false);
@@ -803,6 +940,7 @@ export function useLiveSessionController() {
     console.log("[LiveSession] Ending session...");
     const currentSessionId = sessionIdRef.current;
 
+    voiceprintService.resetSessionState();
     await audioEngine.stop();
     deepgramService.disconnect();
     assistStreamingService.disconnect();
@@ -818,6 +956,7 @@ export function useLiveSessionController() {
           sessionId: currentSessionId,
           durationSeconds: duration,
         });
+        historyService.generateRecap(currentSessionId).catch(console.warn);
       } catch (error) {
         console.error("[SessionManager] Failed to end session:", error);
       }
@@ -831,6 +970,7 @@ export function useLiveSessionController() {
     setShowEnrollment(false);
     setAssistState("idle");
     setAssistPreviewText("");
+      await sessionManager.clearActiveSession();
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
     useDebugStore.getState().reset();
@@ -862,6 +1002,7 @@ export function useLiveSessionController() {
     showCalibration,
     assistState,
     assistPreviewText,
+    isSendingSuggestion,
     isIdle,
     isActive,
     mainWsMeta,
@@ -877,6 +1018,7 @@ export function useLiveSessionController() {
     handleResume,
     handleSimulateOtherPressIn,
     handleSimulateOtherPressOut,
+    handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
     handleEnd,

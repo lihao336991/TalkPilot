@@ -15,6 +15,7 @@ import "react-native-reanimated";
 import "../global.css";
 
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
+import { sessionManager } from "@/features/live/services/SessionManager";
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
 import {
@@ -136,6 +137,19 @@ function RootLayoutNav() {
       });
   }, [authMode, userId]);
 
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    void sessionManager.reconcileDanglingSession().catch((error) => {
+      console.error(
+        "[SessionManager] Failed to reconcile dangling session:",
+        error,
+      );
+    });
+  }, [userId]);
+
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
@@ -187,6 +201,15 @@ function RootLayoutNav() {
         />
         <Stack.Screen
           name="settings"
+          options={{
+            headerShown: false,
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="session-detail"
           options={{
             headerShown: false,
             presentation: "card",

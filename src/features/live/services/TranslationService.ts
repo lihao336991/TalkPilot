@@ -90,8 +90,8 @@ class TranslationService {
   }
 
   /**
-   * Translate a turn's text and attach the result to that turn in the store.
-   * Non-blocking: status transitions go idle -> loading -> done/error.
+   * Translate a turn's text via the Google translator-backed Edge Function
+   * and attach the result to that turn in the store.
    */
   async translate({
     turnId,
@@ -113,10 +113,7 @@ class TranslationService {
 
     try {
       const accessToken = await getValidAccessToken();
-      const targetLanguage =
-        direction === 'to_native'
-          ? getNativeLanguageTag()
-          : getLearningLanguageTag();
+      const targetLanguage = getNativeLanguageTag();
 
       const { data } = await invokeEdgeFunction<TranslationResponse>({
         functionName: 'assist-reply',

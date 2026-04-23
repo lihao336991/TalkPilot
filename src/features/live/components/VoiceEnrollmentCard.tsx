@@ -18,8 +18,9 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import { voiceEnrollmentService } from '../services/VoiceEnrollmentService';
+import { voiceprintService } from '../services/VoiceprintService';
 
-type Phase = 'intro' | 'recording' | 'saving' | 'done';
+type Phase = 'intro' | 'recording' | 'saving' | 'error' | 'done';
 
 type Props = {
   visible: boolean;
@@ -118,11 +119,14 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
 
     try {
       await voiceEnrollmentService.saveEnrollment(chunksRef.current);
+      await voiceprintService.createEnrollmentProfileFromChunks(chunksRef.current);
+      setPhase('done');
     } catch (err) {
       console.error('[VoiceEnrollment] Failed to save enrollment:', err);
+      await voiceEnrollmentService.clearEnrollmentProfile();
+      setPhase('error');
+      return;
     }
-
-    setPhase('done');
   };
 
   return (
@@ -183,6 +187,25 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
               <ActivityIndicator size="large" color="#111827" />
               <Text style={styles.savingText}>{t('live.voiceEnrollment.saving')}</Text>
             </View>
+          )}
+
+          {phase === 'error' && (
+            <>
+              <View style={[styles.doneIcon, styles.errorIcon]}>
+                <Feather name="alert-triangle" size={32} color="#FFF" />
+              </View>
+              <Text style={styles.body}>
+                {t('live.voiceEnrollment.errorBody')}
+              </Text>
+              <Pressable style={styles.primaryButton} onPress={startRecording}>
+                <Text style={styles.primaryButtonText}>
+                  {t('live.voiceEnrollment.retryAction')}
+                </Text>
+              </Pressable>
+              <Pressable onPress={onSkip}>
+                <Text style={styles.skipText}>{t('live.voiceEnrollment.skipForNow')}</Text>
+              </Pressable>
+            </>
           )}
 
           {phase === 'done' && (
@@ -290,5 +313,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorIcon: {
+    backgroundColor: '#F59E0B',
   },
 });

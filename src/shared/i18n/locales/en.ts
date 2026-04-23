@@ -140,10 +140,10 @@ export const en = {
   live: {
     nativeAssist: {
       listening: "Listening to your native speech...",
-      generating: "Generating learning-language reply...",
-      ready: "Assist reply ready",
+      generating: "Translating to the learning language...",
+      ready: "Translation ready",
       original: "{{language}} original",
-      suggestedReply: "Suggested reply",
+      suggestedReply: "Translation",
     },
     screen: {
       wsHintListening: "Mic is sending audio",
@@ -173,9 +173,11 @@ export const en = {
       skipForNow: "Skip for now",
       recordingBody: "Keep talking naturally - anything works.",
       countdown: "{{count}}s",
-      saving: "Saving voice sample…",
+      saving: "Saving voice sample and generating local voiceprint…",
       doneBody:
         "Voice sample saved. Your voice will be recognised automatically in every session.",
+      errorBody: "Local voiceprint generation failed. Please record again.",
+      retryAction: "Record again",
     },
     speakerCalibration: {
       title: "Voice Detection",
@@ -185,7 +187,10 @@ export const en = {
       startAccessibilityLabel: "Start session",
     },
     suggestionPanel: {
-      title: "Quick Reply",
+      title: "Reply Suggestion",
+      subtitle: "AI has prepared a more natural reply for you",
+      actionSendAndPlay: "Send and play suggestion",
+      sending: "Sending...",
     },
     suggestionStyle: {
       formal: "Formal",
@@ -283,6 +288,25 @@ export const en = {
       paused: "paused",
       active: "active",
     },
+    detail: {
+      conversation: "Conversation",
+      recap: "Session Recap",
+      recapGenerating: "Analyzing your session…",
+      recapRetry: "Generate Recap",
+      recapEmpty: "Not enough conversation data to generate a recap.",
+      highlights: "Language Highlights",
+      improvements: "Areas to Improve",
+      overallComment: "Overall",
+      reviewBadge: {
+        green: "Great",
+        yellow: "Good",
+        red: "Needs work",
+      },
+      noTurns: "No conversation recorded in this session.",
+    },
+    card: {
+      recapped: "Reviewed",
+    },
   },
   coach: {
     title: "Coach",
@@ -334,9 +358,13 @@ export const en = {
       statusLabel: "Local sample",
       loading: "Checking…",
       saved: "Saved on this device",
+      enhancedReady: "Enhanced recognition enabled",
+      legacyOnly: "Legacy sample only",
       notSaved: "Not set up yet",
       savedHint:
-        "You can play back this sample or reset it. After reset, Live will ask you to record again next time.",
+        "PCM sample and local voiceprint are both ready. You can play this sample or reset it.",
+      legacyHint:
+        "Only an older PCM sample is available right now. Re-record once to enable enhanced recognition.",
       emptyHint:
         "No local sample is saved right now. The next Live session will ask you to record one.",
       playAction: "Play sample",

@@ -1,80 +1,130 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Feather } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Keyframe,
+} from 'react-native-reanimated';
 import { useSuggestionStore } from '@/features/live/store/suggestionStore';
 import SuggestionCard from './SuggestionCard';
-import { palette, radii, spacing, typography } from '@/shared/theme/tokens';
+import { spacing } from '@/shared/theme/tokens';
 
-export default function SuggestionPanel() {
-  const { t } = useTranslation();
-  const { suggestions, clear } = useSuggestionStore();
-  const visible = suggestions.length > 0;
+type Props = {
+  onSendSuggestion: (text: string) => void | Promise<void>;
+  isSendingSuggestion?: boolean;
+};
 
-  if (!visible) {
+export default function SuggestionPanel({
+  onSendSuggestion,
+  isSendingSuggestion = false,
+}: Props) {
+  const { suggestions, triggerTurnId } = useSuggestionStore();
+  const suggestion = suggestions[0];
+
+  if (!suggestion) {
     return null;
   }
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).springify()} style={styles.container}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerTag}>
-          <Text style={styles.headerTagText}>{t('live.suggestionPanel.title')}</Text>
-        </View>
-        <Pressable style={styles.closeButton} onPress={clear} hitSlop={8}>
-          <Feather name="x" size={14} color={palette.textPrimary} />
-        </Pressable>
-      </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {suggestions.map((item, index) => (
-          <SuggestionCard key={`${item.style}-${index}`} suggestion={item} />
-        ))}
-      </ScrollView>
+    <Animated.View
+      key={triggerTurnId ?? suggestion.text}
+      entering={bubbleEnter}
+      exiting={bubbleExit}
+      style={styles.container}
+    >
+      <Animated.View
+        pointerEvents="none"
+        entering={glowEnter}
+        exiting={glowExit}
+        style={styles.glow}
+      />
+      <SuggestionCard
+        suggestion={suggestion}
+        onSend={() => onSendSuggestion(suggestion.text)}
+        isSending={isSendingSuggestion}
+      />
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-  },
-  headerTag: {
-    paddingHorizontal: spacing.md - 2,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: palette.accentMutedMid,
-    borderWidth: 1,
-    borderColor: palette.accentBorderStrong,
-  },
-  headerTagText: {
-    ...typography.labelSm,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    color: palette.textAccent,
-  },
-  closeButton: {
-    width: 24,
-    height: 24,
-    borderRadius: radii.pill,
-    backgroundColor: palette.bgGhostButton,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollContent: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+  glow: {
+    position: 'absolute',
+    left: spacing.lg + 10,
+    right: spacing.lg + 10,
+    top: 18,
+    bottom: spacing.sm,
+    borderRadius: 32,
+    backgroundColor: 'rgba(178,220,44,0.34)',
   },
 });
+
+const bubbleEnter = new Keyframe({
+  0: {
+    opacity: 0,
+    transform: [
+      { translateY: 38 },
+      { scale: 0.72 },
+    ],
+  },
+  55: {
+    opacity: 1,
+    transform: [
+      { translateY: 0 },
+      { scale: 1.04 },
+    ],
+  },
+  100: {
+    opacity: 1,
+    transform: [
+      { translateY: 0 },
+      { scale: 1 },
+    ],
+  },
+}).duration(420);
+
+const bubbleExit = new Keyframe({
+  0: {
+    opacity: 1,
+    transform: [
+      { translateY: 0 },
+      { scale: 1 },
+    ],
+  },
+  100: {
+    opacity: 0,
+    transform: [
+      { translateY: 30 },
+      { scale: 0.74 },
+    ],
+  },
+}).duration(260);
+
+const glowEnter = new Keyframe({
+  0: {
+    opacity: 0,
+    transform: [{ scale: 0.86 }],
+  },
+  60: {
+    opacity: 0.68,
+    transform: [{ scale: 1.08 }],
+  },
+  100: {
+    opacity: 0.34,
+    transform: [{ scale: 1 }],
+  },
+}).duration(460);
+
+const glowExit = new Keyframe({
+  0: {
+    opacity: 0.34,
+    transform: [{ scale: 1 }],
+  },
+  100: {
+    opacity: 0,
+    transform: [{ scale: 0.84 }],
+  },
+}).duration(220);
