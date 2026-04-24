@@ -62,7 +62,9 @@ serve(async (req: Request) => {
 
   const { data: session, error: sessionError } = await supabase
     .from("sessions")
-    .select("id, user_id, status, title, recap, scene_preset, scene_description")
+    .select(
+      "id, user_id, status, title, recap, scene_preset, scene_description, native_language, learning_language",
+    )
     .eq("id", sessionId)
     .single();
 
@@ -113,14 +115,10 @@ serve(async (req: Request) => {
   }
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
-  const { data: profile } = await adminClient
-    .from("profiles")
-    .select("native_language")
-    .eq("id", user.id)
-    .single();
-
-  const nativeLanguage = profile?.native_language ?? "en";
+  const nativeLanguage = session.native_language ?? "en";
+  const learningLanguage = session.learning_language ?? "en";
   const nativeLanguageName = languageDisplayName(nativeLanguage);
+  const learningLanguageName = languageDisplayName(learningLanguage);
 
   const conversationText = turnList
     .map(
@@ -156,12 +154,12 @@ serve(async (req: Request) => {
 
   const scene = session.scene_description || session.scene_preset || "general conversation";
 
-  const systemPrompt = `You are a language learning assistant. Analyze a completed English practice conversation and produce a structured recap.
+  const systemPrompt = `You are a language learning assistant. Analyze a completed ${learningLanguageName} practice conversation and produce a structured recap.
 
 Output a JSON object with these fields:
 - "title": A short descriptive title (max 15 words) summarizing the conversation topic. Write in ${nativeLanguageName}.
-- "highlights": An array of 1-3 objects, each with "text" (the good expression the user used, in English) and "explanation" (why it's good, in ${nativeLanguageName}).
-- "improvements": An array of 1-3 objects, each with "type" (grammar/vocabulary/naturalness), "original" (what user said, in English), "corrected" (better version, in English), and "explanation" (in ${nativeLanguageName}).
+- "highlights": An array of 1-3 objects, each with "text" (the good expression the user used, in ${learningLanguageName}) and "explanation" (why it's good, in ${nativeLanguageName}).
+- "improvements": An array of 1-3 objects, each with "type" (grammar/vocabulary/naturalness), "original" (what user said, in ${learningLanguageName}), "corrected" (better version, in ${learningLanguageName}), and "explanation" (in ${nativeLanguageName}).
 - "overallComment": A brief encouraging summary (2-3 sentences) in ${nativeLanguageName}.
 
 If there are no notable highlights, return an empty array for "highlights".

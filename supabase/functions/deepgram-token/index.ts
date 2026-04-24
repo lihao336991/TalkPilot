@@ -2,7 +2,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { JSON_HEADERS } from "../_shared/access.ts";
+import {
+  createAuthRequiredResponse,
+  createFeatureAccessDeniedResponse,
+  JSON_HEADERS,
+  mapFeatureAccessRow,
+} from "../_shared/access.ts";
 
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -21,27 +26,11 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({
-      error: "Unauthorized",
-      code: "auth_required",
-      access: {
-        feature: "live_minutes",
-        allowed: false,
-        reason: "auth_required",
-        tier: "unknown",
-        used: null,
-        remaining: null,
-        limit: null,
-        resetAt: null,
-      },
-    }), {
-      status: 401,
-      headers: JSON_HEADERS,
-    });
+    return createAuthRequiredResponse("live_minutes");
   }
 
   const { data: usage, error: usageError } = await supabase.rpc(
-    "check_daily_usage",
+    "get_live_minutes_access",
     { p_user_id: user.id },
   );
 
@@ -52,42 +41,20 @@ serve(async (req: Request) => {
     });
   }
 
-  const usageSummary = usage?.[0] ?? {
-    minutes_used: 0,
-    minutes_remaining: 0,
-    is_limit_reached: false,
-  };
-  const dailyMinutesLimit =
-    Number(usageSummary.minutes_used ?? 0) +
-    Number(usageSummary.minutes_remaining ?? 0);
-  const access = {
-    feature: "live_minutes",
-    allowed: !Boolean(usageSummary.is_limit_reached),
-    reason: usageSummary.is_limit_reached ? "limit_reached" : "ok",
-    tier: dailyMinutesLimit > 10 ? "pro" : "free",
-    used: Number(usageSummary.minutes_used ?? 0),
-    remaining: Number(usageSummary.minutes_remaining ?? 0),
-    limit: dailyMinutesLimit,
-    resetAt: null,
-  };
+  const access = mapFeatureAccessRow("live_minutes", usage?.[0]);
 
-  if (usageSummary.is_limit_reached) {
-    return new Response(
-      JSON.stringify({
-        error: "Daily usage limit reached",
-        code: "DAILY_USAGE_LIMIT_REACHED",
+  if (!access.allowed) {
+    return createFeatureAccessDeniedResponse({
+      access,
+      error: "Live minutes exhausted",
+      extra: {
         tier: access.tier,
         minutes_used: access.used,
         minutes_remaining: access.remaining,
         daily_minutes_limit: access.limit,
         upgrade_required: true,
-        access,
-      }),
-      {
-        status: 429,
-        headers: JSON_HEADERS,
       },
-    );
+    });
   }
 
   // Use Deepgram Token-Based Authentication to mint a short-lived JWT for client WS auth.

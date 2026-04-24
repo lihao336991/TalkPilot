@@ -24,7 +24,9 @@ export function CustomTabBar({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const sessionStatus = useSessionStore((s) => s.status);
+  const isStarting = useSessionStore((s) => s.isStarting);
   const isImmersiveLive =
+    isStarting ||
     sessionStatus === "active" ||
     sessionStatus === "paused" ||
     sessionStatus === "calibrating";

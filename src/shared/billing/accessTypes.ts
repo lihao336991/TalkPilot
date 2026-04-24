@@ -9,6 +9,11 @@ export type FeatureAccessReason =
   | 'auth_required'
   | 'unknown';
 
+export type FeatureAccessCode =
+  | 'feature_access_denied'
+  | 'auth_required'
+  | 'unknown';
+
 export type FeatureAccessSummary = {
   feature: FeatureKey;
   allowed: boolean;
@@ -21,9 +26,21 @@ export type FeatureAccessSummary = {
 };
 
 export type FeatureAccessEnvelope = {
+  code?: string;
   access?: Partial<FeatureAccessSummary> & {
     feature?: string;
     tier?: string;
     reason?: string;
   };
+};
+
+export type FeatureAccessRpcRow = {
+  feature_key?: string | null;
+  allowed?: boolean | null;
+  reason?: string | null;
+  tier?: string | null;
+  used_count?: number | null;
+  remaining_count?: number | null;
+  limit_count?: number | null;
+  reset_at?: string | null;
 };

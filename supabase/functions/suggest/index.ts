@@ -2,7 +2,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { JSON_HEADERS } from "../_shared/access.ts";
+import {
+  createAuthRequiredResponse,
+  createFeatureAccessDeniedResponse,
+  JSON_HEADERS,
+  mapFeatureAccessRow,
+} from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
     createLlmRuntime,
@@ -74,23 +79,7 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({
-      error: "Unauthorized",
-      code: "auth_required",
-      access: {
-        feature: "suggestion",
-        allowed: false,
-        reason: "auth_required",
-        tier: "unknown",
-        used: null,
-        remaining: null,
-        limit: null,
-        resetAt: null,
-      },
-    }), {
-      status: 401,
-      headers: JSON_HEADERS,
-    });
+    return createAuthRequiredResponse("suggestion");
   }
 
   const body = await req.json();
@@ -109,18 +98,32 @@ serve(async (req: Request) => {
     });
   }
 
-  // Temporary bypass: suggestion quota enforcement is disabled until the
-  // feature-access RPC path is stabilized in production.
-  const access = {
-    feature: "suggestion",
-    allowed: true,
-    reason: "bypassed",
-    tier: "unknown",
-    used: null,
-    remaining: null,
-    limit: null,
-    resetAt: null,
-  };
+  const { data: accessRows, error: accessError } = await supabase.rpc(
+    "consume_feature_access",
+    {
+      p_user_id: user.id,
+      p_feature_key: "suggestion",
+    },
+  );
+
+  if (accessError) {
+    return new Response(JSON.stringify({ error: "Suggestion access check failed" }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const access = mapFeatureAccessRow("suggestion", accessRows?.[0]);
+
+  if (!access.allowed) {
+    return createFeatureAccessDeniedResponse({
+      access,
+      error: "Suggestion quota exhausted",
+      extra: {
+        upgrade_required: true,
+      },
+    });
+  }
 
   const { data: turns } = await supabase
     .from("turns")

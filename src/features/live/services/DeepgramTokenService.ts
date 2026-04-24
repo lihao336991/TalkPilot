@@ -5,7 +5,7 @@ import {
 } from '@/shared/billing/access';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
-import { useSessionStore } from '../store/sessionStore';
+import { applyFeatureAccessSummary } from '@/shared/repositories/billingRepository';
 
 class DeepgramTokenService {
   private cachedToken: string | null = null;
@@ -41,13 +41,7 @@ class DeepgramTokenService {
         const errorBody = body as Record<string, unknown>;
         const access = normalizeFeatureAccess(errorBody, 'live_minutes');
         if (access) {
-          useAccessStore.getState().setFeatureAccess(access);
-        }
-        if (errorBody.daily_minutes_limit != null) {
-          useSessionStore.getState().setUsageSummary({
-            minutesUsed: Number(errorBody.minutes_used ?? 0),
-            minutesLimit: Number(errorBody.daily_minutes_limit),
-          });
+          applyFeatureAccessSummary(access);
         }
       }
       console.error('[DeepgramToken] Function error detail:', requestError);
@@ -61,15 +55,9 @@ class DeepgramTokenService {
       );
     }
 
-    if (body?.usage?.daily_minutes_limit != null) {
-      useSessionStore.getState().setUsageSummary({
-        minutesUsed: Number(body.usage.minutes_used ?? 0),
-        minutesLimit: Number(body.usage.daily_minutes_limit),
-      });
-    }
     const access = normalizeFeatureAccess(body, 'live_minutes');
     if (access) {
-      useAccessStore.getState().setFeatureAccess(access);
+      applyFeatureAccessSummary(access);
     }
 
     this.cachedToken = body.deepgram_token;
@@ -102,6 +90,12 @@ class DeepgramTokenService {
     }
 
     return this.inflightTokenPromise;
+  }
+
+  invalidate(): void {
+    this.cachedToken = null;
+    this.expiresAt = 0;
+    this.inflightTokenPromise = null;
   }
 }
 

@@ -5,9 +5,45 @@
 
 set -euo pipefail
 
-KNOWN_FUNCTIONS=("deepgram-token" "review" "suggest" "assist-reply" "revenuecat-webhook" "revenuecat-sync-customer" "session-recap")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FUNCTIONS_DIR="$SCRIPT_DIR"
+
+function list_functions() {
+    local functions=()
+    local path
+
+    for path in "$FUNCTIONS_DIR"/*; do
+        local name
+        name="$(basename "$path")"
+
+        if [[ ! -d "$path" ]]; then
+            continue
+        fi
+
+        if [[ "$name" == _* || "$name" == .* ]]; then
+            continue
+        fi
+
+        if [[ ! -f "$path/index.ts" ]]; then
+            continue
+        fi
+
+        functions+=("$name")
+    done
+
+    if [[ ${#functions[@]} -eq 0 ]]; then
+        echo "Error: no deployable functions found in $FUNCTIONS_DIR" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "${functions[@]}" | sort
+}
+
+KNOWN_FUNCTIONS=()
+while IFS= read -r fn_name; do
+    KNOWN_FUNCTIONS+=("$fn_name")
+done < <(list_functions)
 
 function show_usage() {
     echo "Usage: ./deploy.sh [development|production] [function_name|all]"

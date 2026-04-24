@@ -5,6 +5,7 @@ import {
   type SessionDetail,
   type SessionRecap,
 } from "@/features/history/services/historyService";
+import { getLanguageDisplayName } from "@/shared/locale/deviceLanguage";
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -269,6 +270,15 @@ export default function SessionDetailScreen() {
   }, [id, detail]);
 
   const session = detail?.session;
+  const languageLabelLocale = i18n.language === "zh-CN" ? "zh-CN" : "en";
+  const nativeLanguageName = getLanguageDisplayName(
+    session?.native_language ?? undefined,
+    languageLabelLocale,
+  );
+  const learningLanguageName = getLanguageDisplayName(
+    session?.learning_language ?? undefined,
+    languageLabelLocale,
+  );
   const displayTitle = session?.title || session?.scene_description?.trim() || (session?.scene_preset
     ? session.scene_preset
         .split("_")
@@ -291,9 +301,15 @@ export default function SessionDetailScreen() {
                 {displayTitle}
               </Text>
               {session && (
-                <Text style={styles.headerMeta}>
-                  {formatDuration(session.duration_seconds, t)} · {formatDate(session.started_at, i18n.language)}
-                </Text>
+                <>
+                  <Text style={styles.headerMeta}>
+                    {formatDuration(session.duration_seconds, t)} · {formatDate(session.started_at, i18n.language)}
+                  </Text>
+                  <Text style={styles.headerLanguageMeta}>
+                    {t("history.detail.nativeLanguage")}: {nativeLanguageName} ·{" "}
+                    {t("history.detail.learningLanguage")}: {learningLanguageName}
+                  </Text>
+                </>
               )}
             </>
           )}
@@ -394,6 +410,10 @@ const styles = StyleSheet.create({
   headerMeta: {
     ...typography.labelMd,
     color: palette.textSecondary,
+  },
+  headerLanguageMeta: {
+    ...typography.caption,
+    color: palette.textTertiary,
   },
   headerSpacer: {
     width: 36,

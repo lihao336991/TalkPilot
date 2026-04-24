@@ -1,12 +1,19 @@
 import { ApiRequestError } from '@/shared/api/request';
 import type {
+  FeatureAccessCode,
   FeatureAccessEnvelope,
+  FeatureAccessRpcRow,
   FeatureAccessReason,
   FeatureAccessSummary,
   FeatureKey,
 } from '@/shared/billing/accessTypes';
 
 const KNOWN_FEATURES: FeatureKey[] = ['live_minutes', 'review', 'suggestion'];
+const KNOWN_CODES: FeatureAccessCode[] = [
+  'feature_access_denied',
+  'auth_required',
+  'unknown',
+];
 const KNOWN_REASONS: FeatureAccessReason[] = [
   'ok',
   'limit_reached',
@@ -24,6 +31,12 @@ function normalizeFeature(feature: string | undefined, fallback: FeatureKey): Fe
 function normalizeReason(reason: string | undefined): FeatureAccessReason {
   return KNOWN_REASONS.includes(reason as FeatureAccessReason)
     ? (reason as FeatureAccessReason)
+    : 'unknown';
+}
+
+function normalizeCode(code: string | undefined): FeatureAccessCode {
+  return KNOWN_CODES.includes(code as FeatureAccessCode)
+    ? (code as FeatureAccessCode)
     : 'unknown';
 }
 
@@ -52,13 +65,39 @@ export function normalizeFeatureAccess(
   };
 }
 
+export function mapFeatureAccessRpcRow(
+  row: FeatureAccessRpcRow | null | undefined,
+  fallbackFeature: FeatureKey,
+): FeatureAccessSummary | null {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    feature: normalizeFeature(row.feature_key ?? undefined, fallbackFeature),
+    allowed: Boolean(row.allowed),
+    reason: normalizeReason(row.reason ?? undefined),
+    tier:
+      row.tier === 'free' || row.tier === 'pro' || row.tier === 'unlimited'
+        ? row.tier
+        : 'unknown',
+    used: typeof row.used_count === 'number' ? row.used_count : null,
+    remaining:
+      typeof row.remaining_count === 'number' ? row.remaining_count : null,
+    limit: typeof row.limit_count === 'number' ? row.limit_count : null,
+    resetAt: typeof row.reset_at === 'string' ? row.reset_at : null,
+  };
+}
+
 export class FeatureAccessError extends Error {
   access: FeatureAccessSummary;
+  code: FeatureAccessCode;
 
-  constructor(message: string, access: FeatureAccessSummary) {
+  constructor(message: string, access: FeatureAccessSummary, code: FeatureAccessCode) {
     super(message);
     this.name = 'FeatureAccessError';
     this.access = access;
+    this.code = code;
   }
 }
 
@@ -79,7 +118,16 @@ export function toFeatureAccessError(
     return null;
   }
 
-  return new FeatureAccessError(error.message, access);
+  const body =
+    error.body && typeof error.body === 'object'
+      ? (error.body as Record<string, unknown>)
+      : null;
+
+  return new FeatureAccessError(
+    error.message,
+    access,
+    normalizeCode(typeof body?.code === 'string' ? body.code : undefined),
+  );
 }
 
 export function isFeatureAccessError(error: unknown): error is FeatureAccessError {

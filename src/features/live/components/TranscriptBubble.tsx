@@ -260,11 +260,13 @@ const styles = StyleSheet.create({
   },
   translationRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 8,
   },
   translationTextWrap: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
   },
   translationText: {
     fontSize: 12,
@@ -288,6 +290,7 @@ const styles = StyleSheet.create({
   ttsButton: {
     width: 24,
     height: 24,
+    flexShrink: 0,
     borderRadius: 12,
     backgroundColor: "rgba(21,22,25,0.05)",
     alignItems: "center",

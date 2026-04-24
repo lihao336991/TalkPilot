@@ -60,6 +60,22 @@ export type AssistUiState =
   | "playing"
   | "editing";
 
+export type StartSessionUiState =
+  | "idle"
+  | "preparing"
+  | "connecting"
+  | "finalizing";
+
+const START_SESSION_CANCELLED = "start_session_cancelled";
+
+function createStartSessionCancelledError() {
+  return new Error(START_SESSION_CANCELLED);
+}
+
+function isStartSessionCancelledError(error: unknown) {
+  return error instanceof Error && error.message === START_SESSION_CANCELLED;
+}
+
 export function useLiveSessionController() {
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -70,10 +86,12 @@ export function useLiveSessionController() {
   const dailyMinutesUsed = useSessionStore((s) => s.dailyMinutesUsed);
   const dailyMinutesLimit = useSessionStore((s) => s.dailyMinutesLimit);
   const isDailyLimitReached = useSessionStore((s) => s.isDailyLimitReached);
+  const isSessionStarting = useSessionStore((s) => s.isStarting);
   const startSession = useSessionStore((s) => s.startSession);
   const pauseSession = useSessionStore((s) => s.pauseSession);
   const resumeSession = useSessionStore((s) => s.resumeSession);
   const endSession = useSessionStore((s) => s.endSession);
+  const setSessionStarting = useSessionStore((s) => s.setStarting);
 
   const isListening = useConversationStore((s) => s.isListening);
   const mainWsStatus = useConversationStore((s) => s.mainWsStatus);
@@ -91,9 +109,13 @@ export function useLiveSessionController() {
   const [assistState, setAssistState] = useState<AssistUiState>("idle");
   const [assistPreviewText, setAssistPreviewText] = useState("");
   const [isSendingSuggestion, setIsSendingSuggestion] = useState(false);
+  const [startSessionUiState, setStartSessionUiState] =
+    useState<StartSessionUiState>("idle");
 
   const sessionIdRef = useRef<string | null>(null);
   const assistShouldResumeRef = useRef(false);
+  const startAttemptRef = useRef(0);
+  const cancelledStartAttemptRef = useRef<number | null>(null);
 
   const sendAudioRef = useRef((base64: string) => {
     voiceprintService.ingestChunk(base64);
@@ -155,7 +177,14 @@ export function useLiveSessionController() {
         return true;
       }
 
-      if (shouldRedirectToPaywall(error.access)) {
+      const shouldOpenPaywall =
+        shouldRedirectToPaywall(error.access) ||
+        (error.code as string) === "feature_access_denied";
+
+      if (shouldOpenPaywall) {
+        if ((error.code as string) !== "feature_access_denied") {
+          console.warn("[LiveSession] Redirecting to paywall from legacy access reason");
+        }
         router.push("/paywall" as Href);
         return true;
       }
@@ -277,7 +306,7 @@ export function useLiveSessionController() {
 
     try {
       if (deepgramService.canResumeWithoutReconnect(learningLanguage)) {
-        debug.startStep("prewarm-ws", "Prewarming Live WebSocket...");
+        debug.startStep("prewarm-ws", "Reusing Live WebSocket...");
         deepgramService.beginPausedRetention(
           LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS,
         );
@@ -292,7 +321,7 @@ export function useLiveSessionController() {
       debug.startStep("prewarm-token", "Prewarming Deepgram token...");
       const token = await deepgramTokenService.getToken();
       debug.completeStep("prewarm-token", "ready");
-      debug.startStep("prewarm-ws", "Prewarming Live WebSocket...");
+      debug.startStep("prewarm-ws", "Connecting Live WebSocket...");
       await deepgramService.connect(token, handleUtteranceEnd, learningLanguage);
       deepgramService.beginPausedRetention(LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS);
       debug.completeStep("prewarm-ws", "connected");
@@ -320,6 +349,47 @@ export function useLiveSessionController() {
       console.warn("[LiveSession] Main WS preconnect failed:", error);
     }
   }, [handleUtteranceEnd, isFocused, learningLanguage, status]);
+
+  const beginStartAttempt = useCallback(() => {
+    const nextAttemptId = startAttemptRef.current + 1;
+    startAttemptRef.current = nextAttemptId;
+    cancelledStartAttemptRef.current = null;
+    setSessionStarting(true);
+    setStartSessionUiState("preparing");
+    return nextAttemptId;
+  }, [setSessionStarting]);
+
+  const assertStartAttemptActive = useCallback((attemptId: number) => {
+    if (
+      cancelledStartAttemptRef.current === attemptId ||
+      startAttemptRef.current !== attemptId
+    ) {
+      throw createStartSessionCancelledError();
+    }
+  }, []);
+
+  const cleanupAbortedStart = useCallback(async () => {
+    voiceprintService.resetSessionState();
+    await audioEngine.stop();
+    deepgramService.disconnect();
+    assistStreamingService.disconnect();
+    await translationService.stopPlayback();
+    await sessionManager.clearActiveSession();
+    sessionIdRef.current = null;
+    assistShouldResumeRef.current = false;
+    setListening(false);
+    setForcedSpeaker(null);
+    setShowCalibration(false);
+    setAssistState("idle");
+    setAssistPreviewText("");
+    setDuration(0);
+    setSessionStarting(false);
+    endSession();
+    useConversationStore.getState().reset();
+    useSuggestionStore.getState().clear();
+    useReviewStore.getState().clear();
+    useAccessStore.getState().clear();
+  }, [endSession, setForcedSpeaker, setListening, setSessionStarting]);
 
   const disconnectIdleSockets = useCallback(() => {
     if (
@@ -388,7 +458,7 @@ export function useLiveSessionController() {
   }, [setListening]);
 
   const startStreaming = useCallback(
-    async (speakerId: number | null) => {
+    async (speakerId: number | null, startAttemptId?: number) => {
       const debug = useDebugStore.getState();
       let createdSessionId: string | null = null;
       console.log("[LiveSession] Starting streaming...");
@@ -396,6 +466,10 @@ export function useLiveSessionController() {
         setSelfSpeakerId(speakerId);
         setShowCalibration(false);
         await voiceprintService.hydrateEnrollmentState();
+        if (startAttemptId != null) {
+          assertStartAttemptActive(startAttemptId);
+          setStartSessionUiState("connecting");
+        }
 
         if (deepgramService.canResumeWithoutReconnect(learningLanguage)) {
           deepgramService.cancelPausedRetention();
@@ -403,14 +477,23 @@ export function useLiveSessionController() {
         } else {
           await connectStreamingSocket();
         }
+        if (startAttemptId != null) {
+          assertStartAttemptActive(startAttemptId);
+        }
 
         // Prime Deepgram with the user's enrollment audio so selfSpeakerId is
         // locked before the live mic opens — no need to repeat each session.
         const enrollmentChunks = await voiceEnrollmentService.loadEnrollmentChunks();
+        if (startAttemptId != null) {
+          assertStartAttemptActive(startAttemptId);
+        }
         if (enrollmentChunks.length > 0) {
           debug.startStep("enroll-prime", "Priming speaker ID...");
           try {
             const didLock = await deepgramService.primeWithEnrollment(enrollmentChunks);
+            if (startAttemptId != null) {
+              assertStartAttemptActive(startAttemptId);
+            }
             if (didLock) {
               debug.completeStep("enroll-prime", "locked");
             } else {
@@ -427,20 +510,39 @@ export function useLiveSessionController() {
         }
 
         deepgramService.disableLiveTranscripts();
+        if (startAttemptId != null) {
+          setStartSessionUiState("finalizing");
+        }
 
         debug.startStep("session", "Creating session...");
         const sessionId = await sessionManager.createSession({
           scenePreset,
           sceneDescription,
         });
+        if (startAttemptId != null) {
+          assertStartAttemptActive(startAttemptId);
+        }
         createdSessionId = sessionId;
         debug.completeStep("session", sessionId);
         console.log("[LiveSession] Session created:", sessionId);
         sessionIdRef.current = sessionId;
         startSession(sessionId);
         await startAudioCapture();
+        if (startAttemptId != null) {
+          assertStartAttemptActive(startAttemptId);
+          setSessionStarting(false);
+          setStartSessionUiState("idle");
+        }
         console.log("[LiveSession] Streaming started");
       } catch (error) {
+        if (isStartSessionCancelledError(error)) {
+          setSessionStarting(false);
+          setStartSessionUiState("idle");
+          await cleanupAbortedStart();
+          console.log("[LiveSession] Session start cancelled");
+          return;
+        }
+
         const debugState = useDebugStore.getState();
         const runningStep = debugState.steps.find((s) => s.status === "running");
         if (runningStep) {
@@ -469,6 +571,8 @@ export function useLiveSessionController() {
         deepgramService.disconnect();
         await audioEngine.stop();
         setListening(false);
+        setSessionStarting(false);
+        setStartSessionUiState("idle");
         handleFeatureAccessDenied(error);
         console.error("[LiveSession] Failed to start streaming:", error);
       }
@@ -483,6 +587,8 @@ export function useLiveSessionController() {
       setSelfSpeakerId,
       setListening,
       handleFeatureAccessDenied,
+      assertStartAttemptActive,
+      cleanupAbortedStart,
     ],
   );
 
@@ -505,51 +611,86 @@ export function useLiveSessionController() {
     }
 
     const debug = useDebugStore.getState();
-    useConversationStore.getState().reset();
-    useSuggestionStore.getState().clear();
-    useReviewStore.getState().clear();
-    useAccessStore.getState().clear();
-    debug.reset();
-    sessionIdRef.current = null;
-    assistShouldResumeRef.current = false;
-    setDuration(0);
-    setForcedSpeaker(null);
-    setShowCalibration(false);
-    setAssistState("idle");
-    setAssistPreviewText("");
-    debug.startStep("mic", "Requesting mic permission...");
-    console.log("[LiveSession] Requesting mic permission...");
-    const granted = await AudioEngine.requestPermission();
-    if (!granted) {
-      debug.failStep("mic", "Permission denied");
-      console.error("[LiveSession] Mic permission denied");
-      return;
+    const startAttemptId = beginStartAttempt();
+
+    try {
+      useConversationStore.getState().reset();
+      useSuggestionStore.getState().clear();
+      useReviewStore.getState().clear();
+      useAccessStore.getState().clear();
+      debug.reset();
+      sessionIdRef.current = null;
+      assistShouldResumeRef.current = false;
+      setDuration(0);
+      setForcedSpeaker(null);
+      setShowCalibration(false);
+      setAssistState("idle");
+      setAssistPreviewText("");
+      debug.startStep("mic", "Requesting mic permission...");
+      console.log("[LiveSession] Requesting mic permission...");
+      const granted = await AudioEngine.requestPermission();
+      assertStartAttemptActive(startAttemptId);
+      if (!granted) {
+        debug.failStep("mic", "Permission denied");
+        setSessionStarting(false);
+        setStartSessionUiState("idle");
+        console.error("[LiveSession] Mic permission denied");
+        return;
+      }
+      debug.completeStep("mic", "granted");
+      console.log("[LiveSession] Mic permission granted");
+
+      debug.startStep("audio-init", "Initializing audio engine...");
+      await audioEngine.init();
+      assertStartAttemptActive(startAttemptId);
+      debug.completeStep("audio-init");
+      await voiceprintService.hydrateEnrollmentState();
+      assertStartAttemptActive(startAttemptId);
+      voiceprintService.resetSessionState();
+      deepgramTokenService.prewarm();
+
+      // Show enrollment setup if the user hasn't recorded a voice sample yet
+      const enrollmentAvailability =
+        await voiceEnrollmentService.getEnrollmentAvailability();
+      assertStartAttemptActive(startAttemptId);
+      if (enrollmentAvailability === "missing") {
+        setSessionStarting(false);
+        setStartSessionUiState("idle");
+        setShowEnrollment(true);
+        return;
+      }
+
+      void startStreaming(null, startAttemptId);
+    } catch (error) {
+      if (isStartSessionCancelledError(error)) {
+        setSessionStarting(false);
+        setStartSessionUiState("idle");
+        await cleanupAbortedStart();
+        console.log("[LiveSession] Session start cancelled before streaming");
+        return;
+      }
+
+      setSessionStarting(false);
+      setStartSessionUiState("idle");
+      console.error("[LiveSession] Failed before streaming start:", error);
     }
-    debug.completeStep("mic", "granted");
-    console.log("[LiveSession] Mic permission granted");
-
-    debug.startStep("audio-init", "Initializing audio engine...");
-    await audioEngine.init();
-    debug.completeStep("audio-init");
-    await voiceprintService.hydrateEnrollmentState();
-    voiceprintService.resetSessionState();
-    deepgramTokenService.prewarm();
-
-    // Show enrollment setup if the user hasn't recorded a voice sample yet
-    const enrollmentAvailability =
-      await voiceEnrollmentService.getEnrollmentAvailability();
-    if (enrollmentAvailability === "missing") {
-      setShowEnrollment(true);
-      return;
-    }
-
-    void startStreaming(null);
-  }, [isDailyLimitReached, router, setForcedSpeaker, startStreaming]);
+  }, [
+    assertStartAttemptActive,
+    beginStartAttempt,
+    cleanupAbortedStart,
+    isDailyLimitReached,
+    router,
+    setForcedSpeaker,
+    setSessionStarting,
+    startStreaming,
+  ]);
 
   const handleEnrollmentComplete = useCallback(() => {
+    const startAttemptId = beginStartAttempt();
     setShowEnrollment(false);
-    void startStreaming(null);
-  }, [startStreaming]);
+    setStartSessionUiState("connecting");
+    void startStreaming(null, startAttemptId);
+  }, [beginStartAttempt, startStreaming]);
 
   const handleEnrollmentSkip = useCallback(() => {
     setShowEnrollment(false);
@@ -557,13 +698,30 @@ export function useLiveSessionController() {
   }, []);
 
   const handleCalibrationComplete = useCallback(() => {
+    const startAttemptId = beginStartAttempt();
     console.log("[LiveSession] Voice detection acknowledged, auto-lock enabled");
-    startStreaming(null);
-  }, [startStreaming]);
+    setStartSessionUiState("connecting");
+    void startStreaming(null, startAttemptId);
+  }, [beginStartAttempt, startStreaming]);
 
   const handleCalibrationSkip = useCallback(() => {
-    startStreaming(null);
-  }, [startStreaming]);
+    const startAttemptId = beginStartAttempt();
+    setStartSessionUiState("connecting");
+    void startStreaming(null, startAttemptId);
+  }, [beginStartAttempt, startStreaming]);
+
+  const handleCancelStartSession = useCallback(() => {
+    const activeAttemptId = startAttemptRef.current;
+    if (startSessionUiState === "idle" || activeAttemptId === 0) {
+      return;
+    }
+
+    startAttemptRef.current = activeAttemptId + 1;
+    cancelledStartAttemptRef.current = activeAttemptId;
+    setSessionStarting(false);
+    setStartSessionUiState("idle");
+    void cleanupAbortedStart();
+  }, [cleanupAbortedStart, setSessionStarting, startSessionUiState]);
 
   const handlePause = useCallback(async () => {
     deepgramService.disableLiveTranscripts();
@@ -952,6 +1110,7 @@ export function useLiveSessionController() {
 
     if (currentSessionId) {
       try {
+        deepgramTokenService.invalidate();
         await sessionManager.endSession({
           sessionId: currentSessionId,
           durationSeconds: duration,
@@ -970,7 +1129,9 @@ export function useLiveSessionController() {
     setShowEnrollment(false);
     setAssistState("idle");
     setAssistPreviewText("");
-      await sessionManager.clearActiveSession();
+    setSessionStarting(false);
+    setStartSessionUiState("idle");
+    await sessionManager.clearActiveSession();
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
     useDebugStore.getState().reset();
@@ -986,6 +1147,9 @@ export function useLiveSessionController() {
   const assistWsMeta = getWsStatusMeta(assistWsStatus, "Assist WS");
   const shouldShowAssistWs =
     assistState !== "idle" || assistWsStatus !== "idle";
+  const effectiveStartSessionUiState: StartSessionUiState = isSessionStarting
+    ? startSessionUiState
+    : "idle";
 
   return {
     scenePreset,
@@ -1009,7 +1173,9 @@ export function useLiveSessionController() {
     assistWsMeta,
     shouldShowAssistWs,
     showEnrollment,
+    startSessionUiState: effectiveStartSessionUiState,
     handleStartSession,
+    handleCancelStartSession,
     handleEnrollmentComplete,
     handleEnrollmentSkip,
     handleCalibrationComplete,

@@ -96,6 +96,7 @@
   - `suggest` = 母语文案 + 学习语言内容
   - `review` = 母语文案 + 学习语言内容
   - `assist` = 母语识别 -> 学习语言翻译 -> 学习语言 TTS
+- 历史会话与复盘能力必须基于 `sessions.native_language` / `sessions.learning_language` 的会话级语言快照，不要回退到用当前前端 store 或 `profiles.native_language` 猜测历史语言语义
 - 不要再把当前产品抽象成统一的 `helpLocale`
 - 新增用户可见文案时，必须先加到 `src/shared/i18n/locales/en.ts`，再补其他语言，不要直接在页面里写死字符串
 - 第一版资源文件当前按“每种语言一个文件”维护；如果后续页面和语言继续增长，再按业务域拆分

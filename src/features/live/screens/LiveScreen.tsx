@@ -45,10 +45,12 @@ export default function LiveScreen() {
     isSendingSuggestion,
     isIdle,
     isActive,
+    startSessionUiState,
     mainWsMeta,
     assistWsMeta,
     shouldShowAssistWs,
     handleStartSession,
+    handleCancelStartSession,
     handleEnrollmentComplete,
     handleEnrollmentSkip,
     handleCalibrationComplete,
@@ -63,7 +65,8 @@ export default function LiveScreen() {
     handleEnd,
   } = useLiveSessionController();
 
-  const bottomPadding = isActive ? 0 : getTabBarHeight(insets.bottom);
+  const bottomPadding =
+    isActive || startSessionUiState !== "idle" ? 0 : getTabBarHeight(insets.bottom);
 
   return (
     <SafeAreaView
@@ -75,10 +78,12 @@ export default function LiveScreen() {
         <>
           <StartSessionCard
             onStart={handleStartSession}
+            onCancelStart={handleCancelStartSession}
             dailyMinutesUsed={dailyMinutesUsed}
             dailyMinutesLimit={dailyMinutesLimit}
             isLimitReached={isDailyLimitReached}
             selectedScene={scenePreset}
+            startState={startSessionUiState}
           />
         </>
       )}

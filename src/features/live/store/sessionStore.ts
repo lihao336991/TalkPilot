@@ -7,6 +7,7 @@ export type SessionStatus = 'idle' | 'calibrating' | 'active' | 'paused' | 'ende
 type SessionState = {
   sessionId: string | null;
   status: SessionStatus;
+  isStarting: boolean;
   scenePreset: ScenePreset;
   sceneDescription: string;
   startedAt: number | null;
@@ -18,6 +19,7 @@ type SessionState = {
   pauseSession: () => void;
   resumeSession: () => void;
   endSession: () => void;
+  setStarting: (starting: boolean) => void;
   setScene: (preset: ScenePreset, description?: string) => void;
   setUsageSummary: (payload: { minutesUsed: number; minutesLimit: number }) => void;
   setUsageLimit: (limit: number) => void;
@@ -27,6 +29,7 @@ type SessionState = {
 const initialState = {
   sessionId: null as string | null,
   status: 'idle' as SessionStatus,
+  isStarting: false,
   scenePreset: 'free' as ScenePreset,
   sceneDescription: '',
   startedAt: null as number | null,
@@ -39,7 +42,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   ...initialState,
 
   startSession: (sessionId) =>
-    set({ sessionId, status: 'active', startedAt: Date.now() }),
+    set({ sessionId, status: 'active', startedAt: Date.now(), isStarting: false }),
 
   pauseSession: () =>
     set({ status: 'paused' }),
@@ -48,7 +51,10 @@ export const useSessionStore = create<SessionState>((set) => ({
     set({ status: 'active' }),
 
   endSession: () =>
-    set({ sessionId: null, status: 'ended', startedAt: null }),
+    set({ sessionId: null, status: 'ended', startedAt: null, isStarting: false }),
+
+  setStarting: (isStarting) =>
+    set({ isStarting }),
 
   setScene: (preset, description) =>
     set({ scenePreset: preset, sceneDescription: description ?? '' }),

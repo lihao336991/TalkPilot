@@ -1,9 +1,21 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useConversationStore } from '../store/conversationStore';
+import { deepgramTokenService } from '@/features/live/services/DeepgramTokenService';
+import { resetFreeAccessDebug } from '@/shared/repositories/billingRepository';
 import { getDeepgramLanguageForTag } from '@/shared/locale/deviceLanguage';
 import { useLocaleStore } from '@/shared/store/localeStore';
+import { useTranslation } from 'react-i18next';
 import { useDebugStore, type DebugTurnTrace } from '../store/debugStore';
 
 function StatusIcon({ status }: { status: 'running' | 'done' | 'error' }) {
@@ -79,6 +91,10 @@ function getCollapsedStatus(
   }
 
   return 'running';
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function TraceCard({ trace }: { trace: DebugTurnTrace }) {
@@ -181,6 +197,7 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
 }
 
 function DebugOverlayContent() {
+  const { t } = useTranslation();
   const steps = useDebugStore((s) => s.steps);
   const turnTraces = useDebugStore((s) => s.turnTraces);
   const uiLocale = useLocaleStore((s) => s.uiLocale);
@@ -197,19 +214,151 @@ function DebugOverlayContent() {
   const lastVoiceprintMelFrameCount = useConversationStore((s) => s.lastVoiceprintMelFrameCount);
   const lastSpeakerDecisionSource = useConversationStore((s) => s.lastSpeakerDecisionSource);
   const [collapsed, setCollapsed] = React.useState(true);
+  const [isResettingFreeAccess, setIsResettingFreeAccess] = React.useState(false);
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const hasDebugData = steps.length > 0 || turnTraces.length > 0;
   const latestStep = steps[steps.length - 1];
   const latestTrace = turnTraces[turnTraces.length - 1];
   const mainAsrLanguage = getDeepgramLanguageForTag(learningLanguage);
   const assistAsrLanguage = getDeepgramLanguageForTag(uiLocale);
   const languageSummary = `Main ${mainAsrLanguage} · Assist ${assistAsrLanguage}`;
+  const defaultTop = Math.max(8, insets.top + 8);
+  const dragStartTopRef = React.useRef(defaultTop);
+  const dragMovedRef = React.useRef(false);
+  const [overlayTop, setOverlayTop] = React.useState(defaultTop);
+  const [collapsedHeight, setCollapsedHeight] = React.useState(44);
+  const [expandedHeight, setExpandedHeight] = React.useState(420);
+
+  const getMaxTop = React.useCallback(
+    (overlayHeight: number) =>
+      Math.max(defaultTop, windowHeight - insets.bottom - overlayHeight - 12),
+    [defaultTop, insets.bottom, windowHeight],
+  );
+
+  const clampTop = React.useCallback(
+    (nextTop: number, overlayHeight: number) =>
+      clamp(nextTop, defaultTop, getMaxTop(overlayHeight)),
+    [defaultTop, getMaxTop],
+  );
+
+  React.useEffect(() => {
+    setOverlayTop((currentTop) =>
+      clampTop(currentTop, collapsed ? collapsedHeight : expandedHeight),
+    );
+  }, [clampTop, collapsed, collapsedHeight, expandedHeight]);
+
+  React.useEffect(() => {
+    dragStartTopRef.current = overlayTop;
+  }, [overlayTop]);
+
+  const updateOverlayTop = React.useCallback(
+    (dy: number, overlayHeight: number) => {
+      const nextTop = clampTop(dragStartTopRef.current + dy, overlayHeight);
+      setOverlayTop(nextTop);
+    },
+    [clampTop],
+  );
+
+  const collapsedPanResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 2,
+        onPanResponderGrant: () => {
+          dragStartTopRef.current = overlayTop;
+          dragMovedRef.current = false;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (Math.abs(gestureState.dy) > 3) {
+            dragMovedRef.current = true;
+          }
+          updateOverlayTop(gestureState.dy, collapsedHeight);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (!dragMovedRef.current && Math.abs(gestureState.dy) < 4) {
+            setCollapsed(false);
+          }
+          dragStartTopRef.current = clampTop(
+            dragStartTopRef.current + gestureState.dy,
+            collapsedHeight,
+          );
+          dragMovedRef.current = false;
+        },
+        onPanResponderTerminate: (_, gestureState) => {
+          dragStartTopRef.current = clampTop(
+            dragStartTopRef.current + gestureState.dy,
+            collapsedHeight,
+          );
+          dragMovedRef.current = false;
+        },
+      }),
+    [clampTop, collapsedHeight, overlayTop, updateOverlayTop],
+  );
+
+  const dragHandlePanResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 2,
+        onPanResponderGrant: () => {
+          dragStartTopRef.current = overlayTop;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          updateOverlayTop(gestureState.dy, expandedHeight);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          dragStartTopRef.current = clampTop(
+            dragStartTopRef.current + gestureState.dy,
+            expandedHeight,
+          );
+        },
+        onPanResponderTerminate: (_, gestureState) => {
+          dragStartTopRef.current = clampTop(
+            dragStartTopRef.current + gestureState.dy,
+            expandedHeight,
+          );
+        },
+      }),
+    [clampTop, expandedHeight, overlayTop, updateOverlayTop],
+  );
+
+  const handleResetFreeAccess = React.useCallback(async () => {
+    if (isResettingFreeAccess) {
+      return;
+    }
+
+    setIsResettingFreeAccess(true);
+
+    try {
+      deepgramTokenService.invalidate();
+      await resetFreeAccessDebug();
+      Alert.alert(
+        t('settings.debug.resetFreeAccessAction'),
+        t('settings.debug.resetFreeAccessSuccess'),
+      );
+    } catch (error) {
+      Alert.alert(
+        t('settings.debug.resetFreeAccessAction'),
+        error instanceof Error
+          ? error.message
+          : t('settings.debug.resetFreeAccessFailure'),
+      );
+    } finally {
+      setIsResettingFreeAccess(false);
+    }
+  }, [isResettingFreeAccess, t]);
 
   if (collapsed) {
     return (
-      <Pressable
-        style={[styles.collapsedPill, { top: Math.max(8, insets.top + 8) }]}
-        onPress={() => setCollapsed(false)}
+      <View
+        {...collapsedPanResponder.panHandlers}
+        style={[styles.collapsedPill, { top: overlayTop }]}
+        onLayout={(event) => {
+          setCollapsedHeight(event.nativeEvent.layout.height);
+        }}
       >
         <StatusIcon status={getCollapsedStatus(latestStep, latestTrace)} />
         <Text style={styles.collapsedTitle}>Live 调试</Text>
@@ -217,16 +366,24 @@ function DebugOverlayContent() {
           {buildCollapsedLabel(latestStep, latestTrace, languageSummary)}
         </Text>
         <Text style={styles.collapsedAction}>展开</Text>
-      </Pressable>
+      </View>
     );
   }
 
   return (
-    <View style={[styles.container, { top: Math.max(8, insets.top + 8) }]}>
+    <View
+      style={[styles.container, { top: overlayTop }]}
+      onLayout={(event) => {
+        setExpandedHeight(event.nativeEvent.layout.height);
+      }}
+    >
+      <View {...dragHandlePanResponder.panHandlers} style={styles.dragHandleWrap}>
+        <View style={styles.dragHandle} />
+      </View>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>主流程调试</Text>
-          <Text style={styles.inlineHint}>顶部浮层，默认收起</Text>
+          <Text style={styles.inlineHint}>可上下拖动，默认收起</Text>
         </View>
         <Pressable
           onPress={() => setCollapsed(true)}
@@ -258,6 +415,27 @@ function DebugOverlayContent() {
               <Text style={styles.metricValue}>{assistAsrLanguage}</Text>
             </View>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>调试工具</Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isResettingFreeAccess}
+            onPress={() => {
+              void handleResetFreeAccess();
+            }}
+            style={[
+              styles.toolButton,
+              isResettingFreeAccess && styles.toolButtonDisabled,
+            ]}
+          >
+            <Text style={styles.toolButtonText}>
+              {isResettingFreeAccess
+                ? t('settings.debug.resetFreeAccessBusy')
+                : t('settings.debug.resetFreeAccessAction')}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -426,6 +604,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  dragHandleWrap: {
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  dragHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   collapsedTitle: {
     fontSize: 12,
@@ -610,5 +798,23 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  toolButton: {
+    minHeight: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(96,165,250,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.42)',
+    paddingHorizontal: 12,
+  },
+  toolButtonDisabled: {
+    opacity: 0.6,
+  },
+  toolButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#BFDBFE',
   },
 });

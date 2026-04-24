@@ -7,6 +7,8 @@ export type HistorySession = {
   title: string | null;
   scene_preset: string | null;
   scene_description: string | null;
+  native_language?: string | null;
+  learning_language?: string | null;
   started_at: string;
   ended_at: string | null;
   duration_seconds: number | null;
@@ -106,7 +108,7 @@ async function loadSessionDetail(
     supabase
       .from("sessions")
       .select(
-        "id, title, scene_preset, scene_description, started_at, ended_at, duration_seconds, status, recap",
+        "id, title, scene_preset, scene_description, native_language, learning_language, started_at, ended_at, duration_seconds, status, recap",
       )
       .eq("id", sessionId)
       .single(),

@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from '@/shared/api/supabase';
+import type { FeatureAccessSummary } from '@/shared/billing/accessTypes';
+import { consumeLiveSessionAccess } from '@/shared/repositories/billingRepository';
 import { useAuthStore } from '@/shared/store/authStore';
+import { useLocaleStore } from '@/shared/store/localeStore';
 import type { ScenePreset } from '@/features/live/store/sessionStore';
 
 type CreateSessionParams = {
@@ -149,6 +152,7 @@ class SessionManager {
   }: CreateSessionParams): Promise<string> {
     console.log('[SessionManager] Creating session...');
     const userId = useAuthStore.getState().userId;
+    const { uiLocale, learningLanguage } = useLocaleStore.getState();
 
     if (!userId) {
       throw new Error('Cannot create session without an authenticated user.');
@@ -161,6 +165,8 @@ class SessionManager {
           user_id: userId,
           scene_preset: scenePreset,
           scene_description: sceneDescription || null,
+          native_language: uiLocale,
+          learning_language: learningLanguage,
           status: 'active',
         })
         .select('id')
@@ -245,11 +251,13 @@ class SessionManager {
   async endSession({
     sessionId,
     durationSeconds,
-  }: EndSessionParams): Promise<void> {
+  }: EndSessionParams): Promise<FeatureAccessSummary | null> {
     console.log('[SessionManager] Ending session', sessionId);
     if (!sessionId) {
-      return;
+      return null;
     }
+
+    let didPersistEndState = false;
 
     try {
       const { error } = await supabase
@@ -265,9 +273,19 @@ class SessionManager {
         throw new Error(error.message || 'Failed to end session.');
       }
 
+      didPersistEndState = true;
+      const accessSummary = await consumeLiveSessionAccess({
+        sessionId,
+        durationSeconds,
+      });
+
       console.log('[SessionManager] Session ended:', sessionId);
       await this.clearActiveSession(sessionId);
+      return accessSummary;
     } catch (error) {
+      if (didPersistEndState) {
+        await this.clearActiveSession(sessionId);
+      }
       console.error('[SessionManager] Failed to end session:', error);
       throw error;
     }
