@@ -1,24 +1,21 @@
-import { useConversationStore } from '@/features/live/store/conversationStore';
 import { useAccessStore } from '@/features/live/store/accessStore';
+import { useConversationStore } from '@/features/live/store/conversationStore';
 import { useDebugStore } from '@/features/live/store/debugStore';
 import { useReviewStore, type ReviewResult } from '@/features/live/store/reviewStore';
-import {
-  normalizeFeatureAccess,
-  toFeatureAccessError,
-} from '@/shared/billing/access';
+import { useSessionStore } from '@/features/live/store/sessionStore';
 import { invokeEdgeFunction } from '@/shared/api/request';
+import {
+    normalizeFeatureAccess,
+    toFeatureAccessError,
+} from '@/shared/billing/access';
 import type { FeatureAccessEnvelope } from '@/shared/billing/accessTypes';
-import { useLocaleStore } from '@/shared/store/localeStore';
+import {
+    buildLlmDebugHeaders,
+    formatLlmMetaDetail,
+} from '@/shared/llm/debugConfig';
 import { useAuthStore } from '@/shared/store/authStore';
-
-function getLlmMetaDetail(headers: Headers): string {
-  const provider = headers.get('x-llm-provider');
-  const model = headers.get('x-llm-model');
-  const keyPrefix = headers.get('x-llm-key-prefix');
-  const parts = [provider, model, keyPrefix ? `key ${keyPrefix}` : null].filter(Boolean);
-
-  return parts.join(' · ');
-}
+import { useLlmDebugStore } from '@/shared/store/llmDebugStore';
+import { useLocaleStore } from '@/shared/store/localeStore';
 
 type ReviewApiResponse = FeatureAccessEnvelope & {
   overall_score?: 'green' | 'yellow' | 'red';
@@ -50,6 +47,7 @@ export class ReviewService {
       const { data: rawResult, headers } = await invokeEdgeFunction<ReviewApiResponse>({
         functionName: 'review',
         accessToken,
+        headers: buildLlmDebugHeaders(useLlmDebugStore.getState()),
         body: {
           sessionId,
           userUtterance,
@@ -63,8 +61,9 @@ export class ReviewService {
       if (access) {
         useAccessStore.getState().setFeatureAccess(access);
       }
-      const llmMeta = getLlmMetaDetail(headers);
+      const llmMeta = formatLlmMetaDetail(headers);
       const result = mapReviewResponse(rawResult);
+      const isCopilotEnabled = useSessionStore.getState().copilotEnabled;
 
       console.log('[Review] Score:', result.overallScore);
       useDebugStore
@@ -73,6 +72,10 @@ export class ReviewService {
           turnId,
           [llmMeta, `score ${result.overallScore}`].filter(Boolean).join(' · '),
         );
+      if (!isCopilotEnabled) {
+        store.setLoading(false);
+        return;
+      }
       store.setReview(turnId, result);
       conversationStore.setTurnReview(turnId, result);
       store.setLoading(false);

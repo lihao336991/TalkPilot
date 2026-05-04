@@ -1,0 +1,24 @@
+{
+  "originHash" : "8730e6a3c12021e675a1422f32a9f4676fb3bbc8f4c76543ae677e13c3aec1eb",
+  "pins" : [
+    {
+      "identity" : "nemofeatureextractor-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Otosaku/NeMoFeatureExtractor-iOS.git",
+      "state" : {
+        "revision" : "253a2d4fb60f99db2edd2dce7e6cd1360e4676e1",
+        "version" : "1.0.5"
+      }
+    },
+    {
+      "identity" : "nemospeaker-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Otosaku/NeMoSpeaker-iOS.git",
+      "state" : {
+        "revision" : "ea2af558ffbd8e6eb51cfb242e6d0bdf2d539c6c",
+        "version" : "1.1.0"
+      }
+    }
+  ],
+  "version" : 3
+}

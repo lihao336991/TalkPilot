@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 import { Sentry } from '@/shared/monitoring/sentry';
 import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
@@ -12,6 +14,8 @@ const checks = [
 ];
 
 export default function TestScreen() {
+  const router = useRouter();
+  const { t } = useTranslation();
   const [status, setStatus] = useState<string | null>(null);
 
   const sendTestMessage = async () => {
@@ -54,6 +58,14 @@ export default function TestScreen() {
         </Pressable>
         <Pressable onPress={() => void sendTestException()} style={[styles.button, styles.primaryButton]}>
           <Text style={styles.primaryButtonText}>Send test exception</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/(dev)/voiceprint')}
+          style={[styles.button, styles.secondaryButton]}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {t('dev.testScreen.voiceprintDebugEntry')}
+          </Text>
         </Pressable>
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}

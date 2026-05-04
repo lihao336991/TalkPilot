@@ -147,7 +147,7 @@ export const en = {
     },
     screen: {
       wsHintListening: "Mic is sending audio",
-      wsHintPaused: "Mic is paused",
+      wsHintInactive: "Mic is not sending audio right now",
       assistDraftTitle: "Edit before sending",
       assistDraftSubtitle:
         "Refine your text, then generate a reply in your learning language",
@@ -243,6 +243,10 @@ export const en = {
       live: "Live",
       resume: "Resume",
       pause: "Pause",
+      copilot: "Copilot",
+      copilotOn: "On",
+      copilotOff: "Off",
+      copilotAccessibility: "Copilot {{state}}",
       holdToSpeak: "Hold to speak",
       assistOverlayTitle: "Say it in your native language when you get stuck.",
       assistOverlaySubtitle:
@@ -306,6 +310,7 @@ export const en = {
       learningLanguage: "Learning language",
       recapGenerating: "Analyzing your session…",
       recapRetry: "Generate Recap",
+      recapRegenerate: "Regenerate Recap",
       recapEmpty: "Not enough conversation data to generate a recap.",
       highlights: "Language Highlights",
       improvements: "Areas to Improve",
@@ -396,13 +401,123 @@ export const en = {
     debug: {
       description:
         "Developer-only tools for testing setup flows. This section is hidden in production builds.",
+      devHomeTitle: "TalkPilot Dev",
+      devHomeDescription:
+        "Open the lightweight developer handoff page for manual checks and future debug tools.",
+      voiceprintDebugTitle: "Voiceprint Debug",
+      voiceprintDebugDescription:
+        "Run the local voiceprint model by itself to verify whether speaker separation is accurate.",
       forceOnboardingTitle: "Force onboarding on launch",
       forceOnboardingDescription:
         "Always show onboarding on the next cold launch, even if it was already completed.",
+      llmRoutingTitle: "LLM routing",
+      llmRoutingDescription:
+        "Auto mode falls back between Cerebras and Groq when the current provider is unavailable.",
+      llmCurrentModeLabel: "Current mode",
+      llmCurrentProviderLabel: "Manual provider",
+      llmCurrentModelLabel: "Manual model",
+      llmAutoHint: "Auto order: Cerebras -> Groq",
+      llmManualSwitchHint:
+        "Selecting a provider or model below switches the route to Manual automatically.",
+      llmModeAuto: "Auto",
+      llmModeManual: "Manual",
+      llmProviderTitle: "Provider",
+      llmModelTitle: "Model",
       resetFreeAccessAction: "Reset free access",
       resetFreeAccessBusy: "Resetting...",
       resetFreeAccessSuccess: "Today's free quotas were reset.",
       resetFreeAccessFailure: "Failed to reset today's free quotas.",
+    },
+  },
+  dev: {
+    testScreen: {
+      voiceprintDebugEntry: "Open voiceprint debug",
+    },
+    voiceprintDebug: {
+      title: "Voiceprint Debug",
+      subtitle:
+        "Run the local voiceprint model by itself so you can tell whether speaker separation issues come from local voiceprint or Deepgram segmentation.",
+      baselineTitle: "What Is The Baseline",
+      baselineBody:
+        "The baseline is not the clip you are recording now. It is the enrollment voice sample you recorded earlier in Live. This page compares your current recording against that saved sample.",
+      baselineReady: "Ready",
+      baselineLegacy: "Legacy only",
+      baselineMissing: "Missing",
+      baselineMeaningValue: "Your saved enrollment voice sample from Live",
+      quickCheckTitle: "Quick Check",
+      quickCheckBody:
+        "This page records locally only and runs the on-device voiceprint pipeline without Deepgram. Think of it as: compare `this recording now` against `your saved baseline sample`.",
+      quickCheckSelf:
+        "1. Choose `Verify baseline speaker`, then let the enrolled person speak naturally for 3-5 seconds.",
+      quickCheckOther:
+        "2. Choose `Verify non-baseline speaker`, then let another person speak for the same duration.",
+      quickCheckRead:
+        "3. Read the result against the mode: the first test should lean to `self`, and the second should lean to `other`.",
+      environmentTitle: "Environment",
+      refresh: "Refresh",
+      refreshing: "Refreshing...",
+      testModeTitle: "Test Mode",
+      testModeBody:
+        "Choose how the current recording should relate to the saved baseline before you start. The page scores the result against that relationship.",
+      expectedSelf: "Verify baseline speaker",
+      expectedOther: "Verify non-baseline speaker",
+      modeSelfTitle: "Mode A: Verify baseline speaker",
+      modeSelfDescription:
+        "The current recording is expected to be the same person as the saved enrollment baseline.",
+      modeSelfInstruction:
+        "Suggested run: let the enrolled speaker talk for 3-5 seconds. Ideal result: `dominant label = self` with a high match rate.",
+      modeOtherTitle: "Mode B: Verify non-baseline speaker",
+      modeOtherDescription:
+        "The current recording is expected to be someone different from the saved enrollment baseline.",
+      modeOtherInstruction:
+        "Suggested run: let another real person talk for the same duration. Ideal result: `dominant label = other` with a high match rate.",
+      startAction: "Start local test",
+      stopAction: "Stop and generate result",
+      clearAction: "Clear result",
+      liveMetricsTitle: "Live Metrics",
+      summaryTitle: "Last Result",
+      summaryEmpty:
+        "No completed test yet. Record a short clip to generate a summary.",
+      summaryMatch: "Matches expected speaker",
+      summaryMismatch: "Does not match expected speaker",
+      summaryUnknown: "No stable verdict",
+      timelineTitle: "Recent Snapshots",
+      timelineEmpty:
+        "Snapshots appear here every 200ms while the local voiceprint analysis is running.",
+      metrics: {
+        native: "Native model",
+        enrollment: "Enrollment",
+        baseline: "Baseline",
+        baselineMeaning: "Baseline meaning",
+        model: "Profile model",
+        duration: "Profile duration",
+        elapsed: "Elapsed",
+        chunks: "Audio chunks",
+        similarity: "Last similarity",
+        thresholdBand: "Threshold band",
+        confidenceReason: "Confidence / reason",
+        modelBucket: "Model bucket",
+        dominantLabel: "Dominant label",
+        matchRate: "Match rate for this mode",
+        stableSamples: "Stable samples",
+        unknownSamples: "Unknown samples",
+        averageSimilarity: "Average similarity",
+        range: "Similarity range",
+      },
+      alerts: {
+        unavailableTitle: "Voiceprint unavailable",
+        unavailableBody:
+          "The native iOS voiceprint module is not available in this build.",
+        enrollmentMissingTitle: "Enrollment required",
+        enrollmentMissingBody:
+          "No local voice enrollment is ready yet. Record your sample in Live first.",
+        permissionDeniedTitle: "Microphone denied",
+        permissionDeniedBody:
+          "Microphone access is required to run the local voiceprint test.",
+        startFailedTitle: "Voiceprint test failed",
+        startFailedBody:
+          "The local voiceprint test could not start. Please try again.",
+      },
     },
   },
   profile: {

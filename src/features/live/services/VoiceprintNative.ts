@@ -21,6 +21,12 @@ const nativeVoiceprintModule = NativeModules.VoiceprintModule as
   | VoiceprintModuleShape
   | undefined;
 
+function isFiniteNumberArray(values: unknown[]): values is number[] {
+  return values.every(
+    (value) => typeof value === 'number' && Number.isFinite(value),
+  );
+}
+
 class VoiceprintNative {
   private warnedUnavailable = false;
 
@@ -63,6 +69,9 @@ class VoiceprintNative {
     if (!Array.isArray(embedding) || embedding.length === 0) {
       throw new Error('Native voiceprint embedding is empty');
     }
+    if (!isFiniteNumberArray(embedding)) {
+      throw new Error('Native voiceprint embedding contains invalid values');
+    }
     return embedding;
   }
 
@@ -81,6 +90,12 @@ class VoiceprintNative {
     );
     if (!result || typeof result.similarity !== 'number') {
       throw new Error('Native voiceprint similarity is invalid');
+    }
+    if (
+      result.embedding &&
+      (!Array.isArray(result.embedding) || !isFiniteNumberArray(result.embedding))
+    ) {
+      throw new Error('Native voiceprint result embedding contains invalid values');
     }
     return result;
   }

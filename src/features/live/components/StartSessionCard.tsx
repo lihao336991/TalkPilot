@@ -1,5 +1,6 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,6 +26,30 @@ const STAGE_PARTICLES = [
   { left: 222, top: 184, size: 4, phase: 0.76, distance: 8, alpha: 0.22 },
   { left: 32, top: 198, size: 5, phase: 0.58, distance: 10, alpha: 0.2 },
 ] as const;
+
+// ─── iCloud-style orbit dots ring ────────────────────────────────────────────
+const ORBIT_OUTER_COUNT = 22;
+const ORBIT_INNER_COUNT = 22;
+const ORBIT_OUTER_RADIUS = 105;
+const ORBIT_INNER_RADIUS = 87;
+const ORBIT_OUTER_DOT = 8.5;
+const ORBIT_INNER_DOT = 5.5;
+const ORBIT_CONTAINER = 224; // fits inside heroCluster (236×236)
+const ORBIT_CX = ORBIT_CONTAINER / 2;
+const ORBIT_CY = ORBIT_CONTAINER / 2;
+// Color spectrum: TalkPilot lime → teal → blue → indigo → purple → pink → coral → amber → lime
+const ORBIT_COLORS = [
+  '#C2EA45', '#9FE03D', '#56D77A', '#2ED4B0',
+  '#38C4E8', '#4AACFF', '#6B86FF', '#9B73F0',
+  '#C56CE8', '#F472B6', '#FF8A6E', '#FBBB44',
+  '#D9E830',
+] as const;
+
+function getOrbitColor(angleDeg: number): string {
+  const t = ((angleDeg % 360) + 360) % 360 / 360;
+  const lo = Math.floor(t * ORBIT_COLORS.length) % ORBIT_COLORS.length;
+  return ORBIT_COLORS[lo];
+}
 
 type StartSessionCardProps = {
   onStart: () => void;
@@ -65,6 +90,7 @@ export function StartSessionCard({
   const sweepProgress = useSharedValue(0);
   const stageGlowScale = useSharedValue(1);
   const stageGlowOpacity = useSharedValue(0.36);
+  const orbitProgress = useSharedValue(0);
   const isStarting = startState !== "idle";
 
   useEffect(() => {
@@ -89,6 +115,7 @@ export function StartSessionCard({
     cancelAnimation(sweepProgress);
     cancelAnimation(stageGlowScale);
     cancelAnimation(stageGlowOpacity);
+    cancelAnimation(orbitProgress);
 
     if (isStarting) {
       contentOpacity.value = withTiming(0, { duration: 180 });
@@ -151,6 +178,11 @@ export function StartSessionCard({
         -1,
         false,
       );
+      orbitProgress.value = withRepeat(
+        withTiming(1, { duration: 3200, easing: Easing.linear }),
+        -1,
+        false,
+      );
       return;
     }
 
@@ -191,6 +223,7 @@ export function StartSessionCard({
       statusDotOpacity.value = 0.8;
       particleProgress.value = 0;
       sweepProgress.value = 0;
+      orbitProgress.value = 0;
       return;
     }
 
@@ -210,6 +243,7 @@ export function StartSessionCard({
     statusDotOpacity.value = withTiming(0.8, { duration: 180 });
     particleProgress.value = 0;
     sweepProgress.value = 0;
+    orbitProgress.value = 0;
   }, [
     contentOpacity,
     contentScale,
@@ -229,6 +263,7 @@ export function StartSessionCard({
     statusDotOpacity,
     statusDotScale,
     sweepProgress,
+    orbitProgress,
   ]);
 
   const pulseStyle = useAnimatedStyle(() => ({
@@ -429,30 +464,27 @@ export function StartSessionCard({
         pointerEvents={isStarting ? "auto" : "none"}
         style={[styles.overlayLayer, overlayFrameStyle, scrimStyle]}
       >
-        <View style={styles.overlayBackdrop} />
+        <BlurView intensity={28} tint="light" style={styles.overlayBlur} />
         <LinearGradient
           pointerEvents="none"
-          colors={["rgba(7,12,20,0.24)", "rgba(7,12,20,0.08)", "rgba(7,12,20,0)"]}
-          locations={[0, 0.52, 1]}
+          colors={[
+            "rgba(212,255,117,0.22)",
+            "rgba(194,234,69,0.12)",
+            "rgba(134,174,0,0.08)",
+            "rgba(242,255,220,0.04)",
+          ]}
+          locations={[0, 0.4, 0.75, 1]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={styles.overlayTopVeil}
+          style={styles.overlayGradient}
         />
         <LinearGradient
           pointerEvents="none"
-          colors={["rgba(7,12,20,0)", "rgba(7,12,20,0.08)", "rgba(7,12,20,0.26)"]}
-          locations={[0, 0.5, 1]}
+          colors={["rgba(255,255,255,0.18)", "rgba(255,255,255,0)"]}
+          locations={[0, 0.45]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={styles.overlayBottomVeil}
-        />
-        <LinearGradient
-          pointerEvents="none"
-          colors={["rgba(212,255,117,0.08)", "rgba(255,255,255,0.025)", "rgba(15,23,42,0)"]}
-          locations={[0, 0.42, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.overlayTint}
+          style={styles.overlayHighlight}
         />
         <Animated.View style={[styles.stageGlow, styles.stageGlowOuter, stageGlowStyle]} />
 
@@ -468,61 +500,103 @@ export function StartSessionCard({
           </View>
 
           <View style={styles.heroCluster}>
-            <Animated.View
-              style={[styles.stagePulseRing, styles.stagePulseRingOuter, ring2Style]}
-            />
-            <Animated.View
-              style={[styles.stagePulseRing, styles.stagePulseRingInner, ringStyle]}
-            />
+            <OrbitDotsRing progress={orbitProgress} />
             <Animated.View style={[styles.stageOrb, pulseStyle]}>
               <View style={styles.stageOrbShell}>
-                <LinearGradient
-                  colors={["rgba(230,255,156,0.94)", palette.accent, "#9BCB10"]}
-                  start={{ x: 0.15, y: 0.05 }}
-                  end={{ x: 0.85, y: 0.95 }}
-                  style={styles.stageOrbGradient}
-                >
-                  <View style={styles.stageInnerHighlight} />
-                  <AnimatedLinearGradient
-                    colors={[
-                      "rgba(255,255,255,0)",
-                      "rgba(255,255,255,0.56)",
-                      "rgba(255,255,255,0)",
-                    ]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[styles.sweepLight, sweepStyle]}
-                  />
-                  <Feather
-                    name="mic"
-                    size={52}
-                    color={palette.accentDeep}
-                    style={styles.stageMicIcon}
-                  />
-                </LinearGradient>
+                <BlurView intensity={36} tint="light" style={styles.stageOrbBlur}>
+                  <View style={styles.stageOrbInner} />
+                </BlurView>
+                <View style={styles.stageOrbHighlight} />
+                <Feather
+                  name="mic"
+                  size={48}
+                  color="rgba(86,126,0,0.82)"
+                  style={styles.stageMicIcon}
+                />
               </View>
             </Animated.View>
           </View>
 
           {connectionCopy ? (
             <>
-              <View style={styles.floatingBadge}>
-                <Animated.View style={[styles.connectingBadgeDot, statusDotStyle]} />
-                <Text style={styles.floatingBadgeText}>{connectionCopy.badge}</Text>
-              </View>
-              <Text style={styles.floatingTitle}>{connectionCopy.title}</Text>
               <Pressable
                 onPress={onCancelStart}
                 accessibilityRole="button"
                 accessibilityLabel={t("live.startSession.cancelAccessibilityLabel")}
-                style={styles.cancelButton}
+                style={styles.glassButtonWrap}
               >
-                <Text style={styles.cancelButtonText}>{t("common.actions.cancel")}</Text>
+                <BlurView intensity={32} tint="light" style={styles.glassButtonBlur}>
+                  <Text style={styles.glassButtonText}>{t("common.actions.cancel")}</Text>
+                </BlurView>
+                <View style={styles.glassButtonBorder} />
               </Pressable>
+              <Text style={styles.stageStatusText}>{connectionCopy.badge}</Text>
             </>
           ) : null}
         </Animated.View>
       </Animated.View>
+    </Animated.View>
+  );
+}
+
+function OrbitDotsRing({ progress }: { progress: SharedValue<number> }) {
+  const rotateStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${progress.value * 360}deg` }],
+  }));
+
+  const dots = useMemo(() => {
+    const result: Array<{
+      x: number; y: number; size: number; color: string; opacity: number; key: string;
+    }> = [];
+
+    for (let i = 0; i < ORBIT_OUTER_COUNT; i++) {
+      // Start from top (-PI/2) and go clockwise
+      const angle = (i / ORBIT_OUTER_COUNT) * 2 * Math.PI - Math.PI / 2;
+      const x = ORBIT_CX + ORBIT_OUTER_RADIUS * Math.cos(angle);
+      const y = ORBIT_CY + ORBIT_OUTER_RADIUS * Math.sin(angle);
+      const angleDeg = (i / ORBIT_OUTER_COUNT) * 360;
+      // Subtle opacity variation: brightest at top (angle=-PI/2), dimmer at bottom
+      const opacityPhase = (Math.cos(angle + Math.PI) + 1) / 2;
+      const opacity = 0.55 + 0.35 * opacityPhase;
+      result.push({ x, y, size: ORBIT_OUTER_DOT, color: getOrbitColor(angleDeg), opacity, key: `o${i}` });
+    }
+
+    for (let i = 0; i < ORBIT_INNER_COUNT; i++) {
+      // Offset by half a step to stagger between outer dots — creates 3D donut depth
+      const angle = ((i + 0.5) / ORBIT_INNER_COUNT) * 2 * Math.PI - Math.PI / 2;
+      const x = ORBIT_CX + ORBIT_INNER_RADIUS * Math.cos(angle);
+      const y = ORBIT_CY + ORBIT_INNER_RADIUS * Math.sin(angle);
+      const angleDeg = ((i + 0.5) / ORBIT_INNER_COUNT) * 360;
+      const opacityPhase = (Math.cos(angle + Math.PI) + 1) / 2;
+      const opacity = 0.38 + 0.28 * opacityPhase;
+      result.push({ x, y, size: ORBIT_INNER_DOT, color: getOrbitColor(angleDeg), opacity, key: `i${i}` });
+    }
+
+    return result;
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        { width: ORBIT_CONTAINER, height: ORBIT_CONTAINER, position: "absolute" },
+        rotateStyle,
+      ]}
+    >
+      {dots.map((dot) => (
+        <View
+          key={dot.key}
+          style={{
+            position: "absolute",
+            width: dot.size,
+            height: dot.size,
+            borderRadius: dot.size / 2,
+            backgroundColor: dot.color,
+            left: dot.x - dot.size / 2,
+            top: dot.y - dot.size / 2,
+            opacity: dot.opacity,
+          }}
+        />
+      ))}
     </Animated.View>
   );
 }
@@ -585,35 +659,27 @@ const styles = StyleSheet.create({
     zIndex: 5,
     position: "absolute",
   },
-  overlayBackdrop: {
+  overlayBlur: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(9,16,26,0.16)",
   },
-  overlayTopVeil: {
+  overlayGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  overlayHighlight: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.42,
-  },
-  overlayBottomVeil: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: SCREEN_HEIGHT * 0.44,
-  },
-  overlayTint: {
-    ...StyleSheet.absoluteFillObject,
+    height: SCREEN_HEIGHT * 0.5,
   },
   stageGlow: {
     position: "absolute",
     borderRadius: radii.circle,
-    backgroundColor: "rgba(194,234,69,0.08)",
+    backgroundColor: "rgba(194,234,69,0.14)",
   },
   stageGlowOuter: {
-    width: 296,
-    height: 296,
+    width: 320,
+    height: 320,
   },
   stageWrap: {
     alignItems: "center",
@@ -654,70 +720,81 @@ const styles = StyleSheet.create({
     borderWidth: 0.8,
   },
   stageOrb: {
-    width: 126,
-    height: 126,
-    borderRadius: 63,
+    width: 116,
+    height: 116,
+    borderRadius: 58,
     alignItems: "center",
     justifyContent: "center",
   },
   stageOrbShell: {
     width: "100%",
     height: "100%",
-    borderRadius: 63,
-    padding: 1.5,
-    backgroundColor: "rgba(255,255,255,0.12)",
-    shadowColor: "#DFFF6E",
-    shadowOpacity: 0.22,
+    borderRadius: 58,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.55)",
+    borderWidth: 0.8,
+    borderColor: "rgba(255,255,255,0.72)",
+    shadowColor: "#86AE00",
+    shadowOpacity: 0.18,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 0 },
-    elevation: 10,
-  },
-  stageOrbGradient: {
-    flex: 1,
-    borderRadius: 63,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
   },
-  stageInnerHighlight: {
-    position: "absolute",
-    top: 14,
-    width: 82,
-    height: 28,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.18)",
+  stageOrbBlur: {
+    ...StyleSheet.absoluteFillObject,
   },
-  sweepLight: {
+  stageOrbInner: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(242,255,218,0.28)",
+  },
+  stageOrbHighlight: {
     position: "absolute",
-    width: 50,
-    height: 190,
+    top: 10,
+    width: 64,
+    height: 22,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
   stageMicIcon: {
     opacity: 0.95,
   },
-  floatingBadge: {
-    marginTop: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
+  // ─── Liquid glass cancel button ──────────────────────────────────────────────
+  glassButtonWrap: {
+    marginTop: 28,
     borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+    // Outer glow
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
   },
-  floatingBadgeText: {
-    ...typography.labelMd,
-    color: "rgba(255,255,255,0.9)",
+  glassButtonBlur: {
+    paddingHorizontal: 40,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  floatingTitle: {
-    marginTop: 16,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
+  glassButtonBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radii.pill,
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,0.32)",
+  },
+  glassButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "rgba(10,20,5,0.68)",
+    letterSpacing: 0.15,
+  },
+  stageStatusText: {
+    marginTop: 14,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(86,126,0,0.5)",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
   },
   sceneBadge: {
     flexDirection: "row",
@@ -827,12 +904,6 @@ const styles = StyleSheet.create({
     color: palette.accentDark,
     letterSpacing: 0.3,
   },
-  connectingBadgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#D9FF6C",
-  },
   labelBlock: {
     alignItems: "center",
     gap: spacing.xs + 2,
@@ -846,20 +917,6 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: palette.textSecondary,
     textAlign: "center",
-  },
-  cancelButton: {
-    marginTop: 16,
-    minWidth: 96,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radii.pill,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
-  cancelButtonText: {
-    ...typography.labelMd,
-    color: "rgba(255,255,255,0.92)",
   },
   usageCard: {
     width: "100%",

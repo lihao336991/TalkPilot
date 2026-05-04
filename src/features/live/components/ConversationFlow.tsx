@@ -3,150 +3,150 @@ import {
   Turn,
   useConversationStore,
 } from "@/features/live/store/conversationStore";
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
-import { useTranslation } from "react-i18next";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
-  Dimensions,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 
 const NEAR_BOTTOM_THRESHOLD = 80;
-const FOOTER_HEIGHT = Math.round(Dimensions.get("window").height * 0.5);
-
-function getCurrentRoundAnchorIndex(turns: Turn[]): number {
-  if (turns.length <= 1) return 0;
-
-  const groups: Array<{ speaker: Turn["speaker"]; startIndex: number }> = [];
-  turns.forEach((turn, idx) => {
-    const last = groups[groups.length - 1];
-    if (!last || last.speaker !== turn.speaker) {
-      groups.push({ speaker: turn.speaker, startIndex: idx });
-    }
-  });
-
-  if (groups.length <= 1) return 0;
-
-  const currentGroupStart = groups[groups.length - 1].startIndex;
-  return Math.max(currentGroupStart - 1, 0);
-}
 
 export function ConversationFlow() {
-  const { t } = useTranslation();
   const turns = useConversationStore((s) => s.turns);
-  const isListening = useConversationStore((s) => s.isListening);
+  const currentStableText = useConversationStore((s) => s.currentStableText);
+  const currentStableSpeaker = useConversationStore(
+    (s) => s.currentStableSpeaker,
+  );
+  const currentInterimText = useConversationStore((s) => s.currentInterimText);
+  const currentInterimSpeaker = useConversationStore(
+    (s) => s.currentInterimSpeaker,
+  );
   const flatListRef = useRef<FlatList<Turn>>(null);
   const autoFollowRef = useRef(true);
-  const userDraggingRef = useRef(false);
   const isProgrammaticScrollRef = useRef(false);
   const hasMountedRef = useRef(false);
   const prevTurnCountRef = useRef(0);
-  const sameSpeakerStreakRef = useRef(0);
+  const prevInterimTextRef = useRef("");
 
-  const roundAnchorIndex = useMemo(
-    () => getCurrentRoundAnchorIndex(turns),
-    [turns],
-  );
+  const hasInterim = currentInterimText.trim().length > 0;
+  const hasStablePreview =
+    currentStableText.trim().length > 0 && currentStableSpeaker !== null;
 
-  const scrollToCurrentRound = useCallback(
-    (animated: boolean) => {
-      if (turns.length === 0) return;
-      isProgrammaticScrollRef.current = true;
-      flatListRef.current?.scrollToIndex({
-        index: roundAnchorIndex,
-        animated,
-        viewPosition: 0,
-      });
-      setTimeout(
-        () => {
-          isProgrammaticScrollRef.current = false;
-        },
-        animated ? 400 : 50,
-      );
-    },
-    [roundAnchorIndex, turns.length],
-  );
+  const scrollToBottom = useCallback((animated: boolean) => {
+    isProgrammaticScrollRef.current = true;
+    flatListRef.current?.scrollToEnd({ animated });
+    setTimeout(
+      () => {
+        isProgrammaticScrollRef.current = false;
+      },
+      animated ? 400 : 50,
+    );
+  }, []);
 
   const keyExtractor = useCallback((item: Turn) => item.id, []);
 
   const handleScrollBeginDrag = useCallback(() => {
-    userDraggingRef.current = true;
     autoFollowRef.current = false;
   }, []);
 
-  const checkNearBottom = useCallback(
+  const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (isProgrammaticScrollRef.current) return;
       const { contentOffset, contentSize, layoutMeasurement } =
         event.nativeEvent;
       const distanceToBottom =
         contentSize.height - (contentOffset.y + layoutMeasurement.height);
-      if (distanceToBottom <= FOOTER_HEIGHT + NEAR_BOTTOM_THRESHOLD) {
-        autoFollowRef.current = true;
-      }
-      userDraggingRef.current = false;
+      autoFollowRef.current = distanceToBottom <= NEAR_BOTTOM_THRESHOLD;
     },
     [],
   );
 
-  const handleScrollToIndexFailed = useCallback(() => {
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({ animated: false });
-      requestAnimationFrame(() => {
-        scrollToCurrentRound(false);
-      });
-    });
-  }, [scrollToCurrentRound]);
-
   useEffect(() => {
-    if (turns.length === 0) return;
-
-    const isNewTurn = turns.length > prevTurnCountRef.current;
-    prevTurnCountRef.current = turns.length;
-
-    if (!isNewTurn && hasMountedRef.current) return;
-    if (!autoFollowRef.current && hasMountedRef.current) return;
-
-    const animated = hasMountedRef.current;
-    hasMountedRef.current = true;
-
-    const lastTurn = turns[turns.length - 1];
-    const prevTurn = turns.length >= 2 ? turns[turns.length - 2] : null;
-    const isSpeakerChange = !prevTurn || prevTurn.speaker !== lastTurn.speaker;
-
-    if (isSpeakerChange) {
-      sameSpeakerStreakRef.current = 1;
-    } else {
-      sameSpeakerStreakRef.current += 1;
+    if (turns.length === 0 && !hasInterim) {
+      hasMountedRef.current = false;
+      prevTurnCountRef.current = 0;
+      prevInterimTextRef.current = "";
+      autoFollowRef.current = true;
+      return;
     }
 
+    const isNewTurn = turns.length > prevTurnCountRef.current;
+    const interimChanged = prevInterimTextRef.current !== currentInterimText;
+    prevTurnCountRef.current = turns.length;
+    prevInterimTextRef.current = currentInterimText;
+
+    if (!autoFollowRef.current && hasMountedRef.current) return;
+
+    const animated = hasMountedRef.current && isNewTurn;
+    hasMountedRef.current = true;
+
     requestAnimationFrame(() => {
-      if (isSpeakerChange) {
-        scrollToCurrentRound(animated);
-      } else if (sameSpeakerStreakRef.current >= 8) {
-        isProgrammaticScrollRef.current = true;
-        flatListRef.current?.scrollToIndex({
-          index: turns.length - 1,
-          animated: true,
-          viewPosition: 1,
-        });
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 400);
+      if (isNewTurn || interimChanged) {
+        scrollToBottom(animated);
       }
     });
-  }, [scrollToCurrentRound, turns]);
+  }, [currentInterimText, hasInterim, scrollToBottom, turns.length]);
 
-  const ListFooterSpacer = useMemo(
-    () => <View style={{ height: FOOTER_HEIGHT }} />,
-    [],
-  );
+  const renderInterimBubble = useCallback(() => {
+    if (!hasInterim || !currentInterimSpeaker) {
+      return null;
+    }
 
-  const showListening = isListening;
+    const trimmedInterimText = currentInterimText.trim();
+    if (!trimmedInterimText) {
+      return null;
+    }
+
+    let displayText = trimmedInterimText;
+    if (hasStablePreview && currentStableSpeaker === currentInterimSpeaker) {
+      const trimmedStableText = currentStableText.trim();
+      if (trimmedInterimText === trimmedStableText) {
+        return null;
+      }
+      if (trimmedInterimText.startsWith(trimmedStableText)) {
+        displayText = trimmedInterimText
+          .slice(trimmedStableText.length)
+          .trimStart();
+      }
+    }
+
+    if (!displayText) {
+      return null;
+    }
+
+    return (
+      <TranscriptBubble
+        speaker={currentInterimSpeaker}
+        text={displayText}
+        isFinal={false}
+      />
+    );
+  }, [
+    currentInterimSpeaker,
+    currentInterimText,
+    currentStableSpeaker,
+    currentStableText,
+    hasInterim,
+    hasStablePreview,
+  ]);
+
+  const renderStablePreviewBubble = useCallback(() => {
+    if (!hasStablePreview || !currentStableSpeaker) {
+      return null;
+    }
+
+    return (
+      <TranscriptBubble
+        speaker={currentStableSpeaker}
+        text={currentStableText}
+        isFinal
+      />
+    );
+  }, [currentStableSpeaker, currentStableText, hasStablePreview]);
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -173,22 +173,18 @@ export function ConversationFlow() {
         )}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.content}
+        ListFooterComponent={
+          <>
+            {renderStablePreviewBubble()}
+            {renderInterimBubble()}
+          </>
+        }
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={handleScrollBeginDrag}
-        onMomentumScrollEnd={checkNearBottom}
-        onScrollEndDrag={checkNearBottom}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
-        onScrollToIndexFailed={handleScrollToIndexFailed}
-        ListFooterComponent={ListFooterSpacer}
+        style={styles.list}
       />
-      {showListening && (
-        <View style={styles.listeningContainer}>
-          <View style={styles.listeningDot} />
-          <Text style={styles.listeningText}>
-            {t("live.conversationFlow.listening")}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -197,25 +193,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  list: {
+    zIndex: 1,
+  },
   content: {
     paddingVertical: 12,
-  },
-  listeningContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    gap: 8,
-  },
-  listeningDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#34C759",
-  },
-  listeningText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "rgba(26,26,26,0.68)",
   },
 });

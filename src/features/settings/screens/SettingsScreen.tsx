@@ -82,6 +82,26 @@ function ToggleRow({
   );
 }
 
+function NavigationRow({
+  title,
+  description,
+  onPress,
+}: {
+  title: string;
+  description: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.navigationRow}>
+      <View style={styles.navigationCopy}>
+        <Text style={styles.navigationTitle}>{title}</Text>
+        <Text style={styles.navigationDescription}>{description}</Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={palette.textSecondary} />
+    </Pressable>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -398,6 +418,22 @@ export default function SettingsScreen() {
               {t("settings.debug.description")}
             </Text>
 
+            <NavigationRow
+              title={t("settings.debug.devHomeTitle")}
+              description={t("settings.debug.devHomeDescription")}
+              onPress={() => {
+                router.push("/(dev)/test");
+              }}
+            />
+
+            <NavigationRow
+              title={t("settings.debug.voiceprintDebugTitle")}
+              description={t("settings.debug.voiceprintDebugDescription")}
+              onPress={() => {
+                router.push("/(dev)/voiceprint");
+              }}
+            />
+
             <ToggleRow
               title={t("settings.debug.forceOnboardingTitle")}
               description={t("settings.debug.forceOnboardingDescription")}
@@ -503,6 +539,32 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   toggleDescription: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    lineHeight: 18,
+  },
+  navigationRow: {
+    marginTop: spacing.xs,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    backgroundColor: palette.bgGhostButton,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  navigationCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  navigationTitle: {
+    ...typography.bodyMd,
+    color: palette.textPrimary,
+    fontWeight: "700",
+  },
+  navigationDescription: {
     ...typography.caption,
     color: palette.textSecondary,
     lineHeight: 18,

@@ -1,20 +1,21 @@
 import {
-    palette,
-    radii,
-    shadows,
-    spacing,
-    typography,
+  palette,
+  radii,
+  shadows,
+  spacing,
+  typography,
 } from "@/shared/theme/tokens";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 import {
-    SafeAreaView,
-    useSafeAreaInsets,
+  SafeAreaView,
+  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import { ConversationFlow } from "../components/ConversationFlow";
 import { ConversationToolbar } from "../components/ConversationToolbar";
 import { FloatingSimulateButton } from "../components/FloatingSimulateButton";
+import { SkiaListeningWave } from "../components/SkiaListeningWave";
 import { SpeakerCalibration } from "../components/SpeakerCalibration";
 import { StartSessionCard } from "../components/StartSessionCard";
 import SuggestionPanel from "../components/SuggestionPanel";
@@ -22,23 +23,25 @@ import { VoiceEnrollmentCard } from "../components/VoiceEnrollmentCard";
 
 import { DebugOverlay } from "../components/DebugOverlay";
 import { useLiveSessionController } from "../hooks/useLiveSessionController";
+import { useAudioInputStore } from "../store/audioInputStore";
 
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
 
 export default function LiveScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const mainAudioLevel = useAudioInputStore((s) => s.mainLevel);
 
   const {
     scenePreset,
     dailyMinutesUsed,
     dailyMinutesLimit,
     isDailyLimitReached,
-    status,
     isListening,
     mainWsStatus,
     assistWsStatus,
     forcedSpeaker,
+    copilotEnabled,
     showEnrollment,
     showCalibration,
     assistPreviewText,
@@ -55,10 +58,9 @@ export default function LiveScreen() {
     handleEnrollmentSkip,
     handleCalibrationComplete,
     handleCalibrationSkip,
-    handlePause,
-    handleResume,
     handleSimulateOtherPressIn,
     handleSimulateOtherPressOut,
+    handleToggleCopilot,
     handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
@@ -66,7 +68,9 @@ export default function LiveScreen() {
   } = useLiveSessionController();
 
   const bottomPadding =
-    isActive || startSessionUiState !== "idle" ? 0 : getTabBarHeight(insets.bottom);
+    isActive || startSessionUiState !== "idle"
+      ? 0
+      : getTabBarHeight(insets.bottom);
 
   return (
     <SafeAreaView
@@ -90,6 +94,14 @@ export default function LiveScreen() {
 
       {isActive && (
         <View style={styles.activeContainer}>
+          {isListening ? (
+            <View pointerEvents="none" style={styles.listeningOverlay}>
+              <SkiaListeningWave
+                level={mainAudioLevel}
+                style={styles.listeningWave}
+              />
+            </View>
+          ) : null}
           <View style={styles.wsStatusCard}>
             <View
               style={[
@@ -105,7 +117,7 @@ export default function LiveScreen() {
               <Text style={styles.wsStatusHint}>
                 {isListening
                   ? t("live.screen.wsHintListening")
-                  : t("live.screen.wsHintPaused")}
+                  : t("live.screen.wsHintInactive")}
               </Text>
               {shouldShowAssistWs ? (
                 <View style={styles.assistWsRow}>
@@ -135,12 +147,11 @@ export default function LiveScreen() {
             initialRight={20}
           />
           <ConversationToolbar
-            onPause={handlePause}
-            onResume={handleResume}
+            copilotEnabled={copilotEnabled}
+            onToggleCopilot={handleToggleCopilot}
             onEnd={handleEnd}
             onNativeAssistPressIn={handleNativeAssistPressIn}
             onNativeAssistPressOut={handleNativeAssistPressOut}
-            isPaused={status === "paused"}
             assistPreviewText={assistPreviewText}
           />
         </View>
@@ -168,6 +179,20 @@ const styles = StyleSheet.create({
   },
   activeContainer: {
     flex: 1,
+  },
+  listeningOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 0,
+  },
+  listeningWave: {
+    width: 236,
+    height: 76,
   },
   wsStatusCard: {
     flexDirection: "row",

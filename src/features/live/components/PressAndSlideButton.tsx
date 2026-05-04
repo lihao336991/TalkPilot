@@ -28,6 +28,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { AudioEnergyWave } from "./AudioEnergyWave";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -54,6 +55,7 @@ type PressAndSlideButtonProps = {
   rippleColor?: string;
   overlayTitle?: string;
   overlaySubtitle?: string;
+  energyLevel?: number;
 };
 
 export function PressAndSlideButton({
@@ -77,6 +79,7 @@ export function PressAndSlideButton({
   rippleColor = "rgba(194,234,69,0.34)",
   overlayTitle,
   overlaySubtitle,
+  energyLevel = 0,
 }: PressAndSlideButtonProps) {
   const { t } = useTranslation();
   const [isActive, setIsActive] = useState(false);
@@ -268,7 +271,18 @@ export function PressAndSlideButton({
                   </Text>
                   <View style={styles.voiceBubbleMetaRow}>
                     <View style={styles.waveformCornerInline}>
-                      <WaveformBars color="rgba(32,72,17,0.72)" compact />
+                      <AudioEnergyWave
+                        level={energyLevel}
+                        color="rgba(32,72,17,0.72)"
+                        barCount={7}
+                        width={3}
+                        minHeight={8}
+                        maxHeight={16}
+                        gap={3}
+                        idleOpacity={0.22}
+                        calmness={0.88}
+                        tailFade={0.36}
+                      />
                     </View>
                     {actionState === "speak" ? (
                       <View style={styles.speakBadge}>
@@ -278,13 +292,21 @@ export function PressAndSlideButton({
                   </View>
                 </>
               ) : (
-                <WaveformBars
+                <AudioEnergyWave
+                  level={energyLevel}
                   color={
                     actionState === "cancel"
                       ? "rgba(118,12,14,0.82)"
                       : "rgba(36,78,21,0.78)"
                   }
-                  compact={actionState === "cancel"}
+                  barCount={actionState === "cancel" ? 7 : 11}
+                  width={actionState === "cancel" ? 4 : 5}
+                  minHeight={actionState === "cancel" ? 10 : 11}
+                  maxHeight={actionState === "cancel" ? 24 : 28}
+                  gap={4}
+                  idleOpacity={0.24}
+                  calmness={actionState === "cancel" ? 0.8 : 0.86}
+                  tailFade={0.34}
                 />
               )}
               <View
@@ -409,7 +431,22 @@ export function PressAndSlideButton({
             </>
           ) : null}
           {label ? (
-            <Text style={[styles.buttonLabel, { color: iconColor }, labelStyle]}>{label}</Text>
+            isActive ? (
+              <AudioEnergyWave
+                level={energyLevel}
+                color={iconColor}
+                barCount={5}
+                width={3}
+                minHeight={8}
+                maxHeight={14}
+                gap={2}
+                idleOpacity={0.26}
+                calmness={0.92}
+                tailFade={0.22}
+              />
+            ) : (
+              <Text style={[styles.buttonLabel, { color: iconColor }, labelStyle]}>{label}</Text>
+            )
           ) : icon ? (
             <Feather name={icon} size={24} color={iconColor} />
           ) : null}
@@ -418,34 +455,6 @@ export function PressAndSlideButton({
     </View>
   );
 }
-
-function WaveformBars({
-  color,
-  compact = false,
-}: {
-  color: string;
-  compact?: boolean;
-}) {
-  const bars = compact ? [10, 14, 18, 24, 18, 14, 10] : WAVEFORM_BARS;
-  return (
-    <View style={styles.waveformRow}>
-      {bars.map((height, index) => (
-        <View
-          key={`${height}-${index}`}
-          style={[
-            styles.waveformBar,
-            {
-              height,
-              backgroundColor: color,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-const WAVEFORM_BARS = [8, 10, 14, 18, 24, 18, 12, 8, 10, 14, 18, 24, 18, 12, 8];
 
 const styles = StyleSheet.create({
   container: {
@@ -670,14 +679,5 @@ const styles = StyleSheet.create({
   },
   actionPillTextActive: {
     color: "#000000",
-  },
-  waveformRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  waveformBar: {
-    width: 3,
-    borderRadius: 2,
   },
 });

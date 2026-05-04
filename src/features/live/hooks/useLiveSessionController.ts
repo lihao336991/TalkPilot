@@ -4,9 +4,11 @@ import { Alert } from "react-native";
 import type { PressAndSlideAction } from "@/features/live/components/PressAndSlideButton";
 import { assistReplyService } from "@/features/live/services/AssistReplyService";
 import { assistStreamingService } from "@/features/live/services/AssistStreamingService";
+import { AudioLevelMeter } from "@/features/live/services/AudioLevelMeter";
 import { AudioEngine, audioEngine } from "@/features/live/services/AudioEngine";
 import { deepgramService } from "@/features/live/services/DeepgramStreamingService";
 import { deepgramTokenService } from "@/features/live/services/DeepgramTokenService";
+import { liveActivityService } from "@/features/live/services/LiveActivityService";
 import { reviewService } from "@/features/live/services/ReviewService";
 import { sessionManager } from "@/features/live/services/SessionManager";
 import type { StreamingConnectionStatus } from "@/features/live/services/StreamingWebSocketClient";
@@ -16,6 +18,7 @@ import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollment
 import { voiceprintService } from "@/features/live/services/VoiceprintService";
 import { historyService } from "@/features/history/services/historyService";
 import { useAccessStore } from "@/features/live/store/accessStore";
+import { useAudioInputStore } from "@/features/live/store/audioInputStore";
 import { useConversationStore } from "@/features/live/store/conversationStore";
 import { useDebugStore } from "@/features/live/store/debugStore";
 import { useReviewStore } from "@/features/live/store/reviewStore";
@@ -87,11 +90,11 @@ export function useLiveSessionController() {
   const dailyMinutesLimit = useSessionStore((s) => s.dailyMinutesLimit);
   const isDailyLimitReached = useSessionStore((s) => s.isDailyLimitReached);
   const isSessionStarting = useSessionStore((s) => s.isStarting);
+  const copilotEnabled = useSessionStore((s) => s.copilotEnabled);
   const startSession = useSessionStore((s) => s.startSession);
-  const pauseSession = useSessionStore((s) => s.pauseSession);
-  const resumeSession = useSessionStore((s) => s.resumeSession);
   const endSession = useSessionStore((s) => s.endSession);
   const setSessionStarting = useSessionStore((s) => s.setStarting);
+  const setCopilotEnabled = useSessionStore((s) => s.setCopilotEnabled);
 
   const isListening = useConversationStore((s) => s.isListening);
   const mainWsStatus = useConversationStore((s) => s.mainWsStatus);
@@ -116,11 +119,29 @@ export function useLiveSessionController() {
   const assistShouldResumeRef = useRef(false);
   const startAttemptRef = useRef(0);
   const cancelledStartAttemptRef = useRef<number | null>(null);
+  const mainAudioLevelMeterRef = useRef(new AudioLevelMeter());
+  const assistAudioLevelMeterRef = useRef(new AudioLevelMeter());
+
+  const resetMainAudioLevel = useCallback(() => {
+    mainAudioLevelMeterRef.current.reset();
+    useAudioInputStore.getState().setMainLevel(0);
+  }, []);
+
+  const resetAssistAudioLevel = useCallback(() => {
+    assistAudioLevelMeterRef.current.reset();
+    useAudioInputStore.getState().setAssistLevel(0);
+  }, []);
 
   const sendAudioRef = useRef((base64: string) => {
+    const level = mainAudioLevelMeterRef.current.ingest(base64);
+    useAudioInputStore.getState().setMainLevel(level);
     voiceprintService.ingestChunk(base64);
     deepgramService.sendAudio(base64);
   });
+
+  useEffect(() => {
+    liveActivityService.startObserving();
+  }, []);
 
   useEffect(() => {
     if (status !== "active") return;
@@ -199,12 +220,14 @@ export function useLiveSessionController() {
       speaker,
       text,
       turnId,
+      isTurnEnd,
       detectedLanguage,
       confidence,
     }: {
       speaker: "self" | "other";
       text: string;
       turnId: string;
+      isTurnEnd: boolean;
       detectedLanguage?: string;
       confidence?: number;
     }): Promise<void> =>
@@ -215,6 +238,8 @@ export function useLiveSessionController() {
         console.log(
           "[LiveSession] UtteranceEnd -> speaker=" +
             speaker +
+            ", isTurnEnd=" +
+            String(isTurnEnd) +
             ", lang=" +
             (detectedLanguage ?? "?") +
             ", conf=" +
@@ -243,6 +268,15 @@ export function useLiveSessionController() {
         );
 
         if (speaker === "other") {
+          if (!copilotEnabled) {
+            return;
+          }
+          if (!isTurnEnd) {
+            console.log(
+              "[LiveSession] Skipping suggest for non-turn-end commit, turnId=" + turnId,
+            );
+            return;
+          }
           if (!isLowConfidence) {
             debug.startTurnLlm(turnId, "suggest");
             try {
@@ -256,15 +290,6 @@ export function useLiveSessionController() {
               handleFeatureAccessDenied(error);
             }
           }
-
-          if (isLearningLanguage) {
-            void translationService.translate({
-              turnId,
-              text: trimmed,
-              direction: "to_native",
-              sceneHint: scene,
-            });
-          }
           return;
         }
 
@@ -272,6 +297,9 @@ export function useLiveSessionController() {
         suggestionStore.clear();
 
         if (isLearningLanguage) {
+          if (!copilotEnabled) {
+            return;
+          }
           if (!isLowConfidence) {
             debug.startTurnLlm(turnId, "review");
             try {
@@ -288,7 +316,48 @@ export function useLiveSessionController() {
           return;
         }
       })(),
-    [handleFeatureAccessDenied, learningLanguage, scenePreset, sceneDescription],
+    [
+      copilotEnabled,
+      handleFeatureAccessDenied,
+      learningLanguage,
+      scenePreset,
+      sceneDescription,
+    ],
+  );
+
+  const handleFinalTranscriptUpdated = useCallback(
+    ({
+      speaker,
+      text,
+      turnId,
+      detectedLanguage,
+    }: {
+      speaker: "self" | "other";
+      text: string;
+      turnId: string;
+      detectedLanguage?: string;
+    }) => {
+      if (speaker !== "other") {
+        return;
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      if (!languageMatchesTag(detectedLanguage, learningLanguage)) {
+        return;
+      }
+
+      void translationService.translate({
+        turnId,
+        text: trimmed,
+        direction: "to_native",
+        sceneHint: sceneDescription || scenePreset,
+      });
+    },
+    [learningLanguage, sceneDescription, scenePreset],
   );
 
   const preconnectMainSocket = useCallback(async () => {
@@ -296,7 +365,8 @@ export function useLiveSessionController() {
       !isFocused ||
       status === "active" ||
       status === "paused" ||
-      status === "calibrating"
+      status === "calibrating" ||
+      isSessionStarting
     ) {
       return;
     }
@@ -320,9 +390,31 @@ export function useLiveSessionController() {
 
       debug.startStep("prewarm-token", "Prewarming Deepgram token...");
       const token = await deepgramTokenService.getToken();
+
+      // getToken() 是异步的，完成后再次检查 session 是否已开始启动
+      const storeState = useSessionStore.getState();
+      if (storeState.isStarting || storeState.status === "active") {
+        debug.failStep("prewarm-token", "session start in progress, aborting");
+        return;
+      }
+
       debug.completeStep("prewarm-token", "ready");
       debug.startStep("prewarm-ws", "Connecting Live WebSocket...");
-      await deepgramService.connect(token, handleUtteranceEnd, learningLanguage);
+      await deepgramService.connect(
+        token,
+        handleUtteranceEnd,
+        learningLanguage,
+        handleFinalTranscriptUpdated,
+      );
+
+      // connect() 也是异步的，完成后再次检查，避免 prewarm socket 干扰活跃 session
+      const storeStateAfterConnect = useSessionStore.getState();
+      if (storeStateAfterConnect.isStarting || storeStateAfterConnect.status === "active") {
+        deepgramService.disconnect();
+        debug.failStep("prewarm-ws", "session start in progress, disconnecting prewarm");
+        return;
+      }
+
       deepgramService.beginPausedRetention(LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS);
       debug.completeStep("prewarm-ws", "connected");
     } catch (error) {
@@ -348,7 +440,7 @@ export function useLiveSessionController() {
       }
       console.warn("[LiveSession] Main WS preconnect failed:", error);
     }
-  }, [handleUtteranceEnd, isFocused, learningLanguage, status]);
+  }, [handleUtteranceEnd, isFocused, isSessionStarting, learningLanguage, status]);
 
   const beginStartAttempt = useCallback(() => {
     const nextAttemptId = startAttemptRef.current + 1;
@@ -371,6 +463,8 @@ export function useLiveSessionController() {
   const cleanupAbortedStart = useCallback(async () => {
     voiceprintService.resetSessionState();
     await audioEngine.stop();
+    resetMainAudioLevel();
+    resetAssistAudioLevel();
     deepgramService.disconnect();
     assistStreamingService.disconnect();
     await translationService.stopPlayback();
@@ -389,7 +483,14 @@ export function useLiveSessionController() {
     useSuggestionStore.getState().clear();
     useReviewStore.getState().clear();
     useAccessStore.getState().clear();
-  }, [endSession, setForcedSpeaker, setListening, setSessionStarting]);
+  }, [
+    endSession,
+    resetAssistAudioLevel,
+    resetMainAudioLevel,
+    setForcedSpeaker,
+    setListening,
+    setSessionStarting,
+  ]);
 
   const disconnectIdleSockets = useCallback(() => {
     if (
@@ -440,7 +541,12 @@ export function useLiveSessionController() {
 
     debug.startStep("ws", "Connecting WebSocket...");
     console.log("[LiveSession] Connecting Deepgram...");
-    await deepgramService.connect(token, handleUtteranceEnd, learningLanguage);
+    await deepgramService.connect(
+      token,
+      handleUtteranceEnd,
+      learningLanguage,
+      handleFinalTranscriptUpdated,
+    );
     debug.completeStep("ws");
   }, [handleUtteranceEnd, learningLanguage]);
 
@@ -449,13 +555,14 @@ export function useLiveSessionController() {
 
     debug.startStep("record", "Starting recording...");
     console.log("[LiveSession] Starting audio engine...");
+    resetMainAudioLevel();
     deepgramService.markLiveTranscriptBoundary();
     deepgramService.enableLiveTranscripts();
     voiceprintService.startSessionAnalysis();
     await audioEngine.start(sendAudioRef.current);
     debug.completeStep("record");
     setListening(true);
-  }, [setListening]);
+  }, [resetMainAudioLevel, setListening]);
 
   const startStreaming = useCallback(
     async (speakerId: number | null, startAttemptId?: number) => {
@@ -570,6 +677,8 @@ export function useLiveSessionController() {
         endSession();
         deepgramService.disconnect();
         await audioEngine.stop();
+        resetMainAudioLevel();
+        resetAssistAudioLevel();
         setListening(false);
         setSessionStarting(false);
         setStartSessionUiState("idle");
@@ -589,6 +698,8 @@ export function useLiveSessionController() {
       handleFeatureAccessDenied,
       assertStartAttemptActive,
       cleanupAbortedStart,
+      resetAssistAudioLevel,
+      resetMainAudioLevel,
     ],
   );
 
@@ -723,50 +834,6 @@ export function useLiveSessionController() {
     void cleanupAbortedStart();
   }, [cleanupAbortedStart, setSessionStarting, startSessionUiState]);
 
-  const handlePause = useCallback(async () => {
-    deepgramService.disableLiveTranscripts();
-    voiceprintService.stopSessionAnalysis();
-    await audioEngine.stop();
-    deepgramService.beginPausedRetention();
-    pauseSession();
-    setListening(false);
-    console.log("[LiveSession] Session paused");
-  }, [pauseSession, setListening]);
-
-  const handleResume = useCallback(async () => {
-    if (mainWsStatus === "connecting") {
-      return;
-    }
-
-    console.log("[LiveSession] Resuming session...");
-    resumeSession();
-    setListening(false);
-
-    try {
-      if (deepgramService.canResumeWithoutReconnect()) {
-        deepgramService.cancelPausedRetention();
-        deepgramService.disableLiveTranscripts();
-      } else {
-        await connectStreamingSocket();
-      }
-      await startAudioCapture();
-      console.log("[LiveSession] Session resumed");
-    } catch (error) {
-      pauseSession();
-      setListening(false);
-      handleFeatureAccessDenied(error);
-      console.error("[LiveSession] Failed to resume streaming:", error);
-    }
-  }, [
-    connectStreamingSocket,
-    handleFeatureAccessDenied,
-    pauseSession,
-    resumeSession,
-    setListening,
-    startAudioCapture,
-    mainWsStatus,
-  ]);
-
   const handleSimulateOtherPressIn = useCallback(() => {
     setForcedSpeaker("other");
     console.log("[LiveSession] Simulating other speaker");
@@ -776,6 +843,16 @@ export function useLiveSessionController() {
     setForcedSpeaker(null);
     console.log("[LiveSession] Released simulated other speaker");
   }, [setForcedSpeaker]);
+
+  const handleToggleCopilot = useCallback(() => {
+    const nextEnabled = !copilotEnabled;
+    setCopilotEnabled(nextEnabled);
+
+    if (!nextEnabled) {
+      useSuggestionStore.getState().clear();
+      useReviewStore.getState().setLoading(false);
+    }
+  }, [copilotEnabled, setCopilotEnabled]);
 
   const restoreMainConversationCapture = useCallback(async () => {
     if (!assistShouldResumeRef.current) {
@@ -813,6 +890,7 @@ export function useLiveSessionController() {
         if (shouldResumeCapture) {
           voiceprintService.stopSessionAnalysis();
           await audioEngine.stop();
+          resetMainAudioLevel();
           deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
           setListening(false);
         }
@@ -867,6 +945,7 @@ export function useLiveSessionController() {
       isSendingSuggestion,
       learningLanguage,
       restoreMainConversationCapture,
+      resetMainAudioLevel,
       setListening,
     ],
   );
@@ -980,6 +1059,7 @@ export function useLiveSessionController() {
       if (isListening) {
         voiceprintService.stopSessionAnalysis();
         await audioEngine.stop();
+        resetMainAudioLevel();
         deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
         setListening(false);
       }
@@ -997,9 +1077,12 @@ export function useLiveSessionController() {
       }
 
       assistStreamingService.startCapture();
+      resetAssistAudioLevel();
       setAssistPreviewText("");
       debug.startStep("assist-transcript", "Listening for native transcript...");
       await audioEngine.start((base64: string) => {
+        const level = assistAudioLevelMeterRef.current.ingest(base64);
+        useAudioInputStore.getState().setAssistLevel(level);
         assistStreamingService.sendAudio(base64);
       });
       setAssistState("recording");
@@ -1028,6 +1111,7 @@ export function useLiveSessionController() {
         }
       }
       assistShouldResumeRef.current = false;
+      resetAssistAudioLevel();
       setAssistPreviewText("");
       setAssistState("idle");
       handleFeatureAccessDenied(error);
@@ -1038,6 +1122,8 @@ export function useLiveSessionController() {
     handleFeatureAccessDenied,
     isListening,
     nativeLanguage,
+    resetAssistAudioLevel,
+    resetMainAudioLevel,
     restoreMainConversationCapture,
     setListening,
   ]);
@@ -1052,6 +1138,7 @@ export function useLiveSessionController() {
 
       if (action === "cancel") {
         await audioEngine.stop();
+        resetAssistAudioLevel();
         assistStreamingService.cancelCapture();
         setAssistPreviewText("");
         setAssistState("idle");
@@ -1065,6 +1152,7 @@ export function useLiveSessionController() {
       }
 
       await audioEngine.stop();
+      resetAssistAudioLevel();
 
       const { transcript } = await assistStreamingService.finishCapture();
       assistStreamingService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
@@ -1091,7 +1179,12 @@ export function useLiveSessionController() {
         speakReply: action === "speak",
       });
     },
-    [assistState, processAssistTranscript, restoreMainConversationCapture],
+    [
+      assistState,
+      processAssistTranscript,
+      resetAssistAudioLevel,
+      restoreMainConversationCapture,
+    ],
   );
 
   const handleEnd = useCallback(async () => {
@@ -1100,6 +1193,8 @@ export function useLiveSessionController() {
 
     voiceprintService.resetSessionState();
     await audioEngine.stop();
+    resetMainAudioLevel();
+    resetAssistAudioLevel();
     deepgramService.disconnect();
     assistStreamingService.disconnect();
     await translationService.stopPlayback();
@@ -1138,7 +1233,15 @@ export function useLiveSessionController() {
     if (isFocused) {
       void preconnectMainSocket();
     }
-  }, [duration, endSession, isFocused, preconnectMainSocket, setForcedSpeaker]);
+  }, [
+    duration,
+    endSession,
+    isFocused,
+    preconnectMainSocket,
+    resetAssistAudioLevel,
+    resetMainAudioLevel,
+    setForcedSpeaker,
+  ]);
 
   const isIdle = status === "idle" || status === "ended";
   const isActive =
@@ -1162,6 +1265,7 @@ export function useLiveSessionController() {
     mainWsStatus,
     assistWsStatus,
     forcedSpeaker,
+    copilotEnabled,
     duration,
     showCalibration,
     assistState,
@@ -1180,10 +1284,9 @@ export function useLiveSessionController() {
     handleEnrollmentSkip,
     handleCalibrationComplete,
     handleCalibrationSkip,
-    handlePause,
-    handleResume,
     handleSimulateOtherPressIn,
     handleSimulateOtherPressOut,
+    handleToggleCopilot,
     handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,

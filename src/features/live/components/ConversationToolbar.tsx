@@ -1,48 +1,70 @@
 import { palette, spacing } from "@/shared/theme/tokens";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useAudioInputStore } from "../store/audioInputStore";
 import {
   PressAndSlideAction,
   PressAndSlideButton,
 } from "./PressAndSlideButton";
 
 type ConversationToolbarProps = {
-  onPause: () => void;
-  onResume: () => void;
+  copilotEnabled: boolean;
+  onToggleCopilot: () => void;
   onEnd: () => void;
   onNativeAssistPressIn: () => void;
   onNativeAssistPressOut: (action: PressAndSlideAction) => void;
-  isPaused: boolean;
   assistPreviewText?: string;
 };
 
 export function ConversationToolbar({
-  onPause,
-  onResume,
+  copilotEnabled,
+  onToggleCopilot,
   onEnd,
   onNativeAssistPressIn,
   onNativeAssistPressOut,
-  isPaused,
   assistPreviewText,
 }: ConversationToolbarProps) {
   const { t } = useTranslation();
+  const assistAudioLevel = useAudioInputStore((s) => s.assistLevel);
   return (
     <View style={styles.container}>
       <View style={styles.controlsRow}>
         <Pressable
           style={styles.controlTouch}
-          onPress={isPaused ? onResume : onPause}
-          accessibilityLabel={
-            isPaused ? t("live.toolbar.resume") : t("live.toolbar.pause")
-          }
+          onPress={onToggleCopilot}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: copilotEnabled }}
+          accessibilityLabel={t("live.toolbar.copilotAccessibility", {
+            state: copilotEnabled
+              ? t("live.toolbar.copilotOn")
+              : t("live.toolbar.copilotOff"),
+          })}
         >
-          <View style={[styles.controlButton, styles.pauseBtnInner]}>
-            <Feather
-              name={isPaused ? "play" : "pause"}
+          <View
+            style={[
+              styles.controlButton,
+              styles.copilotButton,
+              copilotEnabled
+                ? styles.copilotButtonActive
+                : styles.copilotButtonInactive,
+            ]}
+          >
+            <MaterialCommunityIcons
+              name={copilotEnabled ? "creation" : "creation-outline"}
               size={18}
-              color={palette.textPrimary}
+              color={copilotEnabled ? palette.accent : palette.textSecondary}
             />
+            <Text
+              style={[
+                styles.copilotLabel,
+                copilotEnabled
+                  ? styles.copilotLabelActive
+                  : styles.copilotLabelInactive,
+              ]}
+            >
+              {t("live.toolbar.copilot")}
+            </Text>
           </View>
         </Pressable>
 
@@ -67,6 +89,7 @@ export function ConversationToolbar({
             rippleColor="rgba(194,234,69,0.34)"
             overlayTitle={t("live.toolbar.assistOverlayTitle")}
             overlaySubtitle={t("live.toolbar.assistOverlaySubtitle")}
+            energyLevel={assistAudioLevel}
           />
         </View>
 
@@ -110,7 +133,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   controlTouch: {
-    width: 76,
+    width: 84,
     alignItems: "center",
   },
   controlButton: {
@@ -128,9 +151,32 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  pauseBtnInner: {
+  copilotButton: {
+    width: 64,
+    borderRadius: 20,
+    gap: 4,
+  },
+  copilotButtonActive: {
+    borderColor: "rgba(134,174,0,0.22)",
+    backgroundColor: "rgba(244,248,239,0.96)",
+    shadowColor: palette.accent,
+    shadowOpacity: 0.1,
+  },
+  copilotButtonInactive: {
+    borderColor: "rgba(15,23,42,0.06)",
     backgroundColor: "rgba(255,255,255,0.76)",
-    borderColor: "rgba(15,23,42,0.04)",
+  },
+  copilotLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  copilotLabelActive: {
+    color: palette.accent,
+  },
+  copilotLabelInactive: {
+    color: palette.textSecondary,
   },
   endBtnInner: {
     backgroundColor: palette.danger,

@@ -143,7 +143,7 @@ export function TranscriptBubble({
               <View style={styles.translationRow}>
                 <View style={styles.translationTextWrap}>
                   {translationStatus === "loading" && (
-                    <Text style={styles.translationLoading}>
+                    <Text style={styles.translationLoading} numberOfLines={1}>
                       {t("live.transcript.translating")}
                     </Text>
                   )}
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   translationTextWrap: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 88,
     flexShrink: 1,
   },
   translationText: {

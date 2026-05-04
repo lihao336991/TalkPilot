@@ -74,6 +74,7 @@
 - 工程化脚本统一优先放到 `scripts/`
 - 大体积原始数据与脚本生成产物优先放到 `data/`
 - 实时音频流的通用 WebSocket 传输层位于 `src/features/live/services/StreamingWebSocketClient.ts`，负责连接、状态同步、发送、暂停保活与断开；具体协议解析与业务副作用继续留在各 provider service 中
+- iOS 本地声纹桥接位于 `ios/TalkPilot/VoiceprintModule.swift`，当前已改为直接调用 Swift Package `NeMoSpeaker-iOS`；JS 层仍通过 `src/features/live/services/VoiceprintNative.ts` 暴露统一接口，模型文件继续从 app bundle 中的 `TitaNetSmall.mlmodelc` 加载
 
 ### i18n 约定
 
@@ -165,6 +166,8 @@
   - 英语主链路由 `DeepgramStreamingService` 承载
   - 母语救场链路由 `AssistStreamingService` 承载
   - 两者都复用 `StreamingWebSocketClient` 作为通用传输层
+- Live 会话当前不再提供显式 `pause/resume` 入口；进入会话后默认持续保持主麦克风录制，直到用户手动挂断
+- Live 工具栏左侧当前是会话级 `Copilot` 开关，默认开启；开启时自动触发 `suggest/review`，关闭后当前会话不再自动触发这两类 LLM 能力
 - `conversationStore` 中的连接状态已拆分为 `mainWsStatus` 与 `assistWsStatus`，不要再把两条链路混用同一个 `wsStatus`
 - 母语救场流程已经不再走本地录音文件上传转写；音频通过母语救场独立 WS 实时识别，`assist-reply` 只负责“文本翻译 + 可选 TTS”
 - 主链路中不再保留 `self -> learning` 的自动翻译；普通主消息流只保留对方说话后的 `other -> native` 翻译，母语转学习语言统一收敛到 SOS 救场链路
@@ -176,7 +179,8 @@
 
 - 当前工程保留了 Expo prebuild 生成的 `ios/` 目录，便于直接在 Xcode 中继续演进
 - iOS deployment target 保持为 `17.0`
-- 如需重新生成原生壳，优先使用 `npm run rebuild:ios`
+- `npm run rebuild:ios` 当前只做安全的 `pod install` / iOS 依赖同步，不再执行 `expo prebuild --clean`
+- 如需显式重新生成 iOS 原生壳，使用 `npm run prebuild:ios:clean`，它会清空并重建 `ios/` 目录，只应在确认需要重建原生壳时使用
 - 如果后续修改应用标识，需同时更新 `app.json` 与 `ios/` 工程配置
 
 ## 后续维护约定

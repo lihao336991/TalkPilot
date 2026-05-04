@@ -3,7 +3,6 @@ import {
   type VoiceprintDecisionLabel,
   type VoiceprintDecisionReason,
 } from '@/features/live/store/conversationStore';
-import { useDebugStore } from '@/features/live/store/debugStore';
 import {
   voiceEnrollmentService,
   type VoiceEnrollmentProfile,
@@ -17,12 +16,26 @@ export type VoiceprintDecision = {
   reason: VoiceprintDecisionReason;
 };
 
-const WINDOW_DURATION_MS = 1_500;
+/** Real-time window now exactly 1s = 16,000 samples → hits the native 1s preset with zero padding */
+const WINDOW_DURATION_MS = 1_000;
 const STEP_DURATION_MS = 500;
-const DEFAULT_SELF_HIGH_THRESHOLD = 0.58;
-const DEFAULT_SELF_LOW_THRESHOLD = 0.38;
-const REINFORCE_THRESHOLD = 0.7;
-const MAX_BUFFER_WINDOW_MULTIPLIER = 2;
+export const VOICEPRINT_SELF_HIGH_THRESHOLD = 0.45;
+export const VOICEPRINT_SELF_LOW_THRESHOLD = 0.30;
+export const VOICEPRINT_STRONG_SELF_THRESHOLD = 0.45;
+const REINFORCE_THRESHOLD = 0.65;
+const MAX_BUFFER_WINDOW_MULTIPLIER = 3;
+const DECISION_WINDOW_SIZE = 5;
+const DECISION_MIN_VOTES = 2;
+
+/** Enrollment segment generation: split trimmed audio into 1s windows for same-bucket embedding */
+const ENROLLMENT_SEGMENT_MS = 1_000;
+const ENROLLMENT_SEGMENT_OVERLAP_MS = 500;
+
+/** VAD energy trimming constants */
+const VAD_FRAME_MS = 20;
+const VAD_ENERGY_THRESHOLD = 0.005; // RMS energy threshold for speech detection
+const VAD_MIN_SPEECH_FRAMES = 10; // Minimum consecutive frames to count as speech
+const VAD_PAD_FRAMES = 5; // Pad a few frames before/after speech region
 
 class VoiceprintService {
   private enrollmentProfile: VoiceEnrollmentProfile | null = null;
@@ -31,8 +44,7 @@ class VoiceprintService {
   private bytesSinceLastAnalysis = 0;
   private isAnalyzing = false;
   private sessionActive = false;
-  private consecutiveSelf = 0;
-  private consecutiveOther = 0;
+  private recentRawLabels: VoiceprintDecisionLabel[] = [];
   private lastEmbedding: number[] | null = null;
   private lastModelInputDurationMs: number | null = null;
   private lastModelMelFrameCount: number | null = null;
@@ -105,37 +117,42 @@ class VoiceprintService {
   private getThresholds() {
     return {
       high:
-        this.enrollmentProfile?.thresholdSelfHigh ?? DEFAULT_SELF_HIGH_THRESHOLD,
+        this.enrollmentProfile?.thresholdSelfHigh ?? VOICEPRINT_SELF_HIGH_THRESHOLD,
       low:
-        this.enrollmentProfile?.thresholdSelfLow ?? DEFAULT_SELF_LOW_THRESHOLD,
+        this.enrollmentProfile?.thresholdSelfLow ?? VOICEPRINT_SELF_LOW_THRESHOLD,
     };
   }
 
-  private stabilizeLabel(rawLabel: VoiceprintDecisionLabel): VoiceprintDecisionLabel {
-    if (rawLabel === 'self') {
-      this.consecutiveSelf += 1;
-      this.consecutiveOther = 0;
-      return this.consecutiveSelf >= 2 ? 'self' : 'unknown';
-    }
-
-    if (rawLabel === 'other') {
-      this.consecutiveOther += 1;
-      this.consecutiveSelf = 0;
-      return this.consecutiveOther >= 2 ? 'other' : 'unknown';
-    }
-
-    if (this.lastDecision.label === 'self') {
-      this.consecutiveOther = 0;
+  private stabilizeLabel(
+    rawLabel: VoiceprintDecisionLabel,
+    similarity: number | null,
+  ): VoiceprintDecisionLabel {
+    // Strong hits should win immediately instead of waiting for multiple windows.
+    if (
+      rawLabel === 'self' &&
+      similarity != null &&
+      similarity >= VOICEPRINT_STRONG_SELF_THRESHOLD
+    ) {
+      this.recentRawLabels.push('self');
+      this.recentRawLabels = this.recentRawLabels.slice(-DECISION_WINDOW_SIZE);
       return 'self';
     }
 
-    if (this.lastDecision.label === 'other') {
-      this.consecutiveSelf = 0;
+    this.recentRawLabels.push(rawLabel);
+    this.recentRawLabels = this.recentRawLabels.slice(-DECISION_WINDOW_SIZE);
+
+    const selfVotes = this.recentRawLabels.filter((label) => label === 'self').length;
+    const otherVotes = this.recentRawLabels.filter((label) => label === 'other').length;
+
+    // Use recent-window majority voting and let unknown act as a neutral vote.
+    if (selfVotes >= DECISION_MIN_VOTES && selfVotes > otherVotes) {
+      return 'self';
+    }
+
+    if (otherVotes >= DECISION_MIN_VOTES && otherVotes > selfVotes) {
       return 'other';
     }
 
-    this.consecutiveSelf = 0;
-    this.consecutiveOther = 0;
     return 'unknown';
   }
 
@@ -171,7 +188,7 @@ class VoiceprintService {
     if (similarity >= high) {
       return {
         similarity,
-        label: this.stabilizeLabel('self'),
+        label: this.stabilizeLabel('self', similarity),
         confidence: 'high',
         reason: 'similarity_high',
       };
@@ -180,7 +197,7 @@ class VoiceprintService {
     if (similarity <= low) {
       return {
         similarity,
-        label: this.stabilizeLabel('other'),
+        label: this.stabilizeLabel('other', similarity),
         confidence: 'high',
         reason: 'similarity_low',
       };
@@ -188,7 +205,7 @@ class VoiceprintService {
 
     return {
       similarity,
-      label: this.stabilizeLabel('unknown'),
+      label: this.stabilizeLabel('unknown', similarity),
       confidence: 'medium',
       reason: 'between_thresholds',
     };
@@ -220,6 +237,26 @@ class VoiceprintService {
         this.bytesSinceLastAnalysis -= this.stepByteLength;
 
         try {
+          // #region debug-point A:before-compare
+          fetch('http://10.200.152.245:7777/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'voiceprint-invalid-enrollment',
+              runId: 'pre-fix',
+              hypothesisId: 'A',
+              location: 'VoiceprintService.ts:analyzeLatestWindow',
+              msg: '[DEBUG] about to compare enrollment embedding',
+              data: {
+                enrollmentLength: this.enrollmentProfile.embedding.length,
+                enrollmentPreview: this.enrollmentProfile.embedding.slice(0, 4),
+                windowBytes: windowBytes.length,
+                nativeAvailable: this.nativeAvailable,
+              },
+              ts: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           const result = await voiceprintNative.compareEmbedding(
             this.bytesToBase64(windowBytes),
             this.enrollmentProfile.embedding,
@@ -229,7 +266,32 @@ class VoiceprintService {
           this.lastModelMelFrameCount = result.melFrameCount ?? null;
           this.updateDecision(this.buildDecision(result.similarity));
         } catch (error) {
-          console.warn('[VoiceprintService] Failed to analyze window:', error);
+          // #region debug-point C:compare-error
+          fetch('http://10.200.152.245:7777/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId: 'voiceprint-invalid-enrollment',
+              runId: 'pre-fix',
+              hypothesisId: 'C',
+              location: 'VoiceprintService.ts:analyzeLatestWindow',
+              msg: '[DEBUG] compareEmbedding failed',
+              data: {
+                error:
+                  error instanceof Error ? error.message : String(error),
+                enrollmentLength: this.enrollmentProfile?.embedding.length ?? null,
+                enrollmentPreview: this.enrollmentProfile?.embedding.slice(0, 4) ?? null,
+              },
+              ts: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
+          console.warn('[VoiceprintService] Failed to analyze window:', error, {
+            enrollmentLength: this.enrollmentProfile?.embedding.length ?? null,
+            enrollmentPreview:
+              this.enrollmentProfile?.embedding.slice(0, 4) ?? null,
+            windowBytes: windowBytes.length,
+          });
           this.lastModelInputDurationMs = null;
           this.lastModelMelFrameCount = null;
           this.updateDecision(this.buildDecision(null));
@@ -246,6 +308,178 @@ class VoiceprintService {
     this.updateDecision(this.buildDecision(null));
   }
 
+  /**
+   * Trim leading/trailing silence from PCM bytes using energy-based VAD.
+   * Returns a trimmed Uint8Array containing only the speech region.
+   */
+  private trimSilencePcm(pcmBytes: Uint8Array): Uint8Array {
+    const bytesPerSample = 2; // 16-bit PCM
+    const samplesPerFrame = Math.floor(
+      (VAD_FRAME_MS / 1000) * voiceEnrollmentService.getPcmFormat().sampleRate,
+    );
+    const totalSamples = Math.floor(pcmBytes.length / bytesPerSample);
+    const totalFrames = Math.floor(totalSamples / samplesPerFrame);
+
+    if (totalFrames < VAD_MIN_SPEECH_FRAMES) {
+      return pcmBytes; // Too short to trim
+    }
+
+    // Compute RMS energy per frame
+    const frameEnergies: number[] = [];
+    for (let f = 0; f < totalFrames; f++) {
+      let sumSquared = 0;
+      const startSample = f * samplesPerFrame;
+      for (let s = 0; s < samplesPerFrame; s++) {
+        const byteOffset = (startSample + s) * bytesPerSample;
+        const sample =
+          (pcmBytes[byteOffset] | (pcmBytes[byteOffset + 1] << 8)) << 16 >> 16;
+        const normalized = sample / 32768;
+        sumSquared += normalized * normalized;
+      }
+      frameEnergies.push(Math.sqrt(sumSquared / samplesPerFrame));
+    }
+
+    // Find first and last frames above energy threshold
+    let firstSpeechFrame = 0;
+    let lastSpeechFrame = totalFrames - 1;
+
+    for (let f = 0; f < totalFrames; f++) {
+      if (frameEnergies[f] >= VAD_ENERGY_THRESHOLD) {
+        firstSpeechFrame = f;
+        break;
+      }
+    }
+
+    for (let f = totalFrames - 1; f >= 0; f--) {
+      if (frameEnergies[f] >= VAD_ENERGY_THRESHOLD) {
+        lastSpeechFrame = f;
+        break;
+      }
+    }
+
+    // Pad a few frames before/after
+    firstSpeechFrame = Math.max(0, firstSpeechFrame - VAD_PAD_FRAMES);
+    lastSpeechFrame = Math.min(totalFrames - 1, lastSpeechFrame + VAD_PAD_FRAMES);
+
+    const startByte = firstSpeechFrame * samplesPerFrame * bytesPerSample;
+    const endByte = Math.min(
+      (lastSpeechFrame + 1) * samplesPerFrame * bytesPerSample,
+      pcmBytes.length,
+    );
+
+    console.log(
+      `[VoiceprintService] VAD trimmed: ${totalFrames} frames → ` +
+        `frames [${firstSpeechFrame}, ${lastSpeechFrame}], ` +
+        `${Math.round((endByte - startByte) / this.bytesPerSecond * 1000)}ms of speech`,
+    );
+
+    return pcmBytes.slice(startByte, endByte);
+  }
+
+  /**
+   * Split PCM into overlapping 1s segments and generate an averaged embedding.
+   * This ensures enrollment uses the same native 1s preset bucket as real-time analysis.
+   * Segments with low energy (silence/pauses) are skipped to avoid polluting the average.
+   */
+  private async generateAveragedEmbedding(pcmBytes: Uint8Array): Promise<number[]> {
+    const segmentBytes = Math.floor(
+      (ENROLLMENT_SEGMENT_MS / 1000) * this.bytesPerSecond,
+    );
+    const stepBytes = Math.floor(
+      ((ENROLLMENT_SEGMENT_MS - ENROLLMENT_SEGMENT_OVERLAP_MS) / 1000) *
+        this.bytesPerSecond,
+    );
+
+    // Collect valid segments (ensure each is exactly 1s for clean preset matching)
+    const segments: Uint8Array[] = [];
+    let offset = 0;
+    while (offset + segmentBytes <= pcmBytes.length) {
+      segments.push(pcmBytes.slice(offset, offset + segmentBytes));
+      offset += stepBytes;
+    }
+
+    if (segments.length === 0) {
+      // Fallback: if trimmed audio is shorter than 1s, use the whole thing
+      console.warn(
+        '[VoiceprintService] Trimmed audio shorter than 1s, using full clip for enrollment',
+      );
+      return voiceprintNative.generateEmbedding(this.bytesToBase64(pcmBytes));
+    }
+
+    // Filter out low-energy segments (likely silence/pauses in the middle)
+    const activeSegments = segments.filter((seg) => this.segmentHasSpeech(seg));
+
+    const usableSegments = activeSegments.length > 0 ? activeSegments : segments;
+    console.log(
+      `[VoiceprintService] Generating enrollment from ${usableSegments.length}/${segments.length} active 1s segments`,
+    );
+
+    // Generate embedding for each segment
+    const embeddings: number[][] = [];
+    for (const segment of usableSegments) {
+      try {
+        const emb = await voiceprintNative.generateEmbedding(
+          this.bytesToBase64(segment),
+        );
+        if (!isFiniteEmbedding(emb)) {
+          console.warn(
+            '[VoiceprintService] Segment embedding contains invalid values, skipping',
+            { preview: emb.slice(0, 4), length: emb.length },
+          );
+          continue;
+        }
+        embeddings.push(emb);
+      } catch (error) {
+        console.warn('[VoiceprintService] Segment embedding failed, skipping:', error);
+      }
+    }
+
+    if (embeddings.length === 0) {
+      throw new Error('All enrollment segments failed to generate embeddings');
+    }
+
+    // Average all embeddings
+    const dim = embeddings[0].length;
+    const averaged = new Array<number>(dim).fill(0);
+    for (const emb of embeddings) {
+      for (let i = 0; i < dim; i++) {
+        averaged[i] += emb[i];
+      }
+    }
+    for (let i = 0; i < dim; i++) {
+      averaged[i] /= embeddings.length;
+    }
+
+    // Normalize the averaged embedding
+    const normalized = normalizeVector(averaged);
+    if (!isFiniteEmbedding(normalized)) {
+      throw new Error('Enrollment embedding contains invalid values after averaging');
+    }
+    return normalized;
+  }
+
+  /**
+   * Check if a PCM segment has enough speech energy to be useful for enrollment.
+   * Returns false for segments that are mostly silence.
+   */
+  private segmentHasSpeech(pcmBytes: Uint8Array): boolean {
+    const bytesPerSample = 2;
+    const totalSamples = Math.floor(pcmBytes.length / bytesPerSample);
+    if (totalSamples === 0) return false;
+
+    // Compute overall RMS of the segment
+    let sumSquared = 0;
+    for (let i = 0; i < totalSamples; i++) {
+      const byteOffset = i * bytesPerSample;
+      const sample =
+        (pcmBytes[byteOffset] | (pcmBytes[byteOffset + 1] << 8)) << 16 >> 16;
+      const normalized = sample / 32768;
+      sumSquared += normalized * normalized;
+    }
+    const rms = Math.sqrt(sumSquared / totalSamples);
+    return rms >= VAD_ENERGY_THRESHOLD;
+  }
+
   async createEnrollmentProfileFromChunks(
     base64Chunks: string[],
   ): Promise<VoiceEnrollmentProfile> {
@@ -254,6 +488,7 @@ class VoiceprintService {
       throw new Error('Voiceprint is unavailable on this device');
     }
 
+    // 1. Concatenate all chunks
     const totalLength = base64Chunks.reduce(
       (sum, chunk) => sum + this.base64ToBytes(chunk).length,
       0,
@@ -266,9 +501,33 @@ class VoiceprintService {
       offset += chunkBytes.length;
     }
 
-    const base64Pcm = this.bytesToBase64(bytes);
-    const embedding = await voiceprintNative.generateEmbedding(base64Pcm);
-    const durationMs = Math.round((bytes.length / this.bytesPerSecond) * 1000);
+    // 2. Trim leading/trailing silence
+    const trimmed = this.trimSilencePcm(bytes);
+
+    // 3. Generate averaged embedding from 1s segments (same bucket as real-time)
+    const embedding = await this.generateAveragedEmbedding(trimmed);
+    // #region debug-point A:create-enrollment-profile
+    fetch('http://10.200.152.245:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'voiceprint-invalid-enrollment',
+        runId: 'pre-fix',
+        hypothesisId: 'A',
+        location: 'VoiceprintService.ts:createEnrollmentProfileFromChunks',
+        msg: '[DEBUG] generated enrollment embedding',
+        data: {
+          chunkCount: base64Chunks.length,
+          trimmedBytes: trimmed.length,
+          embeddingLength: embedding.length,
+          preview: embedding.slice(0, 4),
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+
+    const durationMs = Math.round((trimmed.length / this.bytesPerSecond) * 1000);
     const profile = voiceEnrollmentService.createProfile({
       embedding,
       durationMs,
@@ -276,6 +535,14 @@ class VoiceprintService {
     await voiceEnrollmentService.saveEnrollmentProfile(profile);
     this.enrollmentProfile = profile;
     this.updateDecision(this.buildDecision(null));
+
+    console.log(
+      `[VoiceprintService] Enrollment profile created: ${durationMs}ms speech, ` +
+        `${embedding.length}D embedding (1s-bucket averaged)`,
+      {
+        preview: embedding.slice(0, 4),
+      },
+    );
     return profile;
   }
 
@@ -290,8 +557,7 @@ class VoiceprintService {
     this.bytesSinceLastAnalysis = 0;
     this.isAnalyzing = false;
     this.sessionActive = false;
-    this.consecutiveSelf = 0;
-    this.consecutiveOther = 0;
+    this.recentRawLabels = [];
     this.lastEmbedding = null;
     this.lastModelInputDurationMs = null;
     this.lastModelMelFrameCount = null;
@@ -303,8 +569,7 @@ class VoiceprintService {
     this.bytesSinceLastAnalysis = 0;
     this.isAnalyzing = false;
     this.sessionActive = true;
-    this.consecutiveSelf = 0;
-    this.consecutiveOther = 0;
+    this.recentRawLabels = [];
     this.lastModelInputDurationMs = null;
     this.lastModelMelFrameCount = null;
     this.updateDecision(this.buildDecision(null));
@@ -381,6 +646,10 @@ function normalizeVector(values: number[]): number[] {
     return values;
   }
   return values.map((value) => value / norm);
+}
+
+function isFiniteEmbedding(values: number[]): boolean {
+  return values.every((value) => Number.isFinite(value));
 }
 
 export const voiceprintService = new VoiceprintService();

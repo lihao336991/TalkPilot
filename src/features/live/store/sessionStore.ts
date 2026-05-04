@@ -8,6 +8,7 @@ type SessionState = {
   sessionId: string | null;
   status: SessionStatus;
   isStarting: boolean;
+  copilotEnabled: boolean;
   scenePreset: ScenePreset;
   sceneDescription: string;
   startedAt: number | null;
@@ -20,6 +21,7 @@ type SessionState = {
   resumeSession: () => void;
   endSession: () => void;
   setStarting: (starting: boolean) => void;
+  setCopilotEnabled: (enabled: boolean) => void;
   setScene: (preset: ScenePreset, description?: string) => void;
   setUsageSummary: (payload: { minutesUsed: number; minutesLimit: number }) => void;
   setUsageLimit: (limit: number) => void;
@@ -30,6 +32,7 @@ const initialState = {
   sessionId: null as string | null,
   status: 'idle' as SessionStatus,
   isStarting: false,
+  copilotEnabled: true,
   scenePreset: 'free' as ScenePreset,
   sceneDescription: '',
   startedAt: null as number | null,
@@ -42,7 +45,13 @@ export const useSessionStore = create<SessionState>((set) => ({
   ...initialState,
 
   startSession: (sessionId) =>
-    set({ sessionId, status: 'active', startedAt: Date.now(), isStarting: false }),
+    set({
+      sessionId,
+      status: 'active',
+      startedAt: Date.now(),
+      isStarting: false,
+      copilotEnabled: true,
+    }),
 
   pauseSession: () =>
     set({ status: 'paused' }),
@@ -55,6 +64,9 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setStarting: (isStarting) =>
     set({ isStarting }),
+
+  setCopilotEnabled: (copilotEnabled) =>
+    set({ copilotEnabled }),
 
   setScene: (preset, description) =>
     set({ scenePreset: preset, sceneDescription: description ?? '' }),

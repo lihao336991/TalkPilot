@@ -1,7 +1,9 @@
 import { translationService } from '@/features/live/services/TranslationService';
 import { invokeEdgeFunction } from '@/shared/api/request';
+import { buildLlmDebugHeaders } from '@/shared/llm/debugConfig';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { useLocaleStore } from '@/shared/store/localeStore';
+import { useLlmDebugStore } from '@/shared/store/llmDebugStore';
 
 export type AssistReplyResult = {
   sourceText: string;
@@ -29,6 +31,7 @@ class AssistReplyService {
     }>({
       functionName: 'assist-reply',
       accessToken,
+      headers: buildLlmDebugHeaders(useLlmDebugStore.getState()),
       body: {
         transcript: sourceText,
         scene_hint: sceneHint,

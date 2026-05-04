@@ -220,6 +220,11 @@ function RecapSection({
           <Text style={styles.overallText}>{recap.overallComment}</Text>
         </View>
       ) : null}
+
+      <Pressable style={styles.retryBtn} onPress={onRetry}>
+        <Feather name="refresh-cw" size={14} color={palette.textOnAccent} />
+        <Text style={styles.retryBtnText}>{t("history.detail.recapRegenerate")}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -255,7 +260,7 @@ export default function SessionDetailScreen() {
   const handleGenerateRecap = useCallback(async () => {
     if (!id) return;
     setIsRecapGenerating(true);
-    const result = await historyService.generateRecap(id);
+    const result = await historyService.generateRecap(id, { force: true });
     if (result.recap && detail) {
       setDetail({
         ...detail,

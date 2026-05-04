@@ -1,6 +1,9 @@
 import { sessionManager } from '@/features/live/services/SessionManager';
 import { StreamingWebSocketClient } from '@/features/live/services/StreamingWebSocketClient';
-import { voiceprintService } from '@/features/live/services/VoiceprintService';
+import {
+  VOICEPRINT_STRONG_SELF_THRESHOLD,
+  voiceprintService,
+} from '@/features/live/services/VoiceprintService';
 import { useConversationStore } from '@/features/live/store/conversationStore';
 import { useDebugStore } from '@/features/live/store/debugStore';
 import { useSessionStore } from '@/features/live/store/sessionStore';
@@ -46,6 +49,7 @@ type FinalTurnPayload = {
   speaker: Speaker;
   text: string;
   turnId: string;
+  isTurnEnd: boolean;
   detectedLanguage?: string;
   confidence?: number;
 };
@@ -56,6 +60,25 @@ type SpeakerResolution = {
   source: 'deepgram' | 'voiceprint' | 'hybrid' | 'forced';
   voiceprintSimilarity: number | null;
   voiceprintDecision: 'self' | 'other' | 'unknown' | null;
+};
+
+type BufferedTurn = {
+  speaker: Speaker;
+  rawId: number;
+  text: string;
+  turnId: string;
+  detectedLanguage?: string;
+  confidenceSum: number;
+  confidenceCount: number;
+  recordingStartedAt: number;
+  asrFinalAt: number;
+  voiceprintSimilarity: number | null;
+  voiceprintPeakSimilarity: number | null;
+  voiceprintDecision: 'self' | 'other' | 'unknown' | null;
+  voiceprintSelfVotes: number;
+  voiceprintOtherVotes: number;
+  voiceprintUnknownVotes: number;
+  speakerDecisionSource: SpeakerResolution['source'];
 };
 
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
@@ -96,13 +119,11 @@ export class DeepgramStreamingService {
   });
   private onUtteranceEnd: ((payload: FinalTurnPayload) => Promise<void> | void) | null =
     null;
-  private lastFinalSpeaker: Speaker = 'other';
-  private lastFinalRawSpeakerId: number = -1;
-  private lastFinalText: string = '';
-  private lastFinalTurnId: string = '';
-  private lastFinalLanguage: string | undefined = undefined;
-  private lastFinalConfidenceSum = 0;
-  private lastFinalConfidenceCount = 0;
+  private onFinalTranscriptUpdated:
+    ((payload: FinalTurnPayload) => Promise<void> | void) | null = null;
+  private bufferedTurns: BufferedTurn[] = [];
+  private currentUtteranceBaseTurnId = '';
+  private nextBufferedTurnIndex = 0;
   private currentUtteranceStartedAt: number | null = null;
   private currentDeepgramLanguage = 'en';
   private isPrimingEnrollment = false;
@@ -116,6 +137,7 @@ export class DeepgramStreamingService {
     speaker: Speaker,
     text: string,
     turnId: string,
+    isTurnEnd: boolean,
     detectedLanguage?: string,
     confidence?: number,
   ): Promise<void> {
@@ -158,21 +180,253 @@ export class DeepgramStreamingService {
       speaker,
       text,
       turnId,
+      isTurnEnd,
       detectedLanguage,
       confidence,
     });
   }
 
   private resetBufferedTurn(): void {
-    useConversationStore.getState().clearInterim();
-    this.lastFinalSpeaker = 'other';
-    this.lastFinalRawSpeakerId = -1;
-    this.lastFinalText = '';
-    this.lastFinalTurnId = '';
-    this.lastFinalLanguage = undefined;
-    this.lastFinalConfidenceSum = 0;
-    this.lastFinalConfidenceCount = 0;
+    const store = useConversationStore.getState();
+    store.clearInterim();
+    store.clearStablePreview();
+    this.bufferedTurns = [];
+    this.currentUtteranceBaseTurnId = '';
+    this.nextBufferedTurnIndex = 0;
     this.currentUtteranceStartedAt = null;
+  }
+
+  private getBufferedFallbackSpeaker(): Speaker {
+    return this.bufferedTurns[this.bufferedTurns.length - 1]?.speaker ?? 'other';
+  }
+
+  private ensureUtteranceBaseTurnId(seedTimestamp: number): string {
+    if (!this.currentUtteranceBaseTurnId) {
+      this.currentUtteranceBaseTurnId = `${seedTimestamp}`;
+    }
+    return this.currentUtteranceBaseTurnId;
+  }
+
+  private createBufferedTurn(
+    resolution: SpeakerResolution,
+    text: string,
+    detectedLanguage: string | undefined,
+    confidence: number | undefined,
+    recordingStartedAt: number,
+    seedTimestamp: number,
+  ): BufferedTurn {
+    const baseTurnId = this.ensureUtteranceBaseTurnId(seedTimestamp);
+    const turnId = `${baseTurnId}-${this.nextBufferedTurnIndex++}`;
+    return {
+      speaker: resolution.speaker,
+      rawId: resolution.rawId,
+      text,
+      turnId,
+      detectedLanguage,
+      confidenceSum: confidence ?? 0,
+      confidenceCount: confidence != null ? 1 : 0,
+      recordingStartedAt,
+      asrFinalAt: seedTimestamp,
+      voiceprintSimilarity: resolution.voiceprintSimilarity,
+      voiceprintPeakSimilarity: resolution.voiceprintSimilarity,
+      voiceprintDecision: resolution.voiceprintDecision,
+      voiceprintSelfVotes: resolution.voiceprintDecision === 'self' ? 1 : 0,
+      voiceprintOtherVotes: resolution.voiceprintDecision === 'other' ? 1 : 0,
+      voiceprintUnknownVotes: resolution.voiceprintDecision === 'unknown' ? 1 : 0,
+      speakerDecisionSource: resolution.source,
+    };
+  }
+
+  private registerBufferedTurnTrace(turn: BufferedTurn, asrFinalAt: number): void {
+    useDebugStore.getState().registerTurnTrace({
+      turnId: turn.turnId,
+      speaker: turn.speaker,
+      deepgramSpeakerId: turn.rawId === -1 ? null : turn.rawId,
+      textPreview: turn.text,
+      recordingStartedAt: turn.recordingStartedAt,
+      asrFinalAt,
+      voiceprintSimilarity: turn.voiceprintSimilarity,
+      voiceprintDecision: turn.voiceprintDecision,
+      speakerDecisionSource: turn.speakerDecisionSource,
+    });
+  }
+
+  private mergeBufferedTurn(
+    turn: BufferedTurn,
+    text: string,
+    detectedLanguage: string | undefined,
+    confidence: number | undefined,
+    resolution: SpeakerResolution,
+  ): BufferedTurn {
+    turn.text = mergeTranscriptSegments(turn.text, text);
+    if (detectedLanguage) {
+      turn.detectedLanguage = detectedLanguage;
+    }
+    if (confidence != null) {
+      turn.confidenceSum += confidence;
+      turn.confidenceCount += 1;
+    }
+    turn.asrFinalAt = Date.now();
+    turn.voiceprintSimilarity = resolution.voiceprintSimilarity;
+    turn.voiceprintPeakSimilarity =
+      turn.voiceprintPeakSimilarity == null
+        ? resolution.voiceprintSimilarity
+        : resolution.voiceprintSimilarity == null
+          ? turn.voiceprintPeakSimilarity
+          : Math.max(turn.voiceprintPeakSimilarity, resolution.voiceprintSimilarity);
+    turn.voiceprintDecision = resolution.voiceprintDecision;
+    if (resolution.voiceprintDecision === 'self') {
+      turn.voiceprintSelfVotes += 1;
+    } else if (resolution.voiceprintDecision === 'other') {
+      turn.voiceprintOtherVotes += 1;
+    } else if (resolution.voiceprintDecision === 'unknown') {
+      turn.voiceprintUnknownVotes += 1;
+    }
+    turn.speakerDecisionSource = resolution.source;
+    return turn;
+  }
+
+  private applyVoiceprintTurnLevelOverride(turn: BufferedTurn): BufferedTurn {
+    if (turn.speakerDecisionSource === 'forced') {
+      return turn;
+    }
+
+    if (turn.speaker !== 'other') {
+      return turn;
+    }
+
+    const strongSelfHit =
+      turn.voiceprintPeakSimilarity != null &&
+      turn.voiceprintPeakSimilarity >= VOICEPRINT_STRONG_SELF_THRESHOLD;
+    const selfMajority =
+      turn.voiceprintSelfVotes >= 2 &&
+      turn.voiceprintSelfVotes > turn.voiceprintOtherVotes;
+
+    // Be more aggressive at the whole-bubble level. If a turn has a strong
+    // self-like hit, or its accumulated voiceprint votes lean to self, allow
+    // the whole bubble to flip back to "self" even when Deepgram said "other".
+    if (
+      (selfMajority || (strongSelfHit && turn.voiceprintSelfVotes >= turn.voiceprintOtherVotes)) &&
+      turn.voiceprintOtherVotes === 0
+    ) {
+      turn.speaker = 'self';
+      turn.voiceprintDecision = 'self';
+      turn.voiceprintSimilarity = turn.voiceprintPeakSimilarity ?? turn.voiceprintSimilarity;
+      turn.speakerDecisionSource = 'voiceprint';
+    }
+
+    return turn;
+  }
+
+  private resolvePreviewSpeakerFromResolution(
+    resolution: SpeakerResolution,
+  ): Speaker {
+    if (resolution.source === 'forced') {
+      return resolution.speaker;
+    }
+
+    // For live preview bubbles, bias toward local voiceprint as soon as the
+    // current audio already looks like the user. This avoids a left-side draft
+    // bubble flashing back to the right only at final commit time.
+    if (resolution.voiceprintDecision === 'self') {
+      return 'self';
+    }
+
+    return resolution.speaker;
+  }
+
+  private resolvePreviewSpeakerForBufferedTurn(turn: BufferedTurn): Speaker {
+    if (turn.speakerDecisionSource === 'forced') {
+      return turn.speaker;
+    }
+
+    if (turn.speaker === 'self') {
+      return 'self';
+    }
+
+    const hasSelfLean =
+      turn.voiceprintSelfVotes > turn.voiceprintOtherVotes &&
+      turn.voiceprintSelfVotes > 0;
+    const hasStrongSelfHit =
+      turn.voiceprintPeakSimilarity != null &&
+      turn.voiceprintPeakSimilarity >= VOICEPRINT_STRONG_SELF_THRESHOLD &&
+      turn.voiceprintOtherVotes === 0;
+
+    if (hasSelfLean || hasStrongSelfHit) {
+      return 'self';
+    }
+
+    return turn.speaker;
+  }
+
+  private releaseBufferedTurnsExceptLast(): BufferedTurn[] {
+    if (this.bufferedTurns.length <= 1) {
+      return [];
+    }
+
+    const committedTurns = this.bufferedTurns.slice(0, -1);
+    this.bufferedTurns = this.bufferedTurns.slice(-1);
+    return committedTurns;
+  }
+
+  private drainBufferedTurns(): BufferedTurn[] {
+    const committedTurns = this.bufferedTurns;
+    this.bufferedTurns = [];
+    return committedTurns;
+  }
+
+  private splitWordRuns(words: DeepgramWord[]): DeepgramWord[][] {
+    if (words.length === 0) {
+      return [];
+    }
+
+    const runs: DeepgramWord[][] = [];
+    let currentRun: DeepgramWord[] = [];
+    let currentSpeaker: number | null | undefined = undefined;
+
+    for (const word of words) {
+      const nextSpeaker = word.speaker ?? null;
+      if (currentRun.length === 0) {
+        currentRun = [word];
+        currentSpeaker = nextSpeaker;
+        continue;
+      }
+
+      if (nextSpeaker === currentSpeaker) {
+        currentRun.push(word);
+        continue;
+      }
+
+      runs.push(currentRun);
+      currentRun = [word];
+      currentSpeaker = nextSpeaker;
+    }
+
+    if (currentRun.length > 0) {
+      runs.push(currentRun);
+    }
+
+    return runs;
+  }
+
+  private async commitBufferedTurns(
+    turns: BufferedTurn[],
+    isTurnEnd: boolean,
+  ): Promise<void> {
+    for (const turn of turns) {
+      this.applyVoiceprintTurnLevelOverride(turn);
+      this.registerBufferedTurnTrace(turn, turn.asrFinalAt);
+      const confidence =
+        turn.confidenceCount > 0 ? turn.confidenceSum / turn.confidenceCount : undefined;
+      await this.commitBufferedTurn(
+        turn.speaker,
+        turn.text,
+        turn.turnId,
+        isTurnEnd,
+        turn.detectedLanguage,
+        confidence,
+      );
+    }
   }
 
   private shouldSuppressTranscripts(): boolean {
@@ -283,10 +537,12 @@ export class DeepgramStreamingService {
     token: string,
     onUtteranceEnd: (payload: FinalTurnPayload) => Promise<void> | void,
     learningLanguageTag: string,
+    onFinalTranscriptUpdated?: (payload: FinalTurnPayload) => Promise<void> | void,
   ): Promise<void> {
     console.log('[Deepgram] Connecting WebSocket...');
     this.disconnect();
     this.onUtteranceEnd = onUtteranceEnd;
+    this.onFinalTranscriptUpdated = onFinalTranscriptUpdated ?? null;
     this.currentDeepgramLanguage = getDeepgramLanguageForTag(learningLanguageTag);
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
@@ -294,7 +550,7 @@ export class DeepgramStreamingService {
 
     const url =
       'wss://api.deepgram.com/v1/listen?' +
-      `model=nova-2&language=${this.currentDeepgramLanguage}&smart_format=true&interim_results=true` +
+      `model=nova-3&language=${this.currentDeepgramLanguage}&smart_format=true&interim_results=true` +
       '&utterance_end_ms=1000&vad_events=true&punctuate=true&diarize=true' +
       '&encoding=linear16&sample_rate=16000&channels=1';
 
@@ -370,13 +626,6 @@ export class DeepgramStreamingService {
             return;
           }
 
-          const {
-            speaker,
-            rawId,
-            source,
-            voiceprintSimilarity,
-            voiceprintDecision,
-          } = this.determineSpeaker(liveTranscript.words);
           const trimmedTranscript = liveTranscript.transcript;
 
           if (!isFinal && trimmedTranscript.length > 0 && this.currentUtteranceStartedAt === null) {
@@ -385,72 +634,109 @@ export class DeepgramStreamingService {
 
           if (isFinal && trimmedTranscript.length > 0) {
             const segmentConfidence = alt?.confidence;
-            console.log('[Deepgram] Final transcript (' + speaker + ', source=' + source + ', rawId=' + rawId + ', vp=' + (voiceprintSimilarity?.toFixed(3) ?? '?') + ', vpDecision=' + (voiceprintDecision ?? '?') + ', lang=' + (detectedLanguage ?? '?') + ', conf=' + (segmentConfidence?.toFixed(3) ?? '?') + '):', transcript.substring(0, 80));
-
-            const speakerChanged =
-              this.lastFinalText &&
-              this.lastFinalTurnId &&
-              (this.lastFinalSpeaker !== speaker ||
-                (rawId !== -1 &&
-                  this.lastFinalRawSpeakerId !== -1 &&
-                  this.lastFinalRawSpeakerId !== rawId));
-
-            if (speakerChanged) {
-              const prevSpeaker = this.lastFinalSpeaker;
-              const prevText = this.lastFinalText;
-              const prevTurnId = this.lastFinalTurnId;
-              const prevLanguage = this.lastFinalLanguage;
-              const prevConfidence = this.lastFinalConfidenceCount > 0
-                ? this.lastFinalConfidenceSum / this.lastFinalConfidenceCount
-                : undefined;
-
-              console.log('[Deepgram] Speaker changed (' + prevSpeaker + '/' + this.lastFinalRawSpeakerId + ' -> ' + speaker + '/' + rawId + '), committing buffered turn');
-              this.lastFinalText = '';
-              this.lastFinalTurnId = '';
-              this.lastFinalLanguage = undefined;
-              this.lastFinalConfidenceSum = 0;
-              this.lastFinalConfidenceCount = 0;
-              this.lastFinalRawSpeakerId = -1;
-
-              void this.commitBufferedTurn(
-                prevSpeaker,
-                prevText,
-                prevTurnId,
-                prevLanguage,
-                prevConfidence,
-              );
-            }
-
             const timestamp = Date.now();
-            const turnId = this.lastFinalTurnId || `${timestamp}`;
             const recordingStartedAt = this.currentUtteranceStartedAt ?? timestamp;
-            const mergedText = mergeTranscriptSegments(this.lastFinalText, trimmedTranscript);
+            const wordRuns =
+              liveTranscript.words.length > 0
+                ? this.splitWordRuns(liveTranscript.words)
+                : [liveTranscript.words];
+            const committedTurns: BufferedTurn[] = [];
+            let latestBufferedTurn: BufferedTurn | null = null;
 
-            this.lastFinalSpeaker = speaker;
-            this.lastFinalRawSpeakerId = rawId;
-            this.lastFinalText = mergedText;
-            this.lastFinalTurnId = turnId;
-            if (detectedLanguage) {
-              this.lastFinalLanguage = detectedLanguage;
+            for (const runWords of wordRuns) {
+              const runText =
+                runWords.length > 0
+                  ? this.buildTranscriptFromWords(runWords)
+                  : trimmedTranscript;
+              const nextText = runText.trim();
+              if (!nextText) {
+                continue;
+              }
+
+              const resolution = this.determineSpeaker(runWords);
+              console.log(
+                '[Deepgram] Final transcript (' +
+                  resolution.speaker +
+                  ', source=' +
+                  resolution.source +
+                  ', rawId=' +
+                  resolution.rawId +
+                  ', vp=' +
+                  (resolution.voiceprintSimilarity?.toFixed(3) ?? '?') +
+                  ', vpDecision=' +
+                  (resolution.voiceprintDecision ?? '?') +
+                  ', lang=' +
+                  (detectedLanguage ?? '?') +
+                  ', conf=' +
+                  (segmentConfidence?.toFixed(3) ?? '?') +
+                  '):',
+                nextText.substring(0, 80),
+              );
+
+              const lastBufferedTurn =
+                this.bufferedTurns[this.bufferedTurns.length - 1] ?? null;
+              const shouldMerge =
+                lastBufferedTurn != null &&
+                lastBufferedTurn.speaker === resolution.speaker &&
+                (resolution.rawId === -1 ||
+                  lastBufferedTurn.rawId === -1 ||
+                  lastBufferedTurn.rawId === resolution.rawId);
+
+              if (shouldMerge && lastBufferedTurn) {
+                latestBufferedTurn = this.mergeBufferedTurn(
+                  lastBufferedTurn,
+                  nextText,
+                  detectedLanguage,
+                  segmentConfidence,
+                  resolution,
+                );
+              } else {
+                latestBufferedTurn = this.createBufferedTurn(
+                  resolution,
+                  nextText,
+                  detectedLanguage,
+                  segmentConfidence,
+                  recordingStartedAt,
+                  timestamp,
+                );
+                this.bufferedTurns.push(latestBufferedTurn);
+                committedTurns.push(...this.releaseBufferedTurnsExceptLast());
+              }
+
+              this.registerBufferedTurnTrace(latestBufferedTurn, timestamp);
+              const latestConfidence =
+                latestBufferedTurn.confidenceCount > 0
+                  ? latestBufferedTurn.confidenceSum / latestBufferedTurn.confidenceCount
+                  : segmentConfidence;
+              void this.onFinalTranscriptUpdated?.({
+                speaker: latestBufferedTurn.speaker,
+                text: latestBufferedTurn.text,
+                turnId: latestBufferedTurn.turnId,
+                isTurnEnd: false,
+                detectedLanguage: latestBufferedTurn.detectedLanguage,
+                confidence: latestConfidence,
+              });
             }
-            if (segmentConfidence != null) {
-              this.lastFinalConfidenceSum += segmentConfidence;
-              this.lastFinalConfidenceCount += 1;
+
+            if (latestBufferedTurn) {
+              // Keep the latest finalized chunk visually stable, and let later
+              // interim updates only render the unstable tail as a draft bubble.
+              store.updateStablePreview(
+                latestBufferedTurn.text,
+                this.resolvePreviewSpeakerForBufferedTurn(latestBufferedTurn),
+              );
+              store.clearInterim();
             }
-            useDebugStore.getState().registerTurnTrace({
-              turnId,
-              speaker,
-              textPreview: mergedText,
-              recordingStartedAt,
-              asrFinalAt: timestamp,
-              voiceprintSimilarity,
-              voiceprintDecision,
-              speakerDecisionSource: source,
-            });
-            // Keep the full accumulated sentence in interim state until Deepgram confirms the utterance end.
-            store.updateInterim(mergedText, speaker);
+
+            if (committedTurns.length > 0) {
+              void this.commitBufferedTurns(committedTurns, false);
+            }
           } else if (!isFinal) {
-            store.updateInterim(trimmedTranscript, speaker);
+            const interimResolution = this.determineSpeaker(liveTranscript.words);
+            store.updateInterim(
+              trimmedTranscript,
+              this.resolvePreviewSpeakerFromResolution(interimResolution),
+            );
           }
         }
 
@@ -476,46 +762,47 @@ export class DeepgramStreamingService {
           }
 
           const interimText = store.currentInterimText.trim();
-          const interimSpeaker = store.currentInterimSpeaker ?? this.lastFinalSpeaker;
+          const interimSpeaker =
+            store.currentInterimSpeaker ?? this.getBufferedFallbackSpeaker();
 
-          if (!this.lastFinalText && interimText) {
+          if (this.bufferedTurns.length === 0 && interimText) {
             const fallbackTimestamp = Date.now();
-            const fallbackTurnId = `${fallbackTimestamp}`;
             const recordingStartedAt =
               this.currentUtteranceStartedAt ?? fallbackTimestamp;
-            console.log('[Deepgram] Promoting interim transcript to final:', interimText.substring(0, 80));
-            this.lastFinalSpeaker = interimSpeaker;
-            this.lastFinalText = interimText;
-            this.lastFinalTurnId = fallbackTurnId;
-            useDebugStore.getState().registerTurnTrace({
-              turnId: fallbackTurnId,
-              speaker: interimSpeaker,
-              textPreview: interimText,
+            console.log(
+              '[Deepgram] Promoting interim transcript to final:',
+              interimText.substring(0, 80),
+            );
+            const fallbackTurn = this.createBufferedTurn(
+              {
+                speaker: interimSpeaker,
+                rawId: -1,
+                source: 'deepgram',
+                voiceprintSimilarity: null,
+                voiceprintDecision: null,
+              },
+              interimText,
+              this.currentDeepgramLanguage,
+              undefined,
               recordingStartedAt,
-              asrFinalAt: fallbackTimestamp,
-            });
+              fallbackTimestamp,
+            );
+            this.bufferedTurns.push(fallbackTurn);
+            this.registerBufferedTurnTrace(fallbackTurn, fallbackTimestamp);
           }
 
-          const committedSpeaker = this.lastFinalSpeaker;
-          const committedText = this.lastFinalText;
-          const committedTurnId = this.lastFinalTurnId;
-          const committedLanguage = this.lastFinalLanguage;
-          const committedConfidence = this.lastFinalConfidenceCount > 0
-            ? this.lastFinalConfidenceSum / this.lastFinalConfidenceCount
-            : undefined;
-
-          console.log('[Deepgram] UtteranceEnd -> speaker=' + committedSpeaker + ', lang=' + (committedLanguage ?? '?') + ', conf=' + (committedConfidence?.toFixed(3) ?? '?') + ', turnId=' + committedTurnId);
+          const committedTurns = this.drainBufferedTurns();
+          if (committedTurns.length > 0) {
+            const summary = committedTurns
+              .map((turn) => `${turn.speaker}:${turn.turnId}`)
+              .join(', ');
+            console.log('[Deepgram] UtteranceEnd -> committing turns:', summary);
+          }
 
           this.resetBufferedTurn();
 
-          if (committedText && committedTurnId) {
-            await this.commitBufferedTurn(
-              committedSpeaker,
-              committedText,
-              committedTurnId,
-              committedLanguage,
-              committedConfidence,
-            );
+          if (committedTurns.length > 0) {
+            await this.commitBufferedTurns(committedTurns, true);
           }
         }
       },
@@ -596,15 +883,12 @@ export class DeepgramStreamingService {
       },
     });
 
-    this.lastFinalSpeaker = 'other';
-    this.lastFinalText = '';
-    this.lastFinalTurnId = '';
-    this.lastFinalLanguage = undefined;
-    this.currentUtteranceStartedAt = null;
+    this.resetBufferedTurn();
     this.isPrimingEnrollment = false;
     this.clearPrimeDrainTimer();
     this.suppressMessagesUntil = 0;
     this.onPrimeUtteranceEnd = null;
+    this.onFinalTranscriptUpdated = null;
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
     this.liveTranscriptBoundarySeconds = 0;
@@ -734,7 +1018,7 @@ export class DeepgramStreamingService {
         return { speaker: 'self', rawId: majority };
       }
 
-      return { speaker: this.lastFinalSpeaker, rawId: majority };
+      return { speaker: this.getBufferedFallbackSpeaker(), rawId: majority };
     }
 
     const result = majority === selfSpeakerId ? 'self' : 'other';
@@ -768,15 +1052,19 @@ export class DeepgramStreamingService {
       allowAutoLock,
     );
 
-    if (voiceprintDecision === 'self') {
-      if (selfSpeakerId === null && deepgramResolution.rawId !== -1) {
-        store.setSelfSpeakerId(deepgramResolution.rawId);
-      }
+    // When Deepgram already provides a concrete speaker id, keep turn partitioning
+    // and left/right ownership primarily driven by Deepgram. Voiceprint remains a
+    // supporting signal for auto-locking and debug visibility, but should not
+    // split one sentence into mixed-side bubbles at word-run granularity.
+    if (deepgramResolution.rawId !== -1) {
       const source =
-        deepgramResolution.speaker === 'self' ? 'hybrid' : 'voiceprint';
+        (voiceprintDecision === 'self' && deepgramResolution.speaker === 'self') ||
+        (voiceprintDecision === 'other' && deepgramResolution.speaker === 'other')
+          ? 'hybrid'
+          : 'deepgram';
       store.setSpeakerDecisionSource(source);
       return {
-        speaker: 'self',
+        speaker: deepgramResolution.speaker,
         rawId: deepgramResolution.rawId,
         source,
         voiceprintSimilarity,
@@ -784,21 +1072,21 @@ export class DeepgramStreamingService {
       };
     }
 
-    if (voiceprintDecision === 'other') {
-      if (deepgramResolution.speaker === 'other') {
-        store.setSpeakerDecisionSource('hybrid');
-        return {
-          speaker: 'other',
-          rawId: deepgramResolution.rawId,
-          source: 'hybrid',
-          voiceprintSimilarity,
-          voiceprintDecision,
-        };
-      }
+    if (voiceprintDecision === 'self') {
+      store.setSpeakerDecisionSource('voiceprint');
+      return {
+        speaker: 'self',
+        rawId: deepgramResolution.rawId,
+        source: 'voiceprint',
+        voiceprintSimilarity,
+        voiceprintDecision,
+      };
+    }
 
+    if (voiceprintDecision === 'other') {
       const speaker =
-        this.lastFinalText && this.lastFinalTurnId
-          ? this.lastFinalSpeaker
+        this.bufferedTurns.length > 0
+          ? this.getBufferedFallbackSpeaker()
           : deepgramResolution.speaker;
       const source = speaker === 'other' ? 'voiceprint' : 'deepgram';
       store.setSpeakerDecisionSource(source);

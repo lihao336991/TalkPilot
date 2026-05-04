@@ -3,15 +3,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  createAuthRequiredResponse,
-  createFeatureAccessDeniedResponse,
-  JSON_HEADERS,
-  mapFeatureAccessRow,
+    createAuthRequiredResponse,
+    createFeatureAccessDeniedResponse,
+    JSON_HEADERS,
+    mapFeatureAccessRow,
 } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
-    createLlmRuntime,
-    withLlmDefaults,
+    runLlmChatCompletion,
 } from "../_shared/llm.ts";
 
 function languageDisplayName(tag: string): string {
@@ -107,6 +106,14 @@ serve(async (req: Request) => {
   );
 
   if (accessError) {
+    console.error("[Suggest] Access Error:", {
+      userId: user.id,
+      sessionId,
+      code: accessError.code,
+      message: accessError.message,
+      details: accessError.details,
+      hint: accessError.hint,
+    });
     return new Response(JSON.stringify({ error: "Suggestion access check failed" }), {
       status: 500,
       headers: JSON_HEADERS,
@@ -161,20 +168,21 @@ ${conversationHistory}
 
 Last utterance from the other person: "${lastUtterance}"`;
 
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
-
   try {
-    const completion = await llm.client.chat.completions.create(withLlmDefaults(llm, {
+    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(req, {
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       max_tokens: 100,
       temperature: 0.4,
-    }));
+    });
+    const responseHeaders = buildLlmResponseHeaders(runtime, {
+      routeMode,
+      attempts,
+    }, {
+      "Content-Type": "application/json",
+    });
 
     const rawContent = completion.choices[0]?.message?.content ?? "";
     const cleanText = limitSuggestionWords(sanitizeSuggestionText(rawContent));
@@ -187,9 +195,6 @@ Last utterance from the other person: "${lastUtterance}"`;
   } catch (error: any) {
     const errorContext = {
       error: "LLM Provider Error",
-      provider: llm.provider,
-      model: llm.model,
-      baseUrl: llm.client.baseURL,
       message: error.message,
       name: error.name,
       status: error.status,
@@ -199,9 +204,7 @@ Last utterance from the other person: "${lastUtterance}"`;
     
     return new Response(JSON.stringify(errorContext), {
       status: error.status || 500,
-      headers: buildLlmResponseHeaders(llm, {
-        "Content-Type": "application/json",
-      }),
+      headers: JSON_HEADERS,
     });
   }
 });

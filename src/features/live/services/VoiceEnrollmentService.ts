@@ -8,9 +8,15 @@ const SAMPLE_RATE = 16_000;
 const CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
 const ENROLLMENT_PROFILE_VERSION = 1;
-const VOICEPRINT_MODEL = 'titanet-small-f16-coreml-v1';
+const VOICEPRINT_MODEL = 'titanet-small-f16-coreml-v2';
 const DEFAULT_TITANET_SELF_HIGH_THRESHOLD = 0.58;
 const DEFAULT_TITANET_SELF_LOW_THRESHOLD = 0.38;
+
+function isFiniteEmbeddingArray(values: unknown[]): values is number[] {
+  return values.every(
+    (value) => typeof value === 'number' && Number.isFinite(value),
+  );
+}
 
 export type EnrollmentStatus = 'idle' | 'recording' | 'done';
 
@@ -151,6 +157,32 @@ class VoiceEnrollmentService {
   }
 
   async saveEnrollmentProfile(profile: VoiceEnrollmentProfile): Promise<void> {
+    // #region debug-point B:save-enrollment-profile
+    fetch('http://10.200.152.245:7777/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'voiceprint-invalid-enrollment',
+        runId: 'pre-fix',
+        hypothesisId: 'B',
+        location: 'VoiceEnrollmentService.ts:saveEnrollmentProfile',
+        msg: '[DEBUG] saving enrollment profile',
+        data: {
+          model: profile.model,
+          embeddingLength: profile.embedding.length,
+          thresholdSelfHigh: profile.thresholdSelfHigh,
+          thresholdSelfLow: profile.thresholdSelfLow,
+          preview: profile.embedding.slice(0, 4),
+        },
+        ts: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    console.log('[VoiceEnrollmentService] Saving enrollment profile', {
+      model: profile.model,
+      embeddingLength: profile.embedding.length,
+      preview: profile.embedding.slice(0, 4),
+    });
     await FileSystem.writeAsStringAsync(
       ENROLLMENT_PROFILE_FILE_PATH,
       JSON.stringify(profile),
@@ -168,12 +200,71 @@ class VoiceEnrollmentService {
       }
 
       const parsed = JSON.parse(raw) as Partial<VoiceEnrollmentProfile>;
+      // #region debug-point D:load-enrollment-profile
+      fetch('http://10.200.152.245:7777/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'voiceprint-invalid-enrollment',
+          runId: 'pre-fix',
+          hypothesisId: 'D',
+          location: 'VoiceEnrollmentService.ts:loadEnrollmentProfile',
+          msg: '[DEBUG] loaded raw enrollment profile',
+          data: {
+            parsedModel: parsed.model ?? null,
+            embeddingLength: Array.isArray(parsed.embedding)
+              ? parsed.embedding.length
+              : null,
+            version: parsed.version ?? null,
+            preview: Array.isArray(parsed.embedding)
+              ? parsed.embedding.slice(0, 4)
+              : null,
+          },
+          ts: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      console.log('[VoiceEnrollmentService] Loaded enrollment profile', {
+        parsedModel: parsed.model ?? null,
+        embeddingLength: Array.isArray(parsed.embedding)
+          ? parsed.embedding.length
+          : null,
+        preview: Array.isArray(parsed.embedding)
+          ? parsed.embedding.slice(0, 4)
+          : null,
+      });
       if (
         parsed.version !== ENROLLMENT_PROFILE_VERSION ||
         parsed.model !== VOICEPRINT_MODEL ||
         !Array.isArray(parsed.embedding) ||
-        parsed.embedding.length === 0
+        parsed.embedding.length === 0 ||
+        !isFiniteEmbeddingArray(parsed.embedding)
       ) {
+        // #region debug-point D:reject-enrollment-profile
+        fetch('http://10.200.152.245:7777/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'voiceprint-invalid-enrollment',
+            runId: 'pre-fix',
+            hypothesisId: 'D',
+            location: 'VoiceEnrollmentService.ts:loadEnrollmentProfile',
+            msg: '[DEBUG] rejected enrollment profile during load',
+            data: {
+              expectedModel: VOICEPRINT_MODEL,
+              parsedModel: parsed.model ?? null,
+              embeddingLength: Array.isArray(parsed.embedding)
+                ? parsed.embedding.length
+                : null,
+              hasOnlyFiniteValues: Array.isArray(parsed.embedding)
+                ? isFiniteEmbeddingArray(parsed.embedding)
+                : false,
+              version: parsed.version ?? null,
+            },
+            ts: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         return null;
       }
 

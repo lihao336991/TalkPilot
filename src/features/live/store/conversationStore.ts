@@ -44,10 +44,15 @@ type TranslationUpdate = {
   translationDirection?: TranslationDirection;
 };
 
+type PendingTranslationMap = Record<string, TranslationUpdate | undefined>;
+
 type ConversationState = {
   turns: Turn[];
+  currentStableText: string;
+  currentStableSpeaker: 'self' | 'other' | null;
   currentInterimText: string;
   currentInterimSpeaker: 'self' | 'other' | null;
+  pendingTurnTranslations: PendingTranslationMap;
   selfSpeakerId: number | null;
   forcedSpeaker: 'self' | 'other' | null;
   isListening: boolean;
@@ -70,6 +75,8 @@ type ConversationState = {
   removeTurn: (turnId: string) => void;
   setTurnReview: (turnId: string, review: ReviewResult) => void;
   setTurnTranslation: (turnId: string, update: TranslationUpdate) => void;
+  updateStablePreview: (text: string, speaker: 'self' | 'other') => void;
+  clearStablePreview: () => void;
   updateInterim: (text: string, speaker: 'self' | 'other') => void;
   clearInterim: () => void;
   setSelfSpeakerId: (id: number | null) => void;
@@ -100,8 +107,11 @@ type ConversationState = {
 
 const initialState = {
   turns: [] as Turn[],
+  currentStableText: '',
+  currentStableSpeaker: null as 'self' | 'other' | null,
   currentInterimText: '',
   currentInterimSpeaker: null as 'self' | 'other' | null,
+  pendingTurnTranslations: {} as PendingTranslationMap,
   selfSpeakerId: null as number | null,
   forcedSpeaker: null as 'self' | 'other' | null,
   isListening: false,
@@ -124,7 +134,34 @@ export const useConversationStore = create<ConversationState>((set) => ({
   ...initialState,
 
   addTurn: (turn) =>
-    set((state) => ({ turns: [...state.turns, turn] })),
+    set((state) => {
+      const pendingTranslation = state.pendingTurnTranslations[turn.turnId];
+      const nextTurn = pendingTranslation
+        ? {
+            ...turn,
+            ...(pendingTranslation.translation !== undefined
+              ? { translation: pendingTranslation.translation }
+              : {}),
+            ...(pendingTranslation.translationStatus !== undefined
+              ? { translationStatus: pendingTranslation.translationStatus }
+              : {}),
+            ...(pendingTranslation.translationDirection !== undefined
+              ? { translationDirection: pendingTranslation.translationDirection }
+              : {}),
+          }
+        : turn;
+
+      if (!pendingTranslation) {
+        return { turns: [...state.turns, nextTurn] };
+      }
+
+      const nextPending = { ...state.pendingTurnTranslations };
+      delete nextPending[turn.turnId];
+      return {
+        turns: [...state.turns, nextTurn],
+        pendingTurnTranslations: nextPending,
+      };
+    }),
 
   updateTurn: (turnId, updates) =>
     set((state) => ({
@@ -150,24 +187,44 @@ export const useConversationStore = create<ConversationState>((set) => ({
     })),
 
   setTurnTranslation: (turnId, update) =>
-    set((state) => ({
-      turns: state.turns.map((turn) =>
-        turn.turnId === turnId
-          ? {
-              ...turn,
-              ...(update.translation !== undefined
-                ? { translation: update.translation }
-                : {}),
-              ...(update.translationStatus !== undefined
-                ? { translationStatus: update.translationStatus }
-                : {}),
-              ...(update.translationDirection !== undefined
-                ? { translationDirection: update.translationDirection }
-                : {}),
-            }
-          : turn,
-      ),
-    })),
+    set((state) => {
+      const hasCommittedTurn = state.turns.some((turn) => turn.turnId === turnId);
+      const mergedPending = {
+        ...(state.pendingTurnTranslations[turnId] ?? {}),
+        ...update,
+      };
+
+      return {
+        turns: state.turns.map((turn) =>
+          turn.turnId === turnId
+            ? {
+                ...turn,
+                ...(update.translation !== undefined
+                  ? { translation: update.translation }
+                  : {}),
+                ...(update.translationStatus !== undefined
+                  ? { translationStatus: update.translationStatus }
+                  : {}),
+                ...(update.translationDirection !== undefined
+                  ? { translationDirection: update.translationDirection }
+                  : {}),
+              }
+            : turn,
+        ),
+        pendingTurnTranslations: hasCommittedTurn
+          ? state.pendingTurnTranslations
+          : {
+              ...state.pendingTurnTranslations,
+              [turnId]: mergedPending,
+            },
+      };
+    }),
+
+  updateStablePreview: (text, speaker) =>
+    set({ currentStableText: text, currentStableSpeaker: speaker }),
+
+  clearStablePreview: () =>
+    set({ currentStableText: '', currentStableSpeaker: null }),
 
   updateInterim: (text, speaker) =>
     set({ currentInterimText: text, currentInterimSpeaker: speaker }),

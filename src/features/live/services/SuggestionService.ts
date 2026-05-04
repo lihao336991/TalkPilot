@@ -5,22 +5,19 @@ import {
 } from '@/shared/billing/access';
 import type { FeatureAccessEnvelope } from '@/shared/billing/accessTypes';
 import { useDebugStore } from '@/features/live/store/debugStore';
+import {
+  buildLlmDebugHeaders,
+  formatLlmMetaDetail,
+} from '@/shared/llm/debugConfig';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import {
   type Suggestion,
   useSuggestionStore,
 } from '@/features/live/store/suggestionStore';
+import { useSessionStore } from '@/features/live/store/sessionStore';
 import { useLocaleStore } from '@/shared/store/localeStore';
 import { useAuthStore } from '@/shared/store/authStore';
-
-function getLlmMetaDetail(headers: Headers): string {
-  const provider = headers.get('x-llm-provider');
-  const model = headers.get('x-llm-model');
-  const keyPrefix = headers.get('x-llm-key-prefix');
-  const parts = [provider, model, keyPrefix ? `key ${keyPrefix}` : null].filter(Boolean);
-
-  return parts.join(' · ');
-}
+import { useLlmDebugStore } from '@/shared/store/llmDebugStore';
 
 function isSuggestion(value: unknown): value is Suggestion {
   if (!value || typeof value !== 'object') {
@@ -57,6 +54,7 @@ export class SuggestionService {
       }>({
         functionName: 'suggest',
         accessToken,
+        headers: buildLlmDebugHeaders(useLlmDebugStore.getState()),
         body: {
           sessionId,
           lastUtterance,
@@ -69,11 +67,12 @@ export class SuggestionService {
       if (access) {
         useAccessStore.getState().setFeatureAccess(access);
       }
-      const llmMeta = getLlmMetaDetail(headers);
+      const llmMeta = formatLlmMetaDetail(headers);
       const suggestions = Array.isArray(payload?.suggestions)
         ? payload.suggestions.filter(isSuggestion)
         : [];
       const isStillCurrent = useSuggestionStore.getState().triggerTurnId === turnId;
+      const isCopilotEnabled = useSessionStore.getState().copilotEnabled;
       console.log('[Suggestion] Received suggestions:', suggestions.length, llmMeta);
       useDebugStore
         .getState()
@@ -81,6 +80,10 @@ export class SuggestionService {
           turnId,
           [llmMeta, `${suggestions.length} suggestion(s)`].filter(Boolean).join(' · '),
         );
+      if (!isCopilotEnabled) {
+        store.clear();
+        return;
+      }
       if (isStillCurrent) {
         store.finalizeSuggestions(suggestions);
       }

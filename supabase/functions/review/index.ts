@@ -10,8 +10,7 @@ import {
 } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
-    createLlmRuntime,
-    withLlmDefaults,
+    runLlmChatCompletion,
 } from "../_shared/llm.ts";
 
 function languageDisplayName(tag: string): string {
@@ -42,6 +41,25 @@ function languageDisplayName(tag: string): string {
     en: "English",
   };
   return map[primary] ?? tag;
+}
+
+function sanitizeText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/\s+/g, " ").replace(/[\u0000-\u001F\u007F]/g, "").trim();
+}
+
+function isMeaningfulText(value: unknown, minChars = 3): boolean {
+  const text = sanitizeText(value);
+  if (!text || text.includes("\uFFFD")) {
+    return false;
+  }
+
+  const visibleUnits = (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
+  const suspiciousLongToken = text.split(/\s+/).some((token) => token.length > 48);
+  return visibleUnits >= minChars && !suspiciousLongToken;
 }
 
 serve(async (req: Request) => {
@@ -99,11 +117,6 @@ serve(async (req: Request) => {
     );
   }
 
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
-
   const { data: accessRows, error: accessError } = await supabase.rpc(
     "consume_feature_access",
     {
@@ -113,6 +126,14 @@ serve(async (req: Request) => {
   );
 
   if (accessError) {
+    console.error("[Review] Access Error:", {
+      userId: user.id,
+      sessionId,
+      code: accessError.code,
+      message: accessError.message,
+      details: accessError.details,
+      hint: accessError.hint,
+    });
     return new Response(JSON.stringify({ error: "Review access check failed" }), {
       status: 500,
       headers: JSON_HEADERS,
@@ -149,6 +170,7 @@ serve(async (req: Request) => {
   const systemPrompt = `You are a ${targetLanguageName} language reviewer. The user is practicing ${targetLanguageName} in a "${scene || "general"}" scenario.
 
 Review the user's utterance for grammar, vocabulary, and naturalness issues. Focus on at most 2 most important issues.
+Base every suggestion on the actual utterance. Do not invent context or rewrite the whole sentence unless necessary.
 
 Output your review wrapped in XML-like tags exactly as follows. Do not use JSON.
 <score>green|yellow|red</score>
@@ -174,14 +196,29 @@ User's utterance to review: "${userUtterance}"`;
   const startTime = Date.now();
 
   try {
-    const completion = await llm.client.chat.completions.create(withLlmDefaults(llm, {
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      max_tokens: 200,
-      temperature: 0.3,
-    }));
+    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(
+      req,
+      {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_tokens: 200,
+        temperature: 0.3,
+      },
+      {
+        providerEnvName: "REVIEW_LLM_PROVIDER",
+        modelEnvName: "REVIEW_LLM_MODEL",
+        defaultProvider: "cerebras",
+        defaultModel: "gpt-oss-120b",
+      },
+    );
+    const responseHeaders = buildLlmResponseHeaders(runtime, {
+      routeMode,
+      attempts,
+    }, {
+      "Content-Type": "application/json",
+    });
 
     const latencyMs = Date.now() - startTime;
     const rawContent = completion.choices[0]?.message?.content ?? "";
@@ -198,8 +235,12 @@ User's utterance to review: "${userUtterance}"`;
       }
     }
 
-    const better_expression = betterExprMatch && betterExprMatch[1] ? betterExprMatch[1].trim() : null;
-    const praise = praiseMatch && praiseMatch[1] ? praiseMatch[1].trim() : null;
+    const better_expression = betterExprMatch && isMeaningfulText(betterExprMatch[1])
+      ? sanitizeText(betterExprMatch[1])
+      : null;
+    const praise = praiseMatch && isMeaningfulText(praiseMatch[1])
+      ? sanitizeText(praiseMatch[1])
+      : null;
 
     const issues = [];
     const issueTypeMatches = [...rawContent.matchAll(/<issue_type>\s*([\s\S]*?)\s*<\/issue_type>/gi)];
@@ -209,11 +250,25 @@ User's utterance to review: "${userUtterance}"`;
 
     const issueCount = Math.min(issueTypeMatches.length, issueOriginalMatches.length, issueCorrectedMatches.length, issueExplanationMatches.length);
     for (let i = 0; i < issueCount; i++) {
+      const type = sanitizeText(issueTypeMatches[i][1]).toLowerCase();
+      const original = sanitizeText(issueOriginalMatches[i][1]);
+      const corrected = sanitizeText(issueCorrectedMatches[i][1]);
+      const explanation = sanitizeText(issueExplanationMatches[i][1]);
+
+      if (
+        !["grammar", "vocabulary", "naturalness"].includes(type) ||
+        !isMeaningfulText(original) ||
+        !isMeaningfulText(corrected) ||
+        !isMeaningfulText(explanation)
+      ) {
+        continue;
+      }
+
       issues.push({
-        type: issueTypeMatches[i][1].trim(),
-        original: issueOriginalMatches[i][1].trim(),
-        corrected: issueCorrectedMatches[i][1].trim(),
-        explanation: issueExplanationMatches[i][1].trim()
+        type,
+        original,
+        corrected,
+        explanation
       });
     }
 
@@ -238,9 +293,6 @@ User's utterance to review: "${userUtterance}"`;
   } catch (error: any) {
     const errorContext = {
       error: "LLM Provider Error",
-      provider: llm.provider,
-      model: llm.model,
-      baseUrl: llm.client.baseURL,
       message: error.message,
       name: error.name,
       status: error.status,
@@ -250,7 +302,7 @@ User's utterance to review: "${userUtterance}"`;
     
     return new Response(JSON.stringify(errorContext), {
       status: error.status || 500,
-      headers: responseHeaders,
+      headers: JSON_HEADERS,
     });
   }
 });

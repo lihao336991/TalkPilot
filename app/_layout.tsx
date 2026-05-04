@@ -218,6 +218,15 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen name="(dev)/test" options={{ title: "TalkPilot Dev" }} />
+        <Stack.Screen
+          name="(dev)/voiceprint"
+          options={{
+            headerShown: false,
+            presentation: "card",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );

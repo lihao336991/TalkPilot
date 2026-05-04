@@ -1,6 +1,7 @@
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { useConversationStore } from '@/features/live/store/conversationStore';
+import { useDebugStore } from '@/features/live/store/debugStore';
 import { useLocaleStore } from '@/shared/store/localeStore';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -62,6 +63,7 @@ class TranslationService {
   private sound: Audio.Sound | null = null;
   private outputFileUri = `${FileSystem.cacheDirectory ?? ''}translation-reply.mp3`;
   private voiceCache = new Map<string, boolean>();
+  private latestRequestSeqByTurn = new Map<string, number>();
 
   private async hasVoiceForLanguage(languageTag: string): Promise<boolean> {
     if (this.voiceCache.has(languageTag)) {
@@ -105,13 +107,17 @@ class TranslationService {
     }
 
     const store = useConversationStore.getState();
+    const requestSeq = (this.latestRequestSeqByTurn.get(turnId) ?? 0) + 1;
+    this.latestRequestSeqByTurn.set(turnId, requestSeq);
     store.setTurnTranslation(turnId, {
       translation: undefined,
       translationStatus: 'loading',
       translationDirection: direction,
     });
+    useDebugStore.getState().startTurnTranslation(turnId);
 
     try {
+      const startedAt = Date.now();
       const accessToken = await getValidAccessToken();
       const targetLanguage = getNativeLanguageTag();
 
@@ -132,10 +138,15 @@ class TranslationService {
       const translated =
         data.translated_text?.trim() || data.english_reply?.trim() || '';
 
+      if (this.latestRequestSeqByTurn.get(turnId) !== requestSeq) {
+        return;
+      }
+
       if (!translated) {
         useConversationStore.getState().setTurnTranslation(turnId, {
           translationStatus: 'error',
         });
+        useDebugStore.getState().failTurnTranslation(turnId, 'empty translation');
         return;
       }
 
@@ -144,11 +155,22 @@ class TranslationService {
         translationStatus: 'done',
         translationDirection: direction,
       });
+      const durationMs = Date.now() - startedAt;
+      useDebugStore
+        .getState()
+        .completeTurnTranslation(turnId, `${direction} · ${durationMs} ms`);
     } catch (error) {
+      if (this.latestRequestSeqByTurn.get(turnId) !== requestSeq) {
+        return;
+      }
       console.error('[Translation] Failed to translate turn', turnId, error);
       useConversationStore.getState().setTurnTranslation(turnId, {
         translationStatus: 'error',
       });
+      useDebugStore.getState().failTurnTranslation(
+        turnId,
+        error instanceof Error ? error.message : 'Translation request failed',
+      );
     }
   }
 

@@ -5,9 +5,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { JSON_HEADERS } from "../_shared/access.ts";
 import {
   buildLlmResponseHeaders,
-  createLlmRuntime,
   extractJsonObject,
-  withLlmDefaults,
+  runLlmChatCompletion,
 } from "../_shared/llm.ts";
 
 function languageDisplayName(tag: string): string {
@@ -25,6 +24,121 @@ function languageDisplayName(tag: string): string {
     en: "English",
   };
   return map[primary] ?? tag;
+}
+
+function sanitizeText(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/\s+/g, " ").replace(/[\u0000-\u001F\u007F]/g, "").trim();
+}
+
+function isMeaningfulText(value: unknown, minChars = 4): boolean {
+  const text = sanitizeText(value);
+  if (!text || text.includes("\uFFFD")) {
+    return false;
+  }
+
+  const visibleUnits = (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
+  const suspiciousLongToken = text.split(/\s+/).some((token) => token.length > 48);
+  return visibleUnits >= minChars && !suspiciousLongToken;
+}
+
+function normalizeRecapItem(
+  value: unknown,
+  kind: "highlight" | "improvement",
+): Record<string, string> | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  if (kind === "highlight") {
+    const item = value as { text?: unknown; explanation?: unknown };
+    const text = sanitizeText(item.text);
+    const explanation = sanitizeText(item.explanation);
+    if (!isMeaningfulText(text) || !isMeaningfulText(explanation)) {
+      return null;
+    }
+    return { text, explanation };
+  }
+
+  const item = value as {
+    type?: unknown;
+    original?: unknown;
+    corrected?: unknown;
+    explanation?: unknown;
+  };
+  const type = sanitizeText(item.type).toLowerCase();
+  const original = sanitizeText(item.original);
+  const corrected = sanitizeText(item.corrected);
+  const explanation = sanitizeText(item.explanation);
+
+  if (
+    !["grammar", "vocabulary", "naturalness"].includes(type) ||
+    !isMeaningfulText(original) ||
+    !isMeaningfulText(corrected) ||
+    !isMeaningfulText(explanation)
+  ) {
+    return null;
+  }
+
+  return { type, original, corrected, explanation };
+}
+
+function normalizeRecapPayload(
+  value: unknown,
+): {
+  highlights: Array<{ text: string; explanation: string }>;
+  improvements: Array<{
+    type: string;
+    original: string;
+    corrected: string;
+    explanation: string;
+  }>;
+  overallComment: string;
+} | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const recap = value as {
+    highlights?: unknown;
+    improvements?: unknown;
+    overallComment?: unknown;
+  };
+  const highlights = Array.isArray(recap.highlights)
+    ? recap.highlights
+        .map((item) => normalizeRecapItem(item, "highlight"))
+        .filter((item): item is { text: string; explanation: string } => item != null)
+        .slice(0, 3)
+    : [];
+  const improvements = Array.isArray(recap.improvements)
+    ? recap.improvements
+        .map((item) => normalizeRecapItem(item, "improvement"))
+        .filter(
+          (
+            item,
+          ): item is {
+            type: string;
+            original: string;
+            corrected: string;
+            explanation: string;
+          } => item != null,
+        )
+        .slice(0, 3)
+    : [];
+  const overallComment = sanitizeText(recap.overallComment);
+
+  if (!isMeaningfulText(overallComment, 12)) {
+    return null;
+  }
+
+  return {
+    highlights,
+    improvements,
+    overallComment,
+  };
 }
 
 serve(async (req: Request) => {
@@ -52,6 +166,7 @@ serve(async (req: Request) => {
 
   const body = await req.json();
   const sessionId = body.session_id ?? body.sessionId;
+  const forceRegenerate = body.force === true || body.force_regenerate === true;
 
   if (typeof sessionId !== "string") {
     return new Response(
@@ -82,9 +197,12 @@ serve(async (req: Request) => {
     );
   }
 
-  if (session.title && session.recap) {
+  const existingRecap = normalizeRecapPayload(session.recap);
+  const existingTitle = sanitizeText(session.title);
+
+  if (!forceRegenerate && existingTitle && existingRecap) {
     return new Response(
-      JSON.stringify({ title: session.title, recap: session.recap }),
+      JSON.stringify({ title: existingTitle, recap: existingRecap }),
       { status: 200, headers: JSON_HEADERS },
     );
   }
@@ -165,6 +283,8 @@ Output a JSON object with these fields:
 If there are no notable highlights, return an empty array for "highlights".
 If there are no notable issues, return an empty array for "improvements".
 Always provide a title and overallComment.
+Only use evidence that is clearly supported by the transcript or review data.
+If the transcript looks noisy or fragmented, stay conservative and avoid inventing details.
 
 Respond ONLY with valid JSON. No markdown fences, no extra text.`;
 
@@ -176,47 +296,47 @@ ${conversationText}
 Review data from real-time analysis:
 ${reviewSummary}`;
 
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
-
   try {
-    const completion = await llm.client.chat.completions.create(
-      withLlmDefaults(llm, {
+    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(
+      req,
+      {
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         max_tokens: 800,
         temperature: 0.4,
-      }),
+      },
+      {
+        providerEnvName: "SESSION_RECAP_LLM_PROVIDER",
+        modelEnvName: "SESSION_RECAP_LLM_MODEL",
+        defaultProvider: "cerebras",
+        defaultModel: "gpt-oss-120b",
+      },
     );
+    const responseHeaders = buildLlmResponseHeaders(runtime, {
+      routeMode,
+      attempts,
+    }, {
+      "Content-Type": "application/json",
+    });
 
     const rawContent = completion.choices[0]?.message?.content ?? "{}";
     const jsonStr = extractJsonObject(rawContent);
-    let parsed: any;
+    let parsed: Record<string, unknown> | null = null;
 
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      parsed = {
-        title: scene,
-        highlights: [],
-        improvements: [],
-        overallComment: "",
-      };
+      parsed = null;
     }
 
-    const title = typeof parsed.title === "string" && parsed.title.trim()
-      ? parsed.title.trim()
-      : scene;
+    const title = sanitizeText(parsed?.title) || scene;
+    const recap = normalizeRecapPayload(parsed);
 
-    const recap = {
-      highlights: Array.isArray(parsed.highlights) ? parsed.highlights : [],
-      improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
-      overallComment: typeof parsed.overallComment === "string" ? parsed.overallComment : "",
-    };
+    if (!isMeaningfulText(title) || !recap) {
+      throw new Error("Session recap output failed validation");
+    }
 
     adminClient
       .from("sessions")
@@ -231,15 +351,13 @@ ${reviewSummary}`;
   } catch (error: any) {
     const errorContext = {
       error: "LLM Provider Error",
-      provider: llm.provider,
-      model: llm.model,
       message: error.message,
     };
     console.error("[SessionRecap] LLM Error:", errorContext);
 
     return new Response(JSON.stringify(errorContext), {
       status: error.status || 500,
-      headers: responseHeaders,
+      headers: JSON_HEADERS,
     });
   }
 });

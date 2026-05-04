@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import type {
-  SpeakerDecisionSource,
-  VoiceprintDecisionLabel,
+    SpeakerDecisionSource,
+    VoiceprintDecisionLabel,
 } from './conversationStore';
 
 type StepStatus = 'running' | 'done' | 'error';
 type TurnSpeaker = 'self' | 'other';
 type TurnLlmKind = 'suggest' | 'review';
 type TurnLlmStatus = 'idle' | 'running' | 'done' | 'error' | 'skipped';
+type TurnTranslationStatus = 'idle' | 'running' | 'done' | 'error' | 'skipped';
 
 type DebugStep = {
   key: string;
@@ -22,6 +23,7 @@ type DebugStep = {
 export type DebugTurnTrace = {
   turnId: string;
   speaker: TurnSpeaker;
+  deepgramSpeakerId?: number | null;
   textPreview: string;
   recordingStartedAt: number;
   asrFinalAt?: number;
@@ -31,6 +33,10 @@ export type DebugTurnTrace = {
   llmCompletedAt?: number;
   llmStatus: TurnLlmStatus;
   llmDetail?: string;
+  translationStartedAt?: number;
+  translationCompletedAt?: number;
+  translationStatus: TurnTranslationStatus;
+  translationDetail?: string;
   voiceprintSimilarity?: number | null;
   voiceprintDecision?: VoiceprintDecisionLabel | null;
   speakerDecisionSource?: SpeakerDecisionSource;
@@ -46,6 +52,7 @@ type DebugState = {
   registerTurnTrace: (trace: {
     turnId: string;
     speaker: TurnSpeaker;
+    deepgramSpeakerId?: number | null;
     textPreview: string;
     recordingStartedAt: number;
     asrFinalAt: number;
@@ -57,6 +64,9 @@ type DebugState = {
   startTurnLlm: (turnId: string, kind: TurnLlmKind) => void;
   completeTurnLlm: (turnId: string, detail?: string) => void;
   failTurnLlm: (turnId: string, errorMessage: string) => void;
+  startTurnTranslation: (turnId: string) => void;
+  completeTurnTranslation: (turnId: string, detail?: string) => void;
+  failTurnTranslation: (turnId: string, errorMessage: string) => void;
   reset: () => void;
 };
 
@@ -137,6 +147,7 @@ export const useDebugStore = create<DebugState>((set) => ({
   registerTurnTrace: ({
     turnId,
     speaker,
+    deepgramSpeakerId,
     textPreview,
     recordingStartedAt,
     asrFinalAt,
@@ -148,6 +159,8 @@ export const useDebugStore = create<DebugState>((set) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
         turnId,
         speaker,
+        deepgramSpeakerId:
+          deepgramSpeakerId ?? existing?.deepgramSpeakerId ?? null,
         textPreview,
         recordingStartedAt: existing?.recordingStartedAt ?? recordingStartedAt,
         asrFinalAt,
@@ -157,6 +170,10 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: existing?.llmCompletedAt,
         llmStatus: existing?.llmStatus ?? 'idle',
         llmDetail: existing?.llmDetail,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: existing?.translationCompletedAt,
+        translationStatus: existing?.translationStatus ?? 'idle',
+        translationDetail: existing?.translationDetail,
         voiceprintSimilarity:
           voiceprintSimilarity ?? existing?.voiceprintSimilarity ?? null,
         voiceprintDecision:
@@ -172,6 +189,7 @@ export const useDebugStore = create<DebugState>((set) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
         turnId,
         speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
         textPreview: existing?.textPreview ?? '',
         recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
         asrFinalAt: existing?.asrFinalAt,
@@ -181,6 +199,10 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: existing?.llmCompletedAt,
         llmStatus: existing?.llmStatus ?? 'idle',
         llmDetail: existing?.llmDetail,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: existing?.translationCompletedAt,
+        translationStatus: existing?.translationStatus ?? 'idle',
+        translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
@@ -193,6 +215,7 @@ export const useDebugStore = create<DebugState>((set) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
         turnId,
         speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
         textPreview: existing?.textPreview ?? '',
         recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
         asrFinalAt: existing?.asrFinalAt,
@@ -202,6 +225,10 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: undefined,
         llmStatus: 'running',
         llmDetail: undefined,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: existing?.translationCompletedAt,
+        translationStatus: existing?.translationStatus ?? 'idle',
+        translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
@@ -214,6 +241,7 @@ export const useDebugStore = create<DebugState>((set) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
         turnId,
         speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
         textPreview: existing?.textPreview ?? '',
         recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
         asrFinalAt: existing?.asrFinalAt,
@@ -223,6 +251,10 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: Date.now(),
         llmStatus: 'done',
         llmDetail: detail,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: existing?.translationCompletedAt,
+        translationStatus: existing?.translationStatus ?? 'idle',
+        translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
@@ -235,6 +267,7 @@ export const useDebugStore = create<DebugState>((set) => ({
       turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
         turnId,
         speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
         textPreview: existing?.textPreview ?? '',
         recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
         asrFinalAt: existing?.asrFinalAt,
@@ -244,6 +277,88 @@ export const useDebugStore = create<DebugState>((set) => ({
         llmCompletedAt: Date.now(),
         llmStatus: 'error',
         llmDetail: errorMessage,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: existing?.translationCompletedAt,
+        translationStatus: existing?.translationStatus ?? 'idle',
+        translationDetail: existing?.translationDetail,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
+        createdAt: existing?.createdAt ?? Date.now(),
+      })),
+    })),
+
+  startTurnTranslation: (turnId) =>
+    set((state) => ({
+      turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
+        turnId,
+        speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
+        textPreview: existing?.textPreview ?? '',
+        recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
+        asrFinalAt: existing?.asrFinalAt,
+        utteranceEndAt: existing?.utteranceEndAt,
+        llmKind: existing?.llmKind,
+        llmStartedAt: existing?.llmStartedAt,
+        llmCompletedAt: existing?.llmCompletedAt,
+        llmStatus: existing?.llmStatus ?? 'idle',
+        llmDetail: existing?.llmDetail,
+        translationStartedAt: Date.now(),
+        translationCompletedAt: undefined,
+        translationStatus: 'running',
+        translationDetail: undefined,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
+        createdAt: existing?.createdAt ?? Date.now(),
+      })),
+    })),
+
+  completeTurnTranslation: (turnId, detail) =>
+    set((state) => ({
+      turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
+        turnId,
+        speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
+        textPreview: existing?.textPreview ?? '',
+        recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
+        asrFinalAt: existing?.asrFinalAt,
+        utteranceEndAt: existing?.utteranceEndAt,
+        llmKind: existing?.llmKind,
+        llmStartedAt: existing?.llmStartedAt,
+        llmCompletedAt: existing?.llmCompletedAt,
+        llmStatus: existing?.llmStatus ?? 'idle',
+        llmDetail: existing?.llmDetail,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: Date.now(),
+        translationStatus: 'done',
+        translationDetail: detail,
+        voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
+        voiceprintDecision: existing?.voiceprintDecision ?? null,
+        speakerDecisionSource: existing?.speakerDecisionSource ?? null,
+        createdAt: existing?.createdAt ?? Date.now(),
+      })),
+    })),
+
+  failTurnTranslation: (turnId, errorMessage) =>
+    set((state) => ({
+      turnTraces: upsertTrace(state.turnTraces, turnId, (existing) => ({
+        turnId,
+        speaker: existing?.speaker ?? 'other',
+        deepgramSpeakerId: existing?.deepgramSpeakerId ?? null,
+        textPreview: existing?.textPreview ?? '',
+        recordingStartedAt: existing?.recordingStartedAt ?? Date.now(),
+        asrFinalAt: existing?.asrFinalAt,
+        utteranceEndAt: existing?.utteranceEndAt,
+        llmKind: existing?.llmKind,
+        llmStartedAt: existing?.llmStartedAt,
+        llmCompletedAt: existing?.llmCompletedAt,
+        llmStatus: existing?.llmStatus ?? 'idle',
+        llmDetail: existing?.llmDetail,
+        translationStartedAt: existing?.translationStartedAt,
+        translationCompletedAt: Date.now(),
+        translationStatus: 'error',
+        translationDetail: errorMessage,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,

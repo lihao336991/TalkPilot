@@ -5,9 +5,8 @@ import { translateWithAzure } from "../_shared/azureTranslate.ts";
 import { translateWithGoogle } from "../_shared/googleTranslate.ts";
 import {
   buildLlmResponseHeaders,
-  createLlmRuntime,
   extractJsonObject,
-  withLlmDefaults,
+  runLlmChatCompletion,
 } from "../_shared/llm.ts";
 
 type TranslationDirection = "to_learning" | "to_native";
@@ -126,16 +125,12 @@ function buildPrompt(
 }
 
 async function translateWithLlm(args: {
+  req?: Request;
   direction: TranslationDirection;
   sourceText: string;
   sceneHint: string;
   targetLanguage: string;
 }) {
-  const llm = createLlmRuntime();
-  const responseHeaders = buildLlmResponseHeaders(llm, {
-    "Content-Type": "application/json",
-  });
-
   const translationPrompt = buildPrompt(
     args.direction,
     args.sourceText,
@@ -143,13 +138,18 @@ async function translateWithLlm(args: {
     args.targetLanguage,
   );
 
-  const translationCompletion = await llm.client.chat.completions.create(
-    withLlmDefaults(llm, {
+  const { completion: translationCompletion, runtime, routeMode, attempts } =
+    await runLlmChatCompletion(args.req, {
       messages: translationPrompt,
       max_tokens: 200,
       temperature: 0.3,
-    }),
-  );
+    });
+  const responseHeaders = buildLlmResponseHeaders(runtime, {
+    routeMode,
+    attempts,
+  }, {
+    "Content-Type": "application/json",
+  });
 
   const translationRaw = translationCompletion.choices[0]?.message?.content ?? "{}";
   let translatedText = "";
@@ -294,6 +294,7 @@ serve(async (req: Request) => {
               }),
             }
         : await translateWithLlm({
+            req,
             direction,
             sourceText,
             sceneHint,
