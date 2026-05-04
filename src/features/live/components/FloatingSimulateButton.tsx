@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -43,6 +44,14 @@ export function FloatingSimulateButton({
     onRecordStart();
   };
 
+  const handleTouchStart = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleTouchEnd = () => {
+    void Haptics.selectionAsync();
+  };
+
   const handlePressOut = () => {
     const didStartRecording = didStartRecordingRef.current;
     didStartRecordingRef.current = false;
@@ -58,7 +67,10 @@ export function FloatingSimulateButton({
   const isActive = isPressActive || isRecording;
 
   return (
-    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+    <View
+      pointerEvents="box-none"
+      style={[StyleSheet.absoluteFill, styles.touchLayer]}
+    >
       <Animated.View
         style={[
           styles.buttonWrap,
@@ -71,6 +83,8 @@ export function FloatingSimulateButton({
       >
         <Pressable
           delayLongPress={HOLD_DELAY_MS}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
           onLongPress={handleLongPress}
           onPressOut={handlePressOut}
           style={({ pressed }) => [
@@ -96,6 +110,12 @@ export function FloatingSimulateButton({
 const styles = StyleSheet.create({
   buttonWrap: {
     position: "absolute",
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  touchLayer: {
+    zIndex: 1000,
+    elevation: 1000,
   },
   button: {
     width: BUTTON_SIZE,

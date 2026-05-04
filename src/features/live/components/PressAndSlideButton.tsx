@@ -56,6 +56,7 @@ type PressAndSlideButtonProps = {
   overlayTitle?: string;
   overlaySubtitle?: string;
   energyLevel?: number;
+  showActiveEnergy?: boolean;
 };
 
 export function PressAndSlideButton({
@@ -80,6 +81,7 @@ export function PressAndSlideButton({
   overlayTitle,
   overlaySubtitle,
   energyLevel = 0,
+  showActiveEnergy = true,
 }: PressAndSlideButtonProps) {
   const { t } = useTranslation();
   const [isActive, setIsActive] = useState(false);
@@ -270,20 +272,22 @@ export function PressAndSlideButton({
                     {bubbleText}
                   </Text>
                   <View style={styles.voiceBubbleMetaRow}>
-                    <View style={styles.waveformCornerInline}>
-                      <AudioEnergyWave
-                        level={energyLevel}
-                        color="rgba(32,72,17,0.72)"
-                        barCount={7}
-                        width={3}
-                        minHeight={8}
-                        maxHeight={16}
-                        gap={3}
-                        idleOpacity={0.22}
-                        calmness={0.88}
-                        tailFade={0.36}
-                      />
-                    </View>
+                    {showActiveEnergy ? (
+                      <View style={styles.waveformCornerInline}>
+                        <AudioEnergyWave
+                          level={energyLevel}
+                          color="rgba(32,72,17,0.72)"
+                          barCount={7}
+                          width={3}
+                          minHeight={8}
+                          maxHeight={16}
+                          gap={3}
+                          idleOpacity={0.22}
+                          calmness={0.88}
+                          tailFade={0.36}
+                        />
+                      </View>
+                    ) : null}
                     {actionState === "speak" ? (
                       <View style={styles.speakBadge}>
                         <Feather name="volume-2" size={14} color="#173300" />
@@ -292,22 +296,24 @@ export function PressAndSlideButton({
                   </View>
                 </>
               ) : (
-                <AudioEnergyWave
-                  level={energyLevel}
-                  color={
-                    actionState === "cancel"
-                      ? "rgba(118,12,14,0.82)"
-                      : "rgba(36,78,21,0.78)"
-                  }
-                  barCount={actionState === "cancel" ? 7 : 11}
-                  width={actionState === "cancel" ? 4 : 5}
-                  minHeight={actionState === "cancel" ? 10 : 11}
-                  maxHeight={actionState === "cancel" ? 24 : 28}
-                  gap={4}
-                  idleOpacity={0.24}
-                  calmness={actionState === "cancel" ? 0.8 : 0.86}
-                  tailFade={0.34}
-                />
+                showActiveEnergy ? (
+                  <AudioEnergyWave
+                    level={energyLevel}
+                    color={
+                      actionState === "cancel"
+                        ? "rgba(118,12,14,0.82)"
+                        : "rgba(36,78,21,0.78)"
+                    }
+                    barCount={actionState === "cancel" ? 7 : 11}
+                    width={actionState === "cancel" ? 4 : 5}
+                    minHeight={actionState === "cancel" ? 10 : 11}
+                    maxHeight={actionState === "cancel" ? 24 : 28}
+                    gap={4}
+                    idleOpacity={0.24}
+                    calmness={actionState === "cancel" ? 0.8 : 0.86}
+                    tailFade={0.34}
+                  />
+                ) : null
               )}
               <View
                 style={[
@@ -431,7 +437,7 @@ export function PressAndSlideButton({
             </>
           ) : null}
           {label ? (
-            isActive ? (
+            isActive && showActiveEnergy ? (
               <AudioEnergyWave
                 level={energyLevel}
                 color={iconColor}

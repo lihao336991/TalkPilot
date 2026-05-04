@@ -7,6 +7,7 @@ import {
 } from "@/shared/theme/tokens";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -31,6 +32,7 @@ export default function LiveScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const mainAudioLevel = useAudioInputStore((s) => s.mainLevel);
+  const hasMainInput = useAudioInputStore((s) => s.hasMainInput);
 
   const {
     scenePreset,
@@ -42,6 +44,7 @@ export default function LiveScreen() {
     assistWsStatus,
     forcedSpeaker,
     copilotEnabled,
+    copilotToastState,
     showEnrollment,
     showCalibration,
     assistPreviewText,
@@ -64,6 +67,7 @@ export default function LiveScreen() {
     handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
+    handleRestartMainMicrophone,
     handleEnd,
   } = useLiveSessionController();
 
@@ -77,7 +81,7 @@ export default function LiveScreen() {
       style={[styles.container, { paddingBottom: bottomPadding }]}
       edges={["top"]}
     >
-      <DebugOverlay />
+      <DebugOverlay onRestartMainMicrophone={handleRestartMainMicrophone} />
       {isIdle && (
         <>
           <StartSessionCard
@@ -94,7 +98,7 @@ export default function LiveScreen() {
 
       {isActive && (
         <View style={styles.activeContainer}>
-          {isListening ? (
+          {isListening && hasMainInput ? (
             <View pointerEvents="none" style={styles.listeningOverlay}>
               <SkiaListeningWave
                 level={mainAudioLevel}
@@ -154,6 +158,30 @@ export default function LiveScreen() {
             onNativeAssistPressOut={handleNativeAssistPressOut}
             assistPreviewText={assistPreviewText}
           />
+          {copilotToastState ? (
+            <Animated.View
+              entering={FadeInDown.duration(180)}
+              exiting={FadeOutDown.duration(180)}
+              style={styles.copilotToastWrap}
+              pointerEvents="none"
+            >
+              <View style={styles.copilotToast}>
+                <View
+                  style={[
+                    styles.copilotToastDot,
+                    copilotToastState === "enabled"
+                      ? styles.copilotToastDotEnabled
+                      : styles.copilotToastDotDisabled,
+                  ]}
+                />
+                <Text style={styles.copilotToastText}>
+                  {copilotToastState === "enabled"
+                    ? t("live.toolbar.copilotEnabledToast")
+                    : t("live.toolbar.copilotDisabledToast")}
+                </Text>
+              </View>
+            </Animated.View>
+          ) : null}
         </View>
       )}
 
@@ -259,5 +287,39 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: palette.textTertiary,
     textTransform: "uppercase",
+  },
+  copilotToastWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 112,
+    alignItems: "center",
+  },
+  copilotToast: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(250,252,247,0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.06)",
+  },
+  copilotToastDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  copilotToastDotEnabled: {
+    backgroundColor: "#A6CE39",
+  },
+  copilotToastDotDisabled: {
+    backgroundColor: "rgba(15,23,42,0.28)",
+  },
+  copilotToastText: {
+    ...typography.caption,
+    color: palette.textPrimary,
+    fontWeight: "600",
   },
 });

@@ -5,9 +5,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { JSON_HEADERS } from "../_shared/access.ts";
 import {
   buildLlmResponseHeaders,
-  extractJsonObject,
   runLlmChatCompletion,
 } from "../_shared/llm.ts";
+
+type RecapHighlight = { text: string; explanation: string };
+type RecapImprovement = {
+  type: string;
+  original: string;
+  corrected: string;
+  explanation: string;
+};
+type SessionRecapPayload = {
+  highlights: RecapHighlight[];
+  improvements: RecapImprovement[];
+  overallComment: string;
+};
 
 function languageDisplayName(tag: string): string {
   const primary = tag.split("-")[0].toLowerCase();
@@ -41,8 +53,35 @@ function isMeaningfulText(value: unknown, minChars = 4): boolean {
   }
 
   const visibleUnits = (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
-  const suspiciousLongToken = text.split(/\s+/).some((token) => token.length > 48);
+  const suspiciousLongToken = text.split(/\s+/).some((token) => token.length > 64);
   return visibleUnits >= minChars && !suspiciousLongToken;
+}
+
+function stripModelNoise(value: string): string {
+  return sanitizeText(value)
+    .replace(/^[-*•\d.)\s]+/, "")
+    .replace(/^"(.*)"$/, "$1")
+    .replace(/^'(.*)'$/, "$1")
+    .trim();
+}
+
+function getTagContent(content: string, tag: string): string | null {
+  const match = content.match(new RegExp(`<${tag}>\\s*([\\s\\S]*?)\\s*<\\/${tag}>`, "i"));
+  return match?.[1] ? stripModelNoise(match[1]) : null;
+}
+
+function getTagBlocks(content: string, tag: string): string[] {
+  return [...content.matchAll(new RegExp(`<${tag}>\\s*([\\s\\S]*?)\\s*<\\/${tag}>`, "gi"))]
+    .map((match) => match[1])
+    .filter((value): value is string => typeof value === "string");
+}
+
+function normalizeImprovementType(value: unknown): "grammar" | "vocabulary" | "naturalness" {
+  const type = sanitizeText(value).toLowerCase();
+  if (type === "grammar" || type === "vocabulary" || type === "naturalness") {
+    return type;
+  }
+  return "naturalness";
 }
 
 function normalizeRecapItem(
@@ -88,16 +127,7 @@ function normalizeRecapItem(
 
 function normalizeRecapPayload(
   value: unknown,
-): {
-  highlights: Array<{ text: string; explanation: string }>;
-  improvements: Array<{
-    type: string;
-    original: string;
-    corrected: string;
-    explanation: string;
-  }>;
-  overallComment: string;
-} | null {
+): SessionRecapPayload | null {
   if (!value || typeof value !== "object") {
     return null;
   }
@@ -138,6 +168,120 @@ function normalizeRecapPayload(
     highlights,
     improvements,
     overallComment,
+  };
+}
+
+function parseXmlRecapPayload(rawContent: string): {
+  title: string;
+  recap: SessionRecapPayload | null;
+} {
+  const title = stripModelNoise(getTagContent(rawContent, "title") ?? "");
+  const overallComment = stripModelNoise(getTagContent(rawContent, "overall_comment") ?? "");
+
+  const highlights = getTagBlocks(rawContent, "highlight")
+    .map((block) => {
+      const text = stripModelNoise(getTagContent(block, "text") ?? "");
+      const explanation = stripModelNoise(getTagContent(block, "explanation") ?? "");
+      if (!isMeaningfulText(text) || !isMeaningfulText(explanation)) {
+        return null;
+      }
+      return { text, explanation };
+    })
+    .filter((item): item is RecapHighlight => item != null)
+    .slice(0, 3);
+
+  const improvements = getTagBlocks(rawContent, "improvement")
+    .map((block) => {
+      const original = stripModelNoise(getTagContent(block, "original") ?? "");
+      const corrected = stripModelNoise(getTagContent(block, "corrected") ?? "");
+      const explanation = stripModelNoise(getTagContent(block, "explanation") ?? "");
+      if (
+        !isMeaningfulText(original) ||
+        !isMeaningfulText(corrected) ||
+        !isMeaningfulText(explanation)
+      ) {
+        return null;
+      }
+      return {
+        type: normalizeImprovementType(getTagContent(block, "type")),
+        original,
+        corrected,
+        explanation,
+      };
+    })
+    .filter((item): item is RecapImprovement => item != null)
+    .slice(0, 3);
+
+  if (!isMeaningfulText(overallComment, 12)) {
+    return { title, recap: null };
+  }
+
+  return {
+    title,
+    recap: {
+      highlights,
+      improvements,
+      overallComment,
+    },
+  };
+}
+
+function buildFallbackRecap(
+  reviewList: Array<{
+    user_utterance: string;
+    overall_score: string;
+    issues: any;
+    better_expression: string | null;
+    praise: string | null;
+  }>,
+  nativeLanguageName: string,
+): SessionRecapPayload | null {
+  const highlights = reviewList
+    .map((review) => {
+      const text = stripModelNoise(review.user_utterance);
+      const explanation = stripModelNoise(review.praise ?? "");
+      if (!isMeaningfulText(text) || !isMeaningfulText(explanation)) {
+        return null;
+      }
+      return { text, explanation };
+    })
+    .filter((item): item is RecapHighlight => item != null)
+    .slice(0, 3);
+
+  const improvements = reviewList
+    .flatMap((review) => (Array.isArray(review.issues) ? review.issues : []))
+    .map((issue: any) => {
+      const original = stripModelNoise(issue?.original);
+      const corrected = stripModelNoise(issue?.corrected);
+      const explanation = stripModelNoise(issue?.explanation);
+      if (
+        !isMeaningfulText(original) ||
+        !isMeaningfulText(corrected) ||
+        !isMeaningfulText(explanation)
+      ) {
+        return null;
+      }
+      return {
+        type: normalizeImprovementType(issue?.type),
+        original,
+        corrected,
+        explanation,
+      };
+    })
+    .filter((item): item is RecapImprovement => item != null)
+    .slice(0, 3);
+
+  if (highlights.length === 0 && improvements.length === 0) {
+    return null;
+  }
+
+  return {
+    highlights,
+    improvements,
+    overallComment:
+      nativeLanguageName === "Chinese (Simplified)"
+        ? "本次对话已完成复盘。建议优先关注上方列出的表达亮点和可改进项，下次练习时把这些句式主动用出来。"
+        : "This session recap is ready. Focus on the highlights and improvements above, then reuse these patterns in your next practice.",
   };
 }
 
@@ -238,11 +382,27 @@ serve(async (req: Request) => {
   const nativeLanguageName = languageDisplayName(nativeLanguage);
   const learningLanguageName = languageDisplayName(learningLanguage);
 
-  const conversationText = turnList
-    .map(
-      (t: { speaker: string; text: string }) =>
-        `[${t.speaker === "self" ? "User" : "Other"}]: ${t.text}`,
-    )
+  const cleanTurns = turnList
+    .map((t: { speaker: string; text: string }) => ({
+      speaker: t.speaker === "self" ? "User" : "Other",
+      text: stripModelNoise(t.text),
+    }))
+    .filter((turn) => isMeaningfulText(turn.text, 2))
+    .slice(-80);
+
+  if (cleanTurns.length === 0) {
+    const emptyResult = {
+      title: session.scene_description || session.scene_preset || "Conversation",
+      recap: null,
+    };
+    return new Response(JSON.stringify(emptyResult), {
+      status: 200,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const conversationText = cleanTurns
+    .map((t) => `[${t.speaker}]: ${t.text}`)
     .join("\n");
 
   const reviewSummary =
@@ -272,21 +432,31 @@ serve(async (req: Request) => {
 
   const scene = session.scene_description || session.scene_preset || "general conversation";
 
-  const systemPrompt = `You are a language learning assistant. Analyze a completed ${learningLanguageName} practice conversation and produce a structured recap.
+  const systemPrompt = `You are a senior ${learningLanguageName} conversation coach. Analyze a completed practice conversation and write a concise, useful session recap.
 
-Output a JSON object with these fields:
-- "title": A short descriptive title (max 15 words) summarizing the conversation topic. Write in ${nativeLanguageName}.
-- "highlights": An array of 1-3 objects, each with "text" (the good expression the user used, in ${learningLanguageName}) and "explanation" (why it's good, in ${nativeLanguageName}).
-- "improvements": An array of 1-3 objects, each with "type" (grammar/vocabulary/naturalness), "original" (what user said, in ${learningLanguageName}), "corrected" (better version, in ${learningLanguageName}), and "explanation" (in ${nativeLanguageName}).
-- "overallComment": A brief encouraging summary (2-3 sentences) in ${nativeLanguageName}.
+Output XML-like tags exactly in this shape. Do not use JSON. Do not use markdown. Do not include explanations outside the tags.
 
-If there are no notable highlights, return an empty array for "highlights".
-If there are no notable issues, return an empty array for "improvements".
-Always provide a title and overallComment.
-Only use evidence that is clearly supported by the transcript or review data.
-If the transcript looks noisy or fragmented, stay conservative and avoid inventing details.
+<title>short title in ${nativeLanguageName}, max 12 words</title>
+<highlight>
+  <text>one good expression the User actually said, in ${learningLanguageName}</text>
+  <explanation>why it worked, in ${nativeLanguageName}</explanation>
+</highlight>
+<improvement>
+  <type>grammar|vocabulary|naturalness</type>
+  <original>one exact User phrase from the transcript, in ${learningLanguageName}</original>
+  <corrected>a better version, in ${learningLanguageName}</corrected>
+  <explanation>brief reason, in ${nativeLanguageName}</explanation>
+</improvement>
+<overall_comment>2 concise sentences in ${nativeLanguageName}</overall_comment>
 
-Respond ONLY with valid JSON. No markdown fences, no extra text.`;
+Rules:
+- Use 0-3 highlight blocks and 0-3 improvement blocks.
+- Only analyze text spoken by [User]. Never correct [Other].
+- Prefer concrete, high-signal feedback over generic encouragement.
+- Keep explanations short and actionable.
+- If the transcript is fragmented or noisy, say so briefly in overall_comment and only include items clearly supported by the transcript.
+- Never output corrupted text, random characters, code, internal reasoning, or placeholders.
+- If review data conflicts with the transcript, trust the transcript.`;
 
   const userPrompt = `Scene: ${scene}
 
@@ -304,14 +474,14 @@ ${reviewSummary}`;
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 800,
-        temperature: 0.4,
+        max_tokens: 700,
+        temperature: 0.2,
       },
       {
         providerEnvName: "SESSION_RECAP_LLM_PROVIDER",
         modelEnvName: "SESSION_RECAP_LLM_MODEL",
-        defaultProvider: "cerebras",
-        defaultModel: "gpt-oss-120b",
+        defaultProvider: "minimax",
+        defaultModel: "MiniMax-M2.5-highspeed",
       },
     );
     const responseHeaders = buildLlmResponseHeaders(runtime, {
@@ -321,28 +491,29 @@ ${reviewSummary}`;
       "Content-Type": "application/json",
     });
 
-    const rawContent = completion.choices[0]?.message?.content ?? "{}";
-    const jsonStr = extractJsonObject(rawContent);
-    let parsed: Record<string, unknown> | null = null;
+    const rawContent = completion.choices[0]?.message?.content ?? "";
+    const xmlParsed = parseXmlRecapPayload(rawContent);
+    const title = isMeaningfulText(xmlParsed.title) ? xmlParsed.title : sanitizeText(scene);
+    const recap =
+      xmlParsed.recap ??
+      buildFallbackRecap(reviewList, nativeLanguageName) ??
+      {
+        highlights: [],
+        improvements: [],
+        overallComment:
+          nativeLanguageName === "Chinese (Simplified)"
+            ? "本次对话内容较短或转写较分散，暂时没有足够稳定的表达点可深入分析。建议继续完成一段更完整的对话后再生成复盘。"
+            : "This conversation was short or fragmented, so there was not enough stable language to analyze in depth. Try a fuller conversation and generate the recap again.",
+      };
 
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      parsed = null;
+    if (!isMeaningfulText(title)) {
+      throw new Error("Session recap title failed validation");
     }
 
-    const title = sanitizeText(parsed?.title) || scene;
-    const recap = normalizeRecapPayload(parsed);
-
-    if (!isMeaningfulText(title) || !recap) {
-      throw new Error("Session recap output failed validation");
-    }
-
-    adminClient
+    await adminClient
       .from("sessions")
       .update({ title, recap })
-      .eq("id", sessionId)
-      .then();
+      .eq("id", sessionId);
 
     return new Response(JSON.stringify({ title, recap }), {
       status: 200,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState, type AppStateStatus } from "react-native";
+import * as Haptics from "expo-haptics";
 
 import type { PressAndSlideAction } from "@/features/live/components/PressAndSlideButton";
 import { assistReplyService } from "@/features/live/services/AssistReplyService";
@@ -37,6 +38,9 @@ import { type Href, useRouter } from "expo-router";
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 const LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS = 45_000;
 const SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
+const MAIN_AUDIO_STALE_TIMEOUT_MS = 6_500;
+const MAIN_AUDIO_WATCHDOG_INTERVAL_MS = 3_000;
+const MAIN_AUDIO_RESTART_COOLDOWN_MS = 15_000;
 
 export function getWsStatusMeta(
   status: StreamingConnectionStatus,
@@ -68,6 +72,8 @@ export type StartSessionUiState =
   | "preparing"
   | "connecting"
   | "finalizing";
+
+export type CopilotToastState = "enabled" | "disabled" | null;
 
 const START_SESSION_CANCELLED = "start_session_cancelled";
 
@@ -114,25 +120,35 @@ export function useLiveSessionController() {
   const [isSendingSuggestion, setIsSendingSuggestion] = useState(false);
   const [startSessionUiState, setStartSessionUiState] =
     useState<StartSessionUiState>("idle");
+  const [copilotToastState, setCopilotToastState] =
+    useState<CopilotToastState>(null);
 
   const sessionIdRef = useRef<string | null>(null);
   const assistShouldResumeRef = useRef(false);
   const startAttemptRef = useRef(0);
   const cancelledStartAttemptRef = useRef<number | null>(null);
+  const copilotToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const mainAudioLevelMeterRef = useRef(new AudioLevelMeter());
   const assistAudioLevelMeterRef = useRef(new AudioLevelMeter());
+  const lastMainAudioChunkAtRef = useRef(0);
+  const lastMainAudioRestartAtRef = useRef(0);
+  const isRestartingMainAudioRef = useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const resetMainAudioLevel = useCallback(() => {
     mainAudioLevelMeterRef.current.reset();
-    useAudioInputStore.getState().setMainLevel(0);
+    useAudioInputStore.getState().resetMain();
   }, []);
 
   const resetAssistAudioLevel = useCallback(() => {
     assistAudioLevelMeterRef.current.reset();
-    useAudioInputStore.getState().setAssistLevel(0);
+    useAudioInputStore.getState().resetAssist();
   }, []);
 
   const sendAudioRef = useRef((base64: string) => {
+    lastMainAudioChunkAtRef.current = Date.now();
     const level = mainAudioLevelMeterRef.current.ingest(base64);
     useAudioInputStore.getState().setMainLevel(level);
     voiceprintService.ingestChunk(base64);
@@ -142,6 +158,16 @@ export function useLiveSessionController() {
   useEffect(() => {
     liveActivityService.startObserving();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (copilotToastTimeoutRef.current) {
+        clearTimeout(copilotToastTimeoutRef.current);
+        copilotToastTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (status !== "active") return;
@@ -559,10 +585,87 @@ export function useLiveSessionController() {
     deepgramService.markLiveTranscriptBoundary();
     deepgramService.enableLiveTranscripts();
     voiceprintService.startSessionAnalysis();
+    lastMainAudioChunkAtRef.current = Date.now();
     await audioEngine.start(sendAudioRef.current);
     debug.completeStep("record");
     setListening(true);
   }, [resetMainAudioLevel, setListening]);
+
+  const shouldKeepMainMicActive = useCallback(() => {
+    return (
+      status === "active" &&
+      assistState === "idle" &&
+      !isSendingSuggestion &&
+      sessionIdRef.current !== null
+    );
+  }, [assistState, isSendingSuggestion, status]);
+
+  const restartMainAudioCapture = useCallback(
+    async (reason: string, options: { bypassCooldown?: boolean } = {}) => {
+      if (isRestartingMainAudioRef.current || !shouldKeepMainMicActive()) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        !options.bypassCooldown &&
+        lastMainAudioRestartAtRef.current > 0 &&
+        now - lastMainAudioRestartAtRef.current < MAIN_AUDIO_RESTART_COOLDOWN_MS
+      ) {
+        return;
+      }
+
+      lastMainAudioRestartAtRef.current = now;
+      isRestartingMainAudioRef.current = true;
+      const debug = useDebugStore.getState();
+      debug.startStep("mic-watchdog", `Restarting microphone (${reason})`);
+      console.warn("[LiveSession] Restarting main microphone:", reason);
+
+      try {
+        if (deepgramService.canResumeWithoutReconnect(learningLanguage)) {
+          deepgramService.cancelPausedRetention();
+          deepgramService.disableLiveTranscripts();
+        } else {
+          await connectStreamingSocket();
+        }
+
+        voiceprintService.stopSessionAnalysis();
+        try {
+          await audioEngine.stop();
+        } catch (stopError) {
+          console.warn(
+            "[LiveSession] Failed to stop stale audio engine before restart:",
+            stopError,
+          );
+        }
+        resetMainAudioLevel();
+        await startAudioCapture();
+        debug.completeStep("mic-watchdog", reason);
+      } catch (error) {
+        debug.failStep(
+          "mic-watchdog",
+          error instanceof Error ? error.message : String(error),
+        );
+        resetMainAudioLevel();
+        setListening(false);
+        console.error("[LiveSession] Failed to restart main microphone:", error);
+      } finally {
+        isRestartingMainAudioRef.current = false;
+      }
+    },
+    [
+      connectStreamingSocket,
+      learningLanguage,
+      resetMainAudioLevel,
+      setListening,
+      shouldKeepMainMicActive,
+      startAudioCapture,
+    ],
+  );
+
+  const handleRestartMainMicrophone = useCallback(async () => {
+    await restartMainAudioCapture("manual", { bypassCooldown: true });
+  }, [restartMainAudioCapture]);
 
   const startStreaming = useCallback(
     async (speakerId: number | null, startAttemptId?: number) => {
@@ -703,15 +806,71 @@ export function useLiveSessionController() {
     ],
   );
 
+  useEffect(() => {
+    if (status !== "active") {
+      return;
+    }
+
+    const checkMainAudioHealth = () => {
+      if (!shouldKeepMainMicActive()) {
+        return;
+      }
+
+      const conversationState = useConversationStore.getState();
+      const elapsedSinceChunk = Date.now() - lastMainAudioChunkAtRef.current;
+      const isAudioStale =
+        lastMainAudioChunkAtRef.current === 0 ||
+        elapsedSinceChunk > MAIN_AUDIO_STALE_TIMEOUT_MS;
+      const isSocketOpenButCaptureStopped =
+        conversationState.mainWsStatus === "open" &&
+        !conversationState.isListening;
+
+      if (isAudioStale || isSocketOpenButCaptureStopped) {
+        void restartMainAudioCapture(
+          isSocketOpenButCaptureStopped ? "capture-stopped" : "audio-stale",
+        );
+      }
+    };
+
+    const interval = setInterval(
+      checkMainAudioHealth,
+      MAIN_AUDIO_WATCHDOG_INTERVAL_MS,
+    );
+    return () => clearInterval(interval);
+  }, [restartMainAudioCapture, shouldKeepMainMicActive, status]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        previousState.match(/inactive|background/) &&
+        nextState === "active" &&
+        shouldKeepMainMicActive()
+      ) {
+        const elapsedSinceChunk = Date.now() - lastMainAudioChunkAtRef.current;
+        if (
+          lastMainAudioChunkAtRef.current === 0 ||
+          elapsedSinceChunk > MAIN_AUDIO_STALE_TIMEOUT_MS
+        ) {
+          void restartMainAudioCapture("app-foreground");
+        }
+      }
+    });
+
+    return () => subscription.remove();
+  }, [restartMainAudioCapture, shouldKeepMainMicActive]);
+
   const handleStartSession = useCallback(async () => {
     if (isDailyLimitReached) {
       Alert.alert(
-        "Upgrade required",
-        "Today's free minutes are used up. Upgrade to Pro to keep practicing.",
+        "今日免费额度已用完",
+        "升级到 Pro 后，每天可使用 120 分钟实时对话。",
         [
-          { text: "Later", style: "cancel" },
+          { text: "稍后再说", style: "cancel" },
           {
-            text: "View plans",
+            text: "查看方案",
             onPress: () => {
               router.push("/paywall" as Href);
             },
@@ -847,11 +1006,25 @@ export function useLiveSessionController() {
   const handleToggleCopilot = useCallback(() => {
     const nextEnabled = !copilotEnabled;
     setCopilotEnabled(nextEnabled);
+    void Haptics.impactAsync(
+      nextEnabled
+        ? Haptics.ImpactFeedbackStyle.Medium
+        : Haptics.ImpactFeedbackStyle.Light,
+    );
 
     if (!nextEnabled) {
       useSuggestionStore.getState().clear();
       useReviewStore.getState().setLoading(false);
     }
+
+    setCopilotToastState(nextEnabled ? "enabled" : "disabled");
+    if (copilotToastTimeoutRef.current) {
+      clearTimeout(copilotToastTimeoutRef.current);
+    }
+    copilotToastTimeoutRef.current = setTimeout(() => {
+      setCopilotToastState(null);
+      copilotToastTimeoutRef.current = null;
+    }, 1400);
   }, [copilotEnabled, setCopilotEnabled]);
 
   const restoreMainConversationCapture = useCallback(async () => {
@@ -923,10 +1096,10 @@ export function useLiveSessionController() {
         }
         console.error("[Suggestion] Failed to send and play suggestion:", error);
         Alert.alert(
-          "Notice",
+          "发送失败",
           error instanceof Error
             ? error.message
-            : "Failed to send and play suggestion. Please try again.",
+            : "暂时无法发送并播放这条建议，请稍后重试。",
         );
       } finally {
         try {
@@ -969,7 +1142,7 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert("Notice", "No clear speech detected. Please try again.");
+        Alert.alert("没有识别到清晰语音", "请靠近麦克风后再试一次。");
         return;
       }
 
@@ -1025,10 +1198,10 @@ export function useLiveSessionController() {
         }
         console.error("[NativeAssist] Failed to translate/play:", error);
         Alert.alert(
-          "Notice",
+          "翻译失败",
           error instanceof Error
             ? error.message
-            : "Failed to translate to the learning language. Please try again.",
+            : "暂时无法翻译成学习语言，请稍后重试。",
         );
       } finally {
         setAssistState("idle");
@@ -1058,7 +1231,6 @@ export function useLiveSessionController() {
 
       if (isListening) {
         voiceprintService.stopSessionAnalysis();
-        await audioEngine.stop();
         resetMainAudioLevel();
         deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
         setListening(false);
@@ -1080,7 +1252,10 @@ export function useLiveSessionController() {
       resetAssistAudioLevel();
       setAssistPreviewText("");
       debug.startStep("assist-transcript", "Listening for native transcript...");
-      await audioEngine.start((base64: string) => {
+      const startAssistAudio = isListening
+        ? audioEngine.switchInput.bind(audioEngine)
+        : audioEngine.start.bind(audioEngine);
+      await startAssistAudio((base64: string) => {
         const level = assistAudioLevelMeterRef.current.ingest(base64);
         useAudioInputStore.getState().setAssistLevel(level);
         assistStreamingService.sendAudio(base64);
@@ -1171,7 +1346,7 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert("Notice", "No clear speech detected. Please try again.");
+        Alert.alert("没有识别到清晰语音", "请靠近麦克风后再试一次。");
         return;
       }
 
@@ -1266,6 +1441,7 @@ export function useLiveSessionController() {
     assistWsStatus,
     forcedSpeaker,
     copilotEnabled,
+    copilotToastState,
     duration,
     showCalibration,
     assistState,
@@ -1290,6 +1466,7 @@ export function useLiveSessionController() {
     handleSendSuggestion,
     handleNativeAssistPressIn,
     handleNativeAssistPressOut,
+    handleRestartMainMicrophone,
     handleEnd,
   };
 }

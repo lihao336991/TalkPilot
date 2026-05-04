@@ -96,7 +96,7 @@ export class AssistStreamingService {
 
     const url =
       `wss://api.deepgram.com/v1/listen?` +
-      `model=nova-2&language=${this.currentDeepgramLanguage}&smart_format=true&interim_results=true` +
+      `model=nova-3&language=${this.currentDeepgramLanguage}&smart_format=true&interim_results=true` +
       `&utterance_end_ms=1000&vad_events=true&punctuate=true` +
       `&encoding=linear16&sample_rate=16000&channels=1`;
 

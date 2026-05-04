@@ -78,6 +78,7 @@ function AudioEnergyBar({
     const distanceFromCenter = Math.abs(normalizedIndex - 0.5) * 2;
     const centerWeight = 1 - distanceFromCenter;
     const energy = Math.max(0, Math.min(1, level.value));
+    const visualEnergy = Math.max(energy, Math.min(0.22, energy * 2.6));
     const centerBoost = 0.72 + centerWeight * spikeBoost;
     const clusterA = Math.max(0, Math.sin(phaseFast.value * 1.05 + index * 0.72));
     const clusterB = Math.max(0, Math.sin(phaseFast.value * 1.92 + index * 1.36 + 0.8));
@@ -94,13 +95,16 @@ function AudioEnergyBar({
       0.08 * Math.cos(index * 0.47);
     const waveMotion = ridge + spikeMix * breathing * irregularity;
     const floor = minHeight + (maxHeight - minHeight) * 0.04 * (0.5 + centerWeight * 0.5);
-    const spikeHeight = floor + (maxHeight - floor) * energy * centerBoost * waveMotion;
+    const spikeHeight =
+      floor + (maxHeight - floor) * visualEnergy * centerBoost * waveMotion;
     const edgeFade = 1 - Math.pow(distanceFromCenter, 1.25) * tailFade;
     const totalHeight = mirror ? spikeHeight * 2 : spikeHeight;
 
     return {
       height: totalHeight,
-      opacity: (idleOpacity + (1 - idleOpacity) * (0.2 + energy * 0.8)) * edgeFade,
+      opacity:
+        (idleOpacity + (1 - idleOpacity) * (0.2 + visualEnergy * 0.8)) *
+        edgeFade,
       backgroundColor: color,
       width,
       borderRadius: barRadius,
@@ -112,6 +116,7 @@ function AudioEnergyBar({
     const distanceFromCenter = Math.abs(normalizedIndex - 0.5) * 2;
     const centerWeight = 1 - distanceFromCenter;
     const energy = Math.max(0, Math.min(1, level.value));
+    const visualEnergy = Math.max(energy, Math.min(0.22, energy * 2.6));
     const edgeFade = 1 - Math.pow(distanceFromCenter, 1.18) * tailFade;
     const glowPulseA = Math.max(0, Math.sin(phaseFast.value * 1.18 + index * 0.66));
     const glowPulseB = Math.max(0, Math.sin(phaseFast.value * 2.2 + index * 1.12 + 0.5));
@@ -119,12 +124,12 @@ function AudioEnergyBar({
     const spikeHeight =
       minHeight +
       (maxHeight - minHeight) *
-        (0.12 + energy * (0.44 + centerWeight * 0.28 + glowMix * 0.3));
+        (0.12 + visualEnergy * (0.44 + centerWeight * 0.28 + glowMix * 0.3));
     const totalHeight = mirror ? spikeHeight * 2 : spikeHeight;
 
     return {
       height: totalHeight,
-      opacity: glowIntensity * (0.18 + energy * 0.72) * edgeFade,
+      opacity: glowIntensity * (0.18 + visualEnergy * 0.72) * edgeFade,
       width: width + 6,
       borderRadius: barRadius,
       backgroundColor: glowColor ?? color,

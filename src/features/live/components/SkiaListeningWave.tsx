@@ -26,9 +26,9 @@ const BAR_WIDTH = 4;
 const BAR_GAP = 4;
 const BAR_MIN_HEIGHT = 6;
 const EMA_ATTACK = 0.62;
-const EMA_RELEASE = 0.32;
-const SILENCE_THRESHOLD = 0.012;
-const VOLUME_POWER = 0.6;
+const EMA_RELEASE = 0.42;
+const SILENCE_THRESHOLD = 0.002;
+const VOLUME_POWER = 0.48;
 
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -95,7 +95,8 @@ export function SkiaListeningWave({
     const startX = (width - totalWidth) / 2;
     const baselineY = height * 0.82;
     const maxHeightRange = height * 0.52 - BAR_MIN_HEIGHT;
-    const ambientLevel = 0.07;
+    const ambientLevel = 0.09 + Math.min(0.16, smoothedLevel * 0.55);
+    const responsiveLevel = Math.max(ambientLevel, smoothedLevel);
 
     return weights.map((weight, index) => {
       const seedA = seededUnit(index, 1.7);
@@ -104,11 +105,12 @@ export function SkiaListeningWave({
       const jitterWave =
         Math.sin(localPhase + seedB * Math.PI * 2) * (0.55 + seedA * 0.15) +
         Math.cos(localPhase * 0.83 + index * 0.91 + seedA * 4) * 0.35;
-      const jitter = 0.5 + 0.5 * clamp01((jitterWave + 1) / 2);
-      const activity = Math.max(ambientLevel, smoothedLevel);
+      const jitter = 0.32 + 0.68 * clamp01((jitterWave + 1) / 2);
+      const lowLevelMotion = Math.min(1, responsiveLevel * 4.2);
+      const motionMix = 0.34 + jitter * (0.42 + lowLevelMotion * 0.24);
       const barHeight =
         BAR_MIN_HEIGHT +
-        weight * activity * maxHeightRange * (0.42 + jitter * 0.58);
+        weight * responsiveLevel * maxHeightRange * motionMix;
       const x = startX + index * (BAR_WIDTH + BAR_GAP);
 
       return {

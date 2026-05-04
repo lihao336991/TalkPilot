@@ -140,7 +140,7 @@ export const en = {
   live: {
     nativeAssist: {
       listening: "Listening to your native speech...",
-      generating: "Translating to the learning language...",
+      generating: "Translating...",
       ready: "Translation ready",
       original: "{{language}} original",
       suggestedReply: "Translation",
@@ -247,6 +247,8 @@ export const en = {
       copilotOn: "On",
       copilotOff: "Off",
       copilotAccessibility: "Copilot {{state}}",
+      copilotEnabledToast: "Copilot on",
+      copilotDisabledToast: "Copilot off",
       holdToSpeak: "Hold to speak",
       assistOverlayTitle: "Say it in your native language when you get stuck.",
       assistOverlaySubtitle:

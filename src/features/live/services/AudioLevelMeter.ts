@@ -42,9 +42,14 @@ export class AudioLevelMeter {
     }
 
     const rms = Math.sqrt(sumSquares / sampleCount);
-    const gatedRms = clamp((rms - 0.008) / 0.11, 0, 1);
-    const gatedPeak = clamp((peak - 0.02) / 0.28, 0, 1);
-    const rawLevel = Math.pow(gatedRms * 0.64 + gatedPeak * 0.36, 0.58);
+    const softRms = clamp(rms / 0.12, 0, 1);
+    const softPeak = clamp(peak / 0.32, 0, 1);
+    const noiseFloor = 0.006;
+    const floorLift = rms > noiseFloor ? clamp((rms - noiseFloor) / 0.035, 0, 1) : 0;
+    const rawLevel = Math.pow(
+      softRms * 0.56 + softPeak * 0.3 + floorLift * 0.14,
+      0.54,
+    );
     const attack = rawLevel > this.smoothedLevel ? 0.78 : 0.24;
     this.smoothedLevel += (rawLevel - this.smoothedLevel) * attack;
     this.smoothedLevel = clamp(this.smoothedLevel, 0, 1);

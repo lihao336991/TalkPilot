@@ -168,33 +168,33 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
         <View style={styles.traceHeaderLeft}>
           <StatusIcon status={getTraceStatus(trace)} />
           <Text style={styles.traceTitle}>
-            {trace.speaker === "self" ? "我方" : "对方"} · Turn{" "}
+            {trace.speaker === "self" ? "我方" : "对方"} · 轮次{" "}
             {trace.turnId.slice(-4)}
           </Text>
         </View>
         <Text style={styles.traceKind}>
           {trace.llmKind === "review"
-            ? "Review"
+            ? "复盘"
             : trace.llmKind === "suggest"
-              ? "Suggest"
-              : "ASR"}
+              ? "建议"
+              : "转写"}
         </Text>
       </View>
 
       <Text style={styles.tracePreview} numberOfLines={2}>
-        {trace.textPreview || "No transcript"}
+        {trace.textPreview || "暂无转写"}
       </Text>
 
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>录音 -&gt; ASR</Text>
+        <Text style={styles.metricLabel}>录音 -&gt; 转写</Text>
         <Text style={styles.metricValue}>{formatDurationMs(asrLatency)}</Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>ASR -&gt; UtteranceEnd</Text>
+        <Text style={styles.metricLabel}>转写 -&gt; 句末判断</Text>
         <Text style={styles.metricValue}>{formatDurationMs(utteranceGap)}</Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>LLM 耗时</Text>
+        <Text style={styles.metricLabel}>大模型耗时</Text>
         <Text style={styles.metricValue}>
           {trace.llmStatus === "idle"
             ? "未触发"
@@ -270,7 +270,11 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
   );
 }
 
-function DebugOverlayContent() {
+type DebugOverlayProps = {
+  onRestartMainMicrophone?: () => Promise<void> | void;
+};
+
+function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
   const { t } = useTranslation();
   const steps = useDebugStore((s) => s.steps);
   const turnTraces = useDebugStore((s) => s.turnTraces);
@@ -315,6 +319,8 @@ function DebugOverlayContent() {
   const setLlmModel = useLlmDebugStore((s) => s.setModel);
   const [collapsed, setCollapsed] = React.useState(true);
   const [isResettingFreeAccess, setIsResettingFreeAccess] =
+    React.useState(false);
+  const [isRestartingMainMicrophone, setIsRestartingMainMicrophone] =
     React.useState(false);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -453,6 +459,19 @@ function DebugOverlayContent() {
     }
   }, [isResettingFreeAccess, t]);
 
+  const handleRestartMainMicrophone = React.useCallback(async () => {
+    if (!onRestartMainMicrophone || isRestartingMainMicrophone) {
+      return;
+    }
+
+    setIsRestartingMainMicrophone(true);
+    try {
+      await onRestartMainMicrophone();
+    } finally {
+      setIsRestartingMainMicrophone(false);
+    }
+  }, [isRestartingMainMicrophone, onRestartMainMicrophone]);
+
   if (collapsed) {
     return (
       <View
@@ -463,7 +482,7 @@ function DebugOverlayContent() {
         }}
       >
         <StatusIcon status={getCollapsedStatus(latestStep, latestTrace)} />
-        <Text style={styles.collapsedTitle}>Live 调试</Text>
+        <Text style={styles.collapsedTitle}>实时调试</Text>
         <Text style={styles.collapsedLabel} numberOfLines={1}>
           {buildCollapsedLabel(latestStep, latestTrace, languageSummary)}
         </Text>
@@ -504,19 +523,19 @@ function DebugOverlayContent() {
           <Text style={styles.sectionTitle}>语言</Text>
           <View style={styles.languageCard}>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>App / 母语</Text>
+              <Text style={styles.metricLabel}>界面 / 母语</Text>
               <Text style={styles.metricValue}>{uiLocale}</Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Learning</Text>
+              <Text style={styles.metricLabel}>学习语言</Text>
               <Text style={styles.metricValue}>{learningLanguage}</Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Main ASR</Text>
+              <Text style={styles.metricLabel}>主转写语言</Text>
               <Text style={styles.metricValue}>{mainAsrLanguage}</Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Assist ASR</Text>
+              <Text style={styles.metricLabel}>救场转写语言</Text>
               <Text style={styles.metricValue}>{assistAsrLanguage}</Text>
             </View>
           </View>
@@ -609,6 +628,23 @@ function DebugOverlayContent() {
           <Text style={styles.sectionTitle}>调试工具</Text>
           <Pressable
             accessibilityRole="button"
+            disabled={!onRestartMainMicrophone || isRestartingMainMicrophone}
+            onPress={() => {
+              void handleRestartMainMicrophone();
+            }}
+            style={[
+              styles.toolButton,
+              styles.toolButtonStacked,
+              (!onRestartMainMicrophone || isRestartingMainMicrophone) &&
+                styles.toolButtonDisabled,
+            ]}
+          >
+            <Text style={styles.toolButtonText}>
+              {isRestartingMainMicrophone ? "正在重启主麦克风…" : "重启主麦克风"}
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             disabled={isResettingFreeAccess}
             onPress={() => {
               void handleResetFreeAccess();
@@ -630,25 +666,25 @@ function DebugOverlayContent() {
           <Text style={styles.sectionTitle}>声纹</Text>
           <View style={styles.languageCard}>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Native ready</Text>
+              <Text style={styles.metricLabel}>原生模块</Text>
               <Text style={styles.metricValue}>
-                {voiceprintEnabled ? "yes" : "no"}
+                {voiceprintEnabled ? "可用" : "不可用"}
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Enrollment ready</Text>
+              <Text style={styles.metricLabel}>本地样本</Text>
               <Text style={styles.metricValue}>
-                {voiceprintEnrollmentReady ? "yes" : "no"}
+                {voiceprintEnrollmentReady ? "已就绪" : "未就绪"}
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Last similarity</Text>
+              <Text style={styles.metricLabel}>最近相似度</Text>
               <Text style={styles.metricValue}>
                 {formatSimilarity(lastVoiceprintSimilarity)}
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Threshold band</Text>
+              <Text style={styles.metricLabel}>阈值区间</Text>
               <Text style={styles.metricValue}>
                 {lastVoiceprintThresholdLow != null &&
                 lastVoiceprintThresholdHigh != null
@@ -657,7 +693,7 @@ function DebugOverlayContent() {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>To self gate</Text>
+              <Text style={styles.metricLabel}>距本人阈值</Text>
               <Text style={styles.metricValue}>
                 {formatThresholdDistance(
                   lastVoiceprintSimilarity,
@@ -666,7 +702,7 @@ function DebugOverlayContent() {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>To other gate</Text>
+              <Text style={styles.metricLabel}>距非本人阈值</Text>
               <Text style={styles.metricValue}>
                 {formatThresholdDistance(
                   lastVoiceprintSimilarity,
@@ -675,13 +711,13 @@ function DebugOverlayContent() {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Last decision</Text>
+              <Text style={styles.metricLabel}>最近判定</Text>
               <Text style={styles.metricValue}>
                 {lastVoiceprintDecision ?? "--"}
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Confidence / reason</Text>
+              <Text style={styles.metricLabel}>置信度 / 原因</Text>
               <Text style={styles.metricValue}>
                 {lastVoiceprintConfidence && lastVoiceprintReason
                   ? `${lastVoiceprintConfidence} · ${lastVoiceprintReason}`
@@ -689,7 +725,7 @@ function DebugOverlayContent() {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Model bucket</Text>
+              <Text style={styles.metricLabel}>模型分桶</Text>
               <Text style={styles.metricValue}>
                 {lastVoiceprintInputDurationMs != null
                   ? `${Math.round(lastVoiceprintInputDurationMs / 1000)}s / ${lastVoiceprintMelFrameCount ?? "--"}f`
@@ -697,7 +733,7 @@ function DebugOverlayContent() {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Speaker source</Text>
+              <Text style={styles.metricLabel}>说话人来源</Text>
               <Text style={styles.metricValue}>
                 {lastSpeakerDecisionSource ?? "--"}
               </Text>
@@ -709,8 +745,7 @@ function DebugOverlayContent() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>等待连接与转写链路数据</Text>
             <Text style={styles.emptyBody}>
-              进入 Live 页后会先预建主 WS，开始对话后这里会继续显示 ASR、LLM 和
-              assist 的状态。
+              进入实时对话页后会预建主转写连接。开始对话后，这里会显示转写、大模型和救场链路状态。
             </Text>
           </View>
         ) : null}
@@ -768,9 +803,9 @@ function DebugOverlayContent() {
   );
 }
 
-export function DebugOverlay() {
+export function DebugOverlay(props: DebugOverlayProps) {
   if (!__DEV__) return null;
-  return <DebugOverlayContent />;
+  return <DebugOverlayContent {...props} />;
 }
 
 const styles = StyleSheet.create({
@@ -1042,6 +1077,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(96,165,250,0.42)",
     paddingHorizontal: 12,
+  },
+  toolButtonStacked: {
+    marginBottom: 10,
   },
   toolButtonDisabled: {
     opacity: 0.6,

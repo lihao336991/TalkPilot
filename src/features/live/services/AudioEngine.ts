@@ -77,6 +77,18 @@ export class AudioEngine {
     console.log('[AudioEngine] Started recording');
   }
 
+  async switchInput(onAudioData: (base64: string) => void): Promise<void> {
+    if (!this.isInitialized || !this.subscription) {
+      await this.start(onAudioData);
+      return;
+    }
+
+    console.log('[AudioEngine] Switching recording input handler...');
+    this.subscription.remove();
+    this.subscription = LiveAudioStream.on('data', onAudioData);
+    console.log('[AudioEngine] Switched recording input handler');
+  }
+
   async stop(): Promise<void> {
     console.log('[AudioEngine] Stopping recording...');
     await LiveAudioStream.stop();

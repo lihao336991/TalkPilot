@@ -3,14 +3,20 @@ import { create } from "zustand";
 type AudioInputState = {
   mainLevel: number;
   assistLevel: number;
+  hasMainInput: boolean;
+  hasAssistInput: boolean;
   setMainLevel: (level: number) => void;
   setAssistLevel: (level: number) => void;
+  resetMain: () => void;
+  resetAssist: () => void;
   reset: () => void;
 };
 
 const initialState = {
   mainLevel: 0,
   assistLevel: 0,
+  hasMainInput: false,
+  hasAssistInput: false,
 };
 
 function clampLevel(level: number) {
@@ -22,7 +28,11 @@ function clampLevel(level: number) {
 
 export const useAudioInputStore = create<AudioInputState>((set) => ({
   ...initialState,
-  setMainLevel: (level) => set({ mainLevel: clampLevel(level) }),
-  setAssistLevel: (level) => set({ assistLevel: clampLevel(level) }),
+  setMainLevel: (level) =>
+    set({ mainLevel: clampLevel(level), hasMainInput: true }),
+  setAssistLevel: (level) =>
+    set({ assistLevel: clampLevel(level), hasAssistInput: true }),
+  resetMain: () => set({ mainLevel: 0, hasMainInput: false }),
+  resetAssist: () => set({ assistLevel: 0, hasAssistInput: false }),
   reset: () => set(initialState),
 }));

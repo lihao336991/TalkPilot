@@ -1,7 +1,16 @@
 import { palette, spacing } from "@/shared/theme/tokens";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { useAudioInputStore } from "../store/audioInputStore";
 import {
   PressAndSlideAction,
@@ -27,6 +36,29 @@ export function ConversationToolbar({
 }: ConversationToolbarProps) {
   const { t } = useTranslation();
   const assistAudioLevel = useAudioInputStore((s) => s.assistLevel);
+  const hasAssistInput = useAudioInputStore((s) => s.hasAssistInput);
+  const starRotation = useSharedValue(0);
+
+  useEffect(() => {
+    if (copilotEnabled) {
+      starRotation.value = withRepeat(
+        withTiming(360, {
+          duration: 2400,
+          easing: Easing.linear,
+        }),
+        -1,
+        false,
+      );
+      return;
+    }
+
+    cancelAnimation(starRotation);
+    starRotation.value = withTiming(0, { duration: 180 });
+  }, [copilotEnabled, starRotation]);
+
+  const rotatingStarStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${starRotation.value}deg` }],
+  }));
   return (
     <View style={styles.container}>
       <View style={styles.controlsRow}>
@@ -50,21 +82,28 @@ export function ConversationToolbar({
                 : styles.copilotButtonInactive,
             ]}
           >
-            <MaterialCommunityIcons
-              name={copilotEnabled ? "creation" : "creation-outline"}
-              size={18}
-              color={copilotEnabled ? palette.accent : palette.textSecondary}
-            />
             <Text
               style={[
-                styles.copilotLabel,
+                styles.copilotText,
                 copilotEnabled
-                  ? styles.copilotLabelActive
-                  : styles.copilotLabelInactive,
+                  ? styles.copilotTextActive
+                  : styles.copilotTextInactive,
               ]}
             >
-              {t("live.toolbar.copilot")}
+              AI
             </Text>
+            <Animated.View
+              style={[
+                styles.copilotIndicator,
+                copilotEnabled ? rotatingStarStyle : null,
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="star-four-points"
+                size={10}
+                color={copilotEnabled ? "#9FCB28" : "rgba(15,23,42,0.28)"}
+              />
+            </Animated.View>
           </View>
         </Pressable>
 
@@ -89,7 +128,8 @@ export function ConversationToolbar({
             rippleColor="rgba(194,234,69,0.34)"
             overlayTitle={t("live.toolbar.assistOverlayTitle")}
             overlaySubtitle={t("live.toolbar.assistOverlaySubtitle")}
-            energyLevel={assistAudioLevel}
+            energyLevel={hasAssistInput ? assistAudioLevel : 0}
+            showActiveEnergy={hasAssistInput}
           />
         </View>
 
@@ -140,43 +180,45 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "rgba(255,255,255,0.72)",
+    backgroundColor: "rgba(255,255,255,0.7)",
     borderWidth: 1,
     borderColor: "rgba(15,23,42,0.05)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
   },
   copilotButton: {
-    width: 64,
-    borderRadius: 20,
-    gap: 4,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    overflow: "hidden",
   },
   copilotButtonActive: {
-    borderColor: "rgba(134,174,0,0.22)",
-    backgroundColor: "rgba(244,248,239,0.96)",
-    shadowColor: palette.accent,
-    shadowOpacity: 0.1,
+    borderColor: "rgba(212,226,169,0.9)",
+    backgroundColor: "rgba(252,255,247,0.56)",
   },
   copilotButtonInactive: {
-    borderColor: "rgba(15,23,42,0.06)",
-    backgroundColor: "rgba(255,255,255,0.76)",
+    borderColor: "rgba(15,23,42,0.05)",
+    backgroundColor: "rgba(255,255,255,0.42)",
   },
-  copilotLabel: {
-    fontSize: 10,
+  copilotText: {
+    fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
-  copilotLabelActive: {
-    color: palette.accent,
+  copilotTextActive: {
+    color: "#587600",
   },
-  copilotLabelInactive: {
-    color: palette.textSecondary,
+  copilotTextInactive: {
+    color: "rgba(15,23,42,0.52)",
+  },
+  copilotIndicator: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 12,
+    height: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
   endBtnInner: {
     backgroundColor: palette.danger,
