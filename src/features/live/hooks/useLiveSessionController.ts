@@ -2,6 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, type AppStateStatus } from "react-native";
 
+import { maybeOpenLiveSessionFeedback } from "@/features/feedback/feedbackPromptService";
 import { historyService } from "@/features/history/services/historyService";
 import type { PressAndSlideAction } from "@/features/live/components/PressAndSlideButton";
 import { assistReplyService } from "@/features/live/services/AssistReplyService";
@@ -1397,6 +1398,27 @@ export function useLiveSessionController() {
   const handleEnd = useCallback(async () => {
     console.log("[LiveSession] Ending session...");
     const currentSessionId = sessionIdRef.current;
+    const conversationSnapshot = useConversationStore.getState();
+    const sessionSnapshot = useSessionStore.getState();
+    const suggestionSnapshot = useSuggestionStore.getState();
+    const feedbackContext = {
+      surface: "live_session_end" as const,
+      sessionId: currentSessionId,
+      sessionStatus: sessionSnapshot.status,
+      sessionStartedAt: sessionSnapshot.startedAt,
+      sessionDurationSeconds: duration,
+      scenePreset: sessionSnapshot.scenePreset,
+      sceneDescription: sessionSnapshot.sceneDescription,
+      copilotEnabled: sessionSnapshot.copilotEnabled,
+      turnCount: conversationSnapshot.turns.length,
+      recentTurns: conversationSnapshot.turns.slice(-12),
+      currentStableText: conversationSnapshot.currentStableText,
+      currentInterimText: conversationSnapshot.currentInterimText,
+      mainWsStatus: conversationSnapshot.mainWsStatus,
+      assistWsStatus: conversationSnapshot.assistWsStatus,
+      aiSuggestions: suggestionSnapshot.suggestions,
+      aiSuggestionTriggerTurnId: suggestionSnapshot.triggerTurnId,
+    };
     analytics.capture("live_session_end_requested", {
       duration_seconds: duration,
       has_session_id: Boolean(currentSessionId),
@@ -1445,6 +1467,7 @@ export function useLiveSessionController() {
       duration_seconds: duration,
       had_session_id: Boolean(currentSessionId),
     });
+    void maybeOpenLiveSessionFeedback(feedbackContext, duration);
     useDebugStore.getState().reset();
     if (isFocused) {
       void preconnectMainSocket();

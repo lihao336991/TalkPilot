@@ -17,6 +17,7 @@ import React from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +26,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { legalContent } from "@/features/billing/legal/legalContent";
 
 function LanguageOption({
   label,
@@ -244,6 +246,24 @@ export default function SettingsScreen() {
     );
   }, [isEnrollmentBusy, stopEnrollmentPlayback, t]);
 
+  const handleDeleteDataRequest = React.useCallback(() => {
+    const subject = encodeURIComponent("TalkPilot data deletion request");
+    const body = encodeURIComponent(
+      "Hello TalkPilot,\n\nI would like to request deletion of my account data.\n\nPlease let me know if you need any information to verify this request.\n",
+    );
+
+    void Linking.openURL(
+      `mailto:${legalContent.meta.contact_email}?subject=${subject}&body=${body}`,
+    ).catch(() => {
+      Alert.alert(
+        t("settings.legal.emailUnavailableTitle"),
+        t("settings.legal.emailUnavailableBody", {
+          email: legalContent.meta.contact_email,
+        }),
+      );
+    });
+  }, [t]);
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -409,6 +429,35 @@ export default function SettingsScreen() {
               </Text>
             </Pressable>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t("settings.section.legal")}</Text>
+          <Text style={styles.sectionDescription}>{t("settings.legal.description")}</Text>
+
+          <NavigationRow
+            title={t("settings.legal.privacyTitle")}
+            description={t("settings.legal.privacyDescription")}
+            onPress={() => {
+              router.push("/privacy");
+            }}
+          />
+
+          <NavigationRow
+            title={t("settings.legal.termsTitle")}
+            description={t("settings.legal.termsDescription")}
+            onPress={() => {
+              router.push("/terms");
+            }}
+          />
+
+          <NavigationRow
+            title={t("settings.legal.deleteDataTitle")}
+            description={t("settings.legal.deleteDataDescription", {
+              email: legalContent.meta.contact_email,
+            })}
+            onPress={handleDeleteDataRequest}
+          />
         </View>
 
         {__DEV__ ? (

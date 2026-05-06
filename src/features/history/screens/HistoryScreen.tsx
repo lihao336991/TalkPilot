@@ -15,8 +15,16 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const PAGE_SIZE = 30;
 
 function formatDuration(
   s: number | null,
@@ -68,17 +76,24 @@ export default function HistoryScreen() {
   const tabBarHeight = getTabBarHeight(insets.bottom);
   const [sessions, setSessions] = useState<HistorySession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   const loadSessions = useCallback(async (opts?: { force?: boolean }) => {
     setIsLoading(true);
     setErrorMessage(null);
-    const { data, error } = await historyService.loadSessions(opts);
+    const { data, error } = await historyService.loadSessions({
+      ...opts,
+      limit: PAGE_SIZE,
+      offset: 0,
+    });
     if (error) {
       setErrorMessage(error);
     }
     setSessions(data);
+    setHasMore(data.length === PAGE_SIZE);
     setIsLoading(false);
   }, []);
 
@@ -92,41 +107,52 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }
 
-  const totalMinutes = Math.round(
-    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0) /
-      60,
-  );
-  const completedCount = sessions.filter((s) => s.status === "ended").length;
+  const handleLoadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || refreshing || !hasMore || errorMessage) {
+      return;
+    }
 
-  return (
-    <View style={styles.root}>
-      {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View>
-          <Text style={styles.headerEyebrow}>{t("history.headerEyebrow")}</Text>
-          <Text style={styles.headerTitle}>{t("history.headerTitle")}</Text>
-        </View>
-        <Pressable
-          onPress={handleRefresh}
-          style={styles.refreshBtn}
-          accessibilityLabel={t("history.refreshAccessibilityLabel")}
-        >
-          <Feather
-            name="refresh-cw"
-            size={18}
-            color={refreshing ? palette.textAccent : palette.textSecondary}
-          />
-        </Pressable>
-      </View>
+    setIsLoadingMore(true);
+    const { data, error } = await historyService.loadSessions({
+      limit: PAGE_SIZE,
+      offset: sessions.length,
+    });
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabBarHeight + 80 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    if (error) {
+      setErrorMessage(error);
+      setIsLoadingMore(false);
+      return;
+    }
+
+    setSessions((current) => {
+      const existingIds = new Set(current.map((session) => session.id));
+      const nextPage = data.filter((session) => !existingIds.has(session.id));
+      return [...current, ...nextPage];
+    });
+    setHasMore(data.length === PAGE_SIZE);
+    setIsLoadingMore(false);
+  }, [
+    errorMessage,
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    refreshing,
+    sessions.length,
+  ]);
+
+  const statsSource = sessions[0];
+  const totalSessions = statsSource?.total_sessions ?? sessions.length;
+  const totalDurationSeconds =
+    statsSource?.total_duration_seconds ??
+    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0);
+  const totalMinutes = Math.round(totalDurationSeconds / 60);
+  const completedCount =
+    statsSource?.completed_count ??
+    sessions.filter((s) => s.status === "ended").length;
+
+  function renderListHeader() {
+    return (
+      <>
         {/* ── Stats banner ── */}
         <LinearGradient
           colors={[palette.accentMuted, palette.bgCardSolid]}
@@ -136,7 +162,7 @@ export default function HistoryScreen() {
         >
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statValue}>{sessions.length}</Text>
+              <Text style={styles.statValue}>{totalSessions}</Text>
               <Text style={styles.statLabel}>
                 {t("history.stats.sessions")}
               </Text>
@@ -212,96 +238,124 @@ export default function HistoryScreen() {
             <Text style={styles.stateBody}>{t("history.state.emptyBody")}</Text>
           </View>
         )}
+      </>
+    );
+  }
 
-        {/* ── Session cards ── */}
-        {!isLoading &&
-          !errorMessage &&
-          sessions.map((session) => {
-            const accent = statusColor(session.status);
-            const hasRecap = !!session.recap;
-            return (
-              <Pressable
-                key={session.id}
-                style={styles.card}
-                onPress={() =>
-                  router.push(`/session-detail?id=${session.id}` as any)
-                }
-              >
-                <View
-                  style={[styles.cardAccentBar, { backgroundColor: accent }]}
+  function renderSessionCard({ item: session }: { item: HistorySession }) {
+    const accent = statusColor(session.status);
+    const hasRecap = !!session.recap;
+    return (
+      <Pressable
+        style={styles.card}
+        onPress={() => router.push(`/session-detail?id=${session.id}` as any)}
+      >
+        <View style={[styles.cardAccentBar, { backgroundColor: accent }]} />
+
+        <View style={styles.cardInner}>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {formatCardTitle(session, t)}
+            </Text>
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  borderColor: `${accent}40`,
+                  backgroundColor: `${accent}14`,
+                },
+              ]}
+            >
+              <View style={[styles.statusDot, { backgroundColor: accent }]} />
+              <Text style={[styles.statusText, { color: accent }]}>
+                {session.status === "ended"
+                  ? t("history.sessionStatus.ended")
+                  : session.status === "paused"
+                    ? t("history.sessionStatus.paused")
+                    : t("history.sessionStatus.active")}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardMetaRow}>
+            <Feather name="clock" size={12} color={palette.textTertiary} />
+            <Text style={styles.cardMeta}>
+              {formatDuration(session.duration_seconds, t)}
+            </Text>
+            <Text style={styles.cardMetaDot}>·</Text>
+            <Text style={styles.cardMeta}>
+              {formatSessionDate(session.started_at, i18n.language)}
+            </Text>
+            {hasRecap && (
+              <>
+                <Text style={styles.cardMetaDot}>·</Text>
+                <Feather
+                  name="check-circle"
+                  size={11}
+                  color={palette.textAccent}
                 />
+                <Text style={[styles.cardMeta, { color: palette.textAccent }]}>
+                  {t("history.card.recapped")}
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+        <View style={styles.cardChevron}>
+          <Feather name="chevron-right" size={16} color={palette.textTertiary} />
+        </View>
+      </Pressable>
+    );
+  }
 
-                <View style={styles.cardInner}>
-                  <View style={styles.cardTopRow}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
-                      {formatCardTitle(session, t)}
-                    </Text>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        {
-                          borderColor: `${accent}40`,
-                          backgroundColor: `${accent}14`,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[styles.statusDot, { backgroundColor: accent }]}
-                      />
-                      <Text style={[styles.statusText, { color: accent }]}>
-                        {session.status === "ended"
-                          ? t("history.sessionStatus.ended")
-                          : session.status === "paused"
-                            ? t("history.sessionStatus.paused")
-                            : t("history.sessionStatus.active")}
-                      </Text>
-                    </View>
-                  </View>
+  function renderListFooter() {
+    if (!isLoadingMore) {
+      return null;
+    }
 
-                  <View style={styles.cardMetaRow}>
-                    <Feather
-                      name="clock"
-                      size={12}
-                      color={palette.textTertiary}
-                    />
-                    <Text style={styles.cardMeta}>
-                      {formatDuration(session.duration_seconds, t)}
-                    </Text>
-                    <Text style={styles.cardMetaDot}>·</Text>
-                    <Text style={styles.cardMeta}>
-                      {formatSessionDate(session.started_at, i18n.language)}
-                    </Text>
-                    {hasRecap && (
-                      <>
-                        <Text style={styles.cardMetaDot}>·</Text>
-                        <Feather
-                          name="check-circle"
-                          size={11}
-                          color={palette.textAccent}
-                        />
-                        <Text
-                          style={[
-                            styles.cardMeta,
-                            { color: palette.textAccent },
-                          ]}
-                        >
-                          {t("history.card.recapped")}
-                        </Text>
-                      </>
-                    )}
-                  </View>
-                </View>
-                <View style={styles.cardChevron}>
-                  <Feather
-                    name="chevron-right"
-                    size={16}
-                    color={palette.textTertiary}
-                  />
-                </View>
-              </Pressable>
-            );
-          })}
-      </ScrollView>
+    return (
+      <View style={styles.loadingMore}>
+        <Feather name="loader" size={16} color={palette.textTertiary} />
+        <Text style={styles.loadingMoreText}>{t("history.state.loadingMore")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      {/* ── Header ── */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View>
+          <Text style={styles.headerEyebrow}>{t("history.headerEyebrow")}</Text>
+          <Text style={styles.headerTitle}>{t("history.headerTitle")}</Text>
+        </View>
+        <Pressable
+          onPress={handleRefresh}
+          style={styles.refreshBtn}
+          accessibilityLabel={t("history.refreshAccessibilityLabel")}
+        >
+          <Feather
+            name="refresh-cw"
+            size={18}
+            color={refreshing ? palette.textAccent : palette.textSecondary}
+          />
+        </Pressable>
+      </View>
+
+      <FlatList
+        data={!isLoading && !errorMessage ? sessions : []}
+        keyExtractor={(session) => session.id}
+        renderItem={renderSessionCard}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarHeight + 80 },
+        ]}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.35}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -350,6 +404,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
     gap: spacing.md,
+  },
+  loadingMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+  },
+  loadingMoreText: {
+    ...typography.labelMd,
+    color: palette.textSecondary,
   },
   statsBanner: {
     borderRadius: radii.lg,

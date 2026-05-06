@@ -2,12 +2,16 @@
 
 ## Summary
 
-TalkPilot offers auto-renewable subscriptions for TalkPilot Pro. The paywall is available from Profile > Upgrade to Pro and may also appear when a signed-in user reaches free usage limits.
+TalkPilot is a real-time language practice app with speech recognition, translation, AI suggestions, and auto-renewable subscriptions for TalkPilot Pro. The paywall is available from Profile > Upgrade to Pro and may also appear when a signed-in user reaches free usage limits.
 
 ## Review Notes
 
 - The app uses auto-renewable subscriptions only. Pricing is shown by the App Store purchase sheet and may vary by region.
 - Users can review Terms of Service and Privacy Policy in-app from the paywall and through hosted pages at /legal/terms.html and /legal/privacy.html.
+- The app requests microphone access to support live speaking sessions. Spoken audio may be processed by speech recognition, translation, and AI service providers only to deliver the requested real-time features.
+- The app may process and store transcripts, generated suggestions, review results, and session metadata when needed to provide conversation history, account sync, customer support, security, or feature continuity.
+- Private conversation content is not used for model training by default unless we clearly disclose otherwise and obtain any required consent.
+- Users can submit privacy or deletion requests through the in-app legal section or by email at lihao15510558202@gmail.com.
 - Restore Purchases is available on the paywall for users who previously subscribed with the same Apple ID.
 - Subscription management is available through the in-app customer center and through Apple account subscription settings.
 - A signed-in account is required before purchase so subscription access can sync correctly across sessions.

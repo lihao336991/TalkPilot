@@ -33,13 +33,4 @@ export APP_ENV="$ENV_NAME"
 echo "Using env: $ENV_NAME"
 echo "Env file: $ENV_FILE"
 
-if [[ "$ENV_NAME" == "development" ]]; then
-  for arg in "$@"; do
-    if [[ "$arg" == *ios* ]]; then
-      node "$REPO_ROOT/scripts/sync-ios-ats-local-ip.mjs"
-      break
-    fi
-  done
-fi
-
 exec "$@"

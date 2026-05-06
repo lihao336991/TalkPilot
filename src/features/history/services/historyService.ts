@@ -17,6 +17,9 @@ export type HistorySession = {
   duration_seconds: number | null;
   status: string;
   recap: SessionRecap | null;
+  total_sessions?: number | null;
+  total_duration_seconds?: number | null;
+  completed_count?: number | null;
 };
 
 export type RecapHighlight = {
@@ -73,6 +76,7 @@ type RecapResponse = {
 };
 
 const SESSIONS_CACHE_TTL_MS = 30_000;
+const MAX_SESSIONS_PAGE_SIZE = 30;
 let sessionsCache: HistorySession[] = [];
 let sessionsCacheAt = 0;
 
@@ -217,8 +221,17 @@ function normalizeReview(review: HistoryReview): HistoryReview {
 
 async function loadSessions(opts?: {
   force?: boolean;
+  limit?: number;
+  offset?: number;
 }): Promise<{ data: HistorySession[]; error: string | null }> {
+  const limit = Math.min(
+    Math.max(Math.floor(opts?.limit ?? MAX_SESSIONS_PAGE_SIZE), 1),
+    MAX_SESSIONS_PAGE_SIZE,
+  );
+  const offset = Math.max(Math.floor(opts?.offset ?? 0), 0);
   const useCache =
+    offset === 0 &&
+    limit === MAX_SESSIONS_PAGE_SIZE &&
     !opts?.force &&
     sessionsCache.length > 0 &&
     Date.now() - sessionsCacheAt < SESSIONS_CACHE_TTL_MS;
@@ -227,15 +240,20 @@ async function loadSessions(opts?: {
     return { data: sessionsCache, error: null };
   }
 
-  const { data, error } = await supabase.rpc("list_history_sessions");
+  const { data, error } = await supabase.rpc("list_history_sessions", {
+    p_limit: limit,
+    p_offset: offset,
+  });
 
   if (error) {
     return { data: sessionsCache, error: error.message };
   }
 
   const next = ((data ?? []) as HistorySession[]).map(normalizeSession);
-  sessionsCache = next;
-  sessionsCacheAt = Date.now();
+  if (offset === 0 && limit === MAX_SESSIONS_PAGE_SIZE) {
+    sessionsCache = next;
+    sessionsCacheAt = Date.now();
+  }
   return { data: next, error: null };
 }
 

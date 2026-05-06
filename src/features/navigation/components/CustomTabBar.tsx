@@ -68,7 +68,6 @@ export function CustomTabBar({
 
           let iconName: keyof typeof Feather.glyphMap = "mic";
           if (route.name === "library") iconName = "clock";
-          if (route.name === "community") iconName = "message-circle";
           if (route.name === "profile") iconName = "user";
 
           const isLiveTab = route.name === "index";

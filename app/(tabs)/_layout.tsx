@@ -24,13 +24,6 @@ export default function TabLayout() {
           title: t('navigation.tabs.history'),
         }}
       />
-      {/* <Tabs.Screen
-        name="community"
-        options={{
-          title: 'Coach',
-          href: null, // 二期实现前隐藏
-        }}
-      /> */}
       <Tabs.Screen
         name="profile"
         options={{

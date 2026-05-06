@@ -3,6 +3,12 @@
     "name": "TalkPilot",
     "slug": "talkpilot",
     "version": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/dcd57691-fa34-47f5-812b-a4267526e963",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "talkpilot",
@@ -24,46 +30,7 @@
         ],
         "NSSpeechRecognitionUsageDescription": "TalkPilot uses speech recognition to transcribe conversations.",
         "NSSupportsLiveActivities": true,
-        "NSLocalNetworkUsageDescription": "允许应用访问局域网内的开发服务器",
         "NSMicrophoneUsageDescription": "TalkPilot uses your microphone to provide real-time English conversation assistance.",
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true,
-          "NSAllowsArbitraryLoads": true,
-          "NSExceptionDomains": {
-            "100.75.160.117": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "192.168.2.9": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "192.168.31.61": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "192.168.31.95": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "10.200.152.245": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "10.200.153.50": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "172.20.10.5": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "192.168.3.65": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            }
-          }
-        },
         "ITSAppUsesNonExemptEncryption": false
       }
     },

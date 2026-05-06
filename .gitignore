@@ -52,3 +52,5 @@ data/novel-import/incoming/*
 data/novel-import/incoming_handled/*
 .tmp-home
 .dbg
+dist-ota-check/
+dist-ota-env-fix/

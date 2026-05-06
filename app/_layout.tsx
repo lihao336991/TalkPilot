@@ -15,6 +15,7 @@ import "react-native-reanimated";
 import "../global.css";
 
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
+import { FeedbackModal } from "@/features/feedback/components/FeedbackModal";
 import { sessionManager } from "@/features/live/services/SessionManager";
 import { analytics } from "@/shared/analytics/analytics";
 import { initAuth } from "@/shared/api/supabase";
@@ -208,89 +209,92 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="login"
-          options={{
-            headerShown: false,
-            presentation: "transparentModal",
-            animation: "fade",
-            contentStyle: { backgroundColor: "transparent" },
-          }}
-        />
-        <Stack.Screen
-          name="paywall"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="customer-center"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="terms"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="privacy"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="session-detail"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
-        {__DEV__ ? (
-          <>
-            <Stack.Screen
-              name="(dev)/test"
-              options={{ title: "TalkPilot Dev" }}
-            />
-            <Stack.Screen
-              name="(dev)/voiceprint"
-              options={{
-                headerShown: false,
-                presentation: "card",
-                animation: "slide_from_right",
-                gestureEnabled: true,
-              }}
-            />
-          </>
-        ) : null}
-      </Stack>
+      <>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="login"
+            options={{
+              headerShown: false,
+              presentation: "transparentModal",
+              animation: "fade",
+              contentStyle: { backgroundColor: "transparent" },
+            }}
+          />
+          <Stack.Screen
+            name="paywall"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="customer-center"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="terms"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="privacy"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          <Stack.Screen
+            name="session-detail"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
+          {__DEV__ ? (
+            <>
+              <Stack.Screen
+                name="(dev)/test"
+                options={{ title: "TalkPilot Dev" }}
+              />
+              <Stack.Screen
+                name="(dev)/voiceprint"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                  animation: "slide_from_right",
+                  gestureEnabled: true,
+                }}
+              />
+            </>
+          ) : null}
+        </Stack>
+        <FeedbackModal />
+      </>
     </ThemeProvider>
   );
 }

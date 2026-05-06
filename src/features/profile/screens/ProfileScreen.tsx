@@ -1,4 +1,5 @@
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
+import { useFeedbackStore } from "@/features/feedback/feedbackStore";
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
 import { refreshProfileFromSession, signOut } from "@/shared/api/supabase";
 import {
@@ -101,6 +102,7 @@ export default function ProfileScreen() {
   const uiLocale = useLocaleStore((s) => s.uiLocale);
   const learningLanguage = useLocaleStore((s) => s.learningLanguage);
   const followSystemUiLocale = useLocaleStore((s) => s.followSystemUiLocale);
+  const openFeedback = useFeedbackStore((s) => s.openFeedback);
 
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -182,6 +184,12 @@ export default function ProfileScreen() {
 
   function handleOpenSettings() {
     router.push("/settings" as Href);
+  }
+
+  function handleOpenFeedback() {
+    openFeedback({
+      surface: "profile",
+    });
   }
 
   const displayTitle = isAuthenticated
@@ -502,6 +510,29 @@ export default function ProfileScreen() {
                 />
               </View>
             </Pressable>
+
+            <Pressable onPress={handleOpenFeedback} style={styles.feedbackCard}>
+              <View style={styles.preferenceHeader}>
+                <View style={styles.preferenceTitleWrap}>
+                  <Feather
+                    name="message-square"
+                    size={16}
+                    color={palette.textAccent}
+                  />
+                  <Text style={styles.preferenceTitle}>
+                    {t("profile.feedback.title")}
+                  </Text>
+                </View>
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={palette.textTertiary}
+                />
+              </View>
+              <Text style={styles.preferenceBody}>
+                {t("profile.feedback.body")}
+              </Text>
+            </Pressable>
           </View>
         </Animated.View>
       </ScrollView>
@@ -755,6 +786,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   preferenceCard: {
+    borderRadius: radii.md,
+    padding: spacing.md + 2,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    gap: spacing.sm,
+  },
+  feedbackCard: {
     borderRadius: radii.md,
     padding: spacing.md + 2,
     backgroundColor: palette.bgGhostButton,

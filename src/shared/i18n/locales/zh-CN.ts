@@ -107,6 +107,23 @@ export const zhCN: TranslationSchema = {
       unsupportedBody: "首个版本暂只在 iOS 构建中启用 Apple 与 Google 登录。",
     },
   },
+  feedback: {
+    closeAccessibilityLabel: "关闭反馈",
+    sessionTitle: "这次体验怎么样？",
+    profileTitle: "发送反馈",
+    subtitle: "评分和必要的 App 上下文会发送到 PostHog。",
+    placeholder: "告诉我们发生了什么，或者哪里可以更好。",
+    submit: "发送反馈",
+    submitted: "已发送",
+    ratingAccessibilityLabel: "{{count}} 星评分",
+    categories: {
+      general: "整体体验",
+      transcription: "转写",
+      ai_reply: "AI 回复",
+      bug: "Bug",
+      other: "其他",
+    },
+  },
   onboarding: {
     slides: {
       speak: {
@@ -281,6 +298,7 @@ export const zhCN: TranslationSchema = {
     state: {
       loadingTitle: "正在加载会话…",
       loadingBody: "正在拉取你的对话历史。",
+      loadingMore: "正在加载更多会话…",
       errorTitle: "加载历史失败",
       emptyTitle: "还没有会话记录",
       emptyBody: "开始并结束一场实时对话后，会话记录会显示在这里。",
@@ -347,6 +365,7 @@ export const zhCN: TranslationSchema = {
     section: {
       appLanguage: "界面语言",
       learningLanguage: "学习语言",
+      legal: "法律与隐私",
       debug: "调试",
     },
     appLanguage: {
@@ -385,6 +404,20 @@ export const zhCN: TranslationSchema = {
       resetConfirmTitle: "重置声音样本？",
       resetConfirmBody:
         "这会删除当前设备上的声音样本。下次开始实时对话时，系统会提示你重新录制。",
+    },
+    legal: {
+      description:
+        "查看 TalkPilot 如何处理麦克风权限、语音数据、对话转写、订阅以及隐私请求。",
+      privacyTitle: "隐私政策",
+      privacyDescription:
+        "查看麦克风、语音、转写内容和分析数据如何被处理。",
+      termsTitle: "用户协议",
+      termsDescription:
+        "查看产品条款、AI 功能边界、订阅规则与使用规范。",
+      deleteDataTitle: "申请删除数据",
+      deleteDataDescription: "通过 {{email}} 提交删除数据或隐私请求。",
+      emailUnavailableTitle: "无法打开邮件应用",
+      emailUnavailableBody: "请直接发送邮件联系：{{email}}",
     },
     debug: {
       description: "仅供开发包使用的调试项，用来验证首次引导等流程；正式包里不会显示。",
@@ -538,6 +571,10 @@ export const zhCN: TranslationSchema = {
       body: "调整界面语言，并选择你希望练习的目标语言。",
       appLanguage: "界面语言",
       learningLanguage: "学习语言",
+    },
+    feedback: {
+      title: "反馈",
+      body: "告诉我们产品问题、想法，或任何体验不顺的地方。",
     },
   },
   billing: {

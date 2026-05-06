@@ -108,6 +108,23 @@ export const en = {
         "Apple and Google sign-in are currently enabled for the iOS build in this first release.",
     },
   },
+  feedback: {
+    closeAccessibilityLabel: "Close feedback",
+    sessionTitle: "How was this session?",
+    profileTitle: "Send feedback",
+    subtitle: "Your rating and useful app context will be sent to PostHog.",
+    placeholder: "Tell us what happened or what could be better.",
+    submit: "Send feedback",
+    submitted: "Sent",
+    ratingAccessibilityLabel: "{{count}} star rating",
+    categories: {
+      general: "General",
+      transcription: "Transcription",
+      ai_reply: "AI reply",
+      bug: "Bug",
+      other: "Other",
+    },
+  },
   onboarding: {
     slides: {
       speak: {
@@ -286,6 +303,7 @@ export const en = {
     state: {
       loadingTitle: "Loading sessions…",
       loadingBody: "Pulling your conversation history.",
+      loadingMore: "Loading more sessions…",
       errorTitle: "Could not load history",
       emptyTitle: "No sessions yet",
       emptyBody:
@@ -356,6 +374,7 @@ export const en = {
     section: {
       appLanguage: "App language",
       learningLanguage: "Learning language",
+      legal: "Legal and privacy",
       debug: "Debug",
     },
     appLanguage: {
@@ -399,6 +418,22 @@ export const en = {
       resetConfirmTitle: "Reset voice sample?",
       resetConfirmBody:
         "This removes the local enrollment sample. The next Live session will ask you to record a new one.",
+    },
+    legal: {
+      description:
+        "Review how TalkPilot handles microphone access, speech data, transcripts, subscriptions, and privacy requests.",
+      privacyTitle: "Privacy Policy",
+      privacyDescription:
+        "Read how microphone, speech, transcript, and analytics data are processed.",
+      termsTitle: "Terms of Service",
+      termsDescription:
+        "Review the product terms, AI feature limits, subscriptions, and acceptable use.",
+      deleteDataTitle: "Request data deletion",
+      deleteDataDescription:
+        "Send a deletion or privacy request to {{email}}.",
+      emailUnavailableTitle: "Email unavailable",
+      emailUnavailableBody:
+        "Couldn't open your mail app. Please contact us at {{email}}.",
     },
     debug: {
       description:
@@ -562,6 +597,10 @@ export const en = {
       body: "Adjust app language and choose the language you want to learn.",
       appLanguage: "App language",
       learningLanguage: "Learning language",
+    },
+    feedback: {
+      title: "Feedback",
+      body: "Share product issues, ideas, or anything that felt off.",
     },
   },
   billing: {
