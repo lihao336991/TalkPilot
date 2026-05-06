@@ -1,6 +1,7 @@
 import { getAppleSignInCredentials } from '@/shared/auth/providers/appleAuth';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { logBillingEvent } from '@/shared/billing/logger';
+import { getRequiredEnv } from '@/shared/config/env';
 import {
     clearGoogleSignInSession,
     configureGoogleSignIn,
@@ -8,6 +9,7 @@ import {
 } from '@/shared/auth/providers/googleAuth';
 import { supabaseStorage } from '@/shared/auth/supabaseStorage';
 import { createClient, type Session } from '@supabase/supabase-js';
+import { AppState, type AppStateStatus } from 'react-native';
 import { syncSubscriptionTierToUsageLimit } from '../repositories/billingRepository';
 import {
     type AuthMode,
@@ -18,8 +20,8 @@ import {
 } from '../store/authStore';
 
 export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder',
+  getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
+  getRequiredEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
   {
     auth: {
       autoRefreshToken: true,
@@ -31,10 +33,30 @@ export const supabase = createClient(
 );
 
 let authSubscriptionInitialized = false;
+let authAutoRefreshBound = false;
 let recoverSessionPromise: Promise<Session | null> | null = null;
 let guestSessionPromise: Promise<Session | null> | null = null;
 let guestFallbackSuppressed = false;
 const SESSION_REFRESH_BUFFER_MS = 60_000;
+
+function syncAutoRefreshState(appState: AppStateStatus) {
+  if (appState === 'active') {
+    supabase.auth.startAutoRefresh();
+    return;
+  }
+
+  supabase.auth.stopAutoRefresh();
+}
+
+function bindAutoRefreshLifecycle() {
+  if (authAutoRefreshBound) {
+    return;
+  }
+
+  syncAutoRefreshState(AppState.currentState);
+  AppState.addEventListener('change', syncAutoRefreshState);
+  authAutoRefreshBound = true;
+}
 
 function normalizeSubscriptionTier(
   tier: string | null | undefined,
@@ -389,6 +411,7 @@ export const initAuth = async () => {
   const { setLoading } = useAuthStore.getState();
 
   setLoading(true);
+  bindAutoRefreshLifecycle();
 
   try {
     const session =

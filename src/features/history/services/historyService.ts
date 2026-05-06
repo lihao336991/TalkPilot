@@ -3,6 +3,7 @@ import { invokeEdgeFunction } from "@/shared/api/request";
 import { buildLlmDebugHeaders } from "@/shared/llm/debugConfig";
 import { useAuthStore } from "@/shared/store/authStore";
 import { useLlmDebugStore } from "@/shared/store/llmDebugStore";
+import { analytics } from "@/shared/analytics/analytics";
 
 export type HistorySession = {
   id: string;
@@ -291,6 +292,9 @@ async function generateRecap(
   }
 
   try {
+    analytics.capture("llm_session_recap_requested", {
+      force: opts?.force === true,
+    });
     const { data } = await invokeEdgeFunction<RecapResponse>({
       functionName: "session-recap",
       accessToken,
@@ -300,6 +304,10 @@ async function generateRecap(
 
     invalidateSessionsCache();
 
+    analytics.capture("llm_session_recap_succeeded", {
+      has_recap: Boolean(data.recap),
+      title_len: typeof data.title === "string" ? data.title.length : 0,
+    });
     return {
       title: sanitizeText(data.title) || null,
       recap: normalizeRecap(data.recap),
@@ -307,6 +315,9 @@ async function generateRecap(
     };
   } catch (e: any) {
     console.warn("[HistoryService] generateRecap failed:", e.message);
+    analytics.captureError("llm_session_recap_failed", e, {
+      force: opts?.force === true,
+    });
     return { title: null, recap: null, error: e.message };
   }
 }

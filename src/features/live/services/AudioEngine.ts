@@ -17,6 +17,28 @@ export class AudioEngine {
   private subscription: EmitterSubscription | null = null;
   private isInitialized = false;
 
+  private createConfig(): Options {
+    const config: Options = {
+      sampleRate: AUDIO_CONFIG.sampleRate,
+      channels: AUDIO_CONFIG.channels,
+      bitsPerSample: AUDIO_CONFIG.bitsPerSample,
+      bufferSize: AUDIO_CONFIG.bufferSize,
+    };
+    if (Platform.OS === 'android') {
+      config.audioSource = AUDIO_CONFIG.audioSource;
+    }
+    return config;
+  }
+
+  private initializeRecorder(): void {
+    if (this.isInitialized) {
+      return;
+    }
+
+    LiveAudioStream.init(this.createConfig());
+    this.isInitialized = true;
+  }
+
   private async configureRecordingAudioMode(): Promise<void> {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
@@ -46,18 +68,18 @@ export class AudioEngine {
   async init(): Promise<void> {
     console.log('[AudioEngine] Initializing...');
     await this.configureRecordingAudioMode();
-    const config: Options = {
-      sampleRate: AUDIO_CONFIG.sampleRate,
-      channels: AUDIO_CONFIG.channels,
-      bitsPerSample: AUDIO_CONFIG.bitsPerSample,
-      bufferSize: AUDIO_CONFIG.bufferSize,
-    };
-    if (Platform.OS === 'android') {
-      config.audioSource = AUDIO_CONFIG.audioSource;
-    }
-    LiveAudioStream.init(config);
-    this.isInitialized = true;
+    this.initializeRecorder();
     console.log('[AudioEngine] Initialized');
+  }
+
+  async prewarm(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    console.log('[AudioEngine] Prewarming recorder...');
+    this.initializeRecorder();
+    console.log('[AudioEngine] Recorder prewarmed');
   }
 
   async start(onAudioData: (base64: string) => void): Promise<void> {

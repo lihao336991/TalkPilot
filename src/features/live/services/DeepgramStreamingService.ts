@@ -81,6 +81,11 @@ type BufferedTurn = {
   speakerDecisionSource: SpeakerResolution['source'];
 };
 
+type RawSpeakerHint = {
+  selfVotes: number;
+  otherVotes: number;
+};
+
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
 
 function mergeTranscriptSegments(existing: string, incoming: string): string {
@@ -111,8 +116,6 @@ function mergeTranscriptSegments(existing: string, incoming: string): string {
 }
 
 export class DeepgramStreamingService {
-  private static readonly PRIME_DRAIN_MS = 250;
-  private static readonly PRIME_SILENCE_MS = 300;
   private static readonly AUDIO_BYTES_PER_SECOND = 16_000 * 2;
   private client = new StreamingWebSocketClient((status) => {
     useConversationStore.getState().setMainWsStatus(status);
@@ -126,12 +129,10 @@ export class DeepgramStreamingService {
   private nextBufferedTurnIndex = 0;
   private currentUtteranceStartedAt: number | null = null;
   private currentDeepgramLanguage = 'en';
-  private isPrimingEnrollment = false;
-  private suppressMessagesUntil = 0;
-  private primeDrainTimer: ReturnType<typeof setTimeout> | null = null;
   private acceptLiveTranscripts = false;
   private audioCursorSeconds = 0;
   private liveTranscriptBoundarySeconds = 0;
+  private rawSpeakerHints = new Map<number, RawSpeakerHint>();
 
   private async commitBufferedTurn(
     speaker: Speaker,
@@ -429,10 +430,6 @@ export class DeepgramStreamingService {
     }
   }
 
-  private shouldSuppressTranscripts(): boolean {
-    return this.isPrimingEnrollment || Date.now() < this.suppressMessagesUntil;
-  }
-
   enableLiveTranscripts(): void {
     this.resetBufferedTurn();
     this.acceptLiveTranscripts = true;
@@ -501,38 +498,6 @@ export class DeepgramStreamingService {
     return null;
   }
 
-  private clearPrimeDrainTimer(): void {
-    if (this.primeDrainTimer) {
-      clearTimeout(this.primeDrainTimer);
-      this.primeDrainTimer = null;
-    }
-  }
-
-  private finishPrimingSession(): void {
-    this.clearPrimeDrainTimer();
-    this.isPrimingEnrollment = false;
-    this.suppressMessagesUntil = Date.now() + DeepgramStreamingService.PRIME_DRAIN_MS;
-    this.onPrimeUtteranceEnd = null;
-    this.resetBufferedTurn();
-  }
-
-  private schedulePrimeDrain(onDrained: () => void): void {
-    if (!this.isPrimingEnrollment) {
-      return;
-    }
-
-    this.clearPrimeDrainTimer();
-    this.primeDrainTimer = setTimeout(() => {
-      this.finishPrimingSession();
-      setTimeout(() => {
-        if (Date.now() >= this.suppressMessagesUntil) {
-          this.suppressMessagesUntil = 0;
-        }
-        onDrained();
-      }, DeepgramStreamingService.PRIME_DRAIN_MS);
-    }, DeepgramStreamingService.PRIME_DRAIN_MS);
-  }
-
   connect(
     token: string,
     onUtteranceEnd: (payload: FinalTurnPayload) => Promise<void> | void,
@@ -547,6 +512,7 @@ export class DeepgramStreamingService {
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
     this.liveTranscriptBoundarySeconds = 0;
+    this.rawSpeakerHints.clear();
 
     const url =
       'wss://api.deepgram.com/v1/listen?' +
@@ -601,16 +567,6 @@ export class DeepgramStreamingService {
           const words = alt?.words ?? [];
           const detectedLanguage =
             alt?.languages?.[0] ?? this.currentDeepgramLanguage;
-
-          if (this.shouldSuppressTranscripts()) {
-            if (this.isPrimingEnrollment) {
-              this.determineSpeaker(words);
-              if (this.onPrimeUtteranceEnd) {
-                this.schedulePrimeDrain(this.onPrimeUtteranceEnd);
-              }
-            }
-            return;
-          }
 
           if (!this.acceptLiveTranscripts) {
             return;
@@ -741,22 +697,7 @@ export class DeepgramStreamingService {
         }
 
         if (data.type === 'UtteranceEnd') {
-          if (this.shouldSuppressTranscripts()) {
-            if (this.isPrimingEnrollment && this.onPrimeUtteranceEnd) {
-              this.schedulePrimeDrain(this.onPrimeUtteranceEnd);
-            }
-            this.resetBufferedTurn();
-            return;
-          }
-
           if (!this.acceptLiveTranscripts) {
-            this.resetBufferedTurn();
-            return;
-          }
-
-          // If we're in enrollment priming mode, just lock the speaker and resolve
-          if (this.onPrimeUtteranceEnd) {
-            this.onPrimeUtteranceEnd();
             this.resetBufferedTurn();
             return;
           }
@@ -884,89 +825,12 @@ export class DeepgramStreamingService {
     });
 
     this.resetBufferedTurn();
-    this.isPrimingEnrollment = false;
-    this.clearPrimeDrainTimer();
-    this.suppressMessagesUntil = 0;
-    this.onPrimeUtteranceEnd = null;
     this.onFinalTranscriptUpdated = null;
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
     this.liveTranscriptBoundarySeconds = 0;
+    this.rawSpeakerHints.clear();
   }
-
-  /**
-   * Sends a pre-recorded enrollment audio sample through the already-open WebSocket
-   * so Deepgram assigns a speaker ID to the user's voice before the live mic starts.
-   * Resolves once an UtteranceEnd is received (or after a timeout) with the locked speaker ID.
-   */
-  async primeWithEnrollment(base64Chunks: string[]): Promise<boolean> {
-    if (base64Chunks.length === 0) return false;
-
-    console.log('[Deepgram] Priming with enrollment audio...');
-    this.resetBufferedTurn();
-    this.isPrimingEnrollment = true;
-    this.suppressMessagesUntil = 0;
-
-    await new Promise<void>((resolve) => {
-      const PRIME_TIMEOUT_MS = 2_000;
-      let settled = false;
-
-      const settle = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve();
-      };
-
-      const timer = setTimeout(() => {
-        console.warn('[Deepgram] Enrollment prime timed out, continuing without lock');
-        this.finishPrimingSession();
-        setTimeout(() => {
-          if (Date.now() >= this.suppressMessagesUntil) {
-            this.suppressMessagesUntil = 0;
-          }
-          settle();
-        }, DeepgramStreamingService.PRIME_DRAIN_MS);
-      }, PRIME_TIMEOUT_MS);
-
-      this.onPrimeUtteranceEnd = () => {
-        settle();
-      };
-
-      // Send all enrollment chunks
-      for (const chunk of base64Chunks) {
-        try {
-          const buffer = base64ToArrayBuffer(chunk);
-          if (this.client.send(buffer)) {
-            this.advanceAudioCursor(buffer.byteLength);
-          }
-        } catch (err) {
-          console.error('[Deepgram] Failed to send enrollment chunk:', err);
-        }
-      }
-
-      const silenceBytes =
-        (DeepgramStreamingService.PRIME_SILENCE_MS / 1000) *
-        DeepgramStreamingService.AUDIO_BYTES_PER_SECOND;
-      const silenceBuffer = new ArrayBuffer(silenceBytes);
-      try {
-        if (this.client.send(silenceBuffer)) {
-          this.advanceAudioCursor(silenceBuffer.byteLength);
-        }
-      } catch {}
-
-      try {
-        this.client.send('{"type":"Finalize"}');
-      } catch {}
-    });
-
-    const selfSpeakerId = useConversationStore.getState().selfSpeakerId;
-    const didLock = selfSpeakerId !== null;
-    console.log('[Deepgram] Enrollment prime complete, didLock=', didLock, 'selfSpeakerId=', selfSpeakerId);
-    return didLock;
-  }
-
-  private onPrimeUtteranceEnd: (() => void) | null = null;
 
   private getMajoritySpeaker(words: DeepgramWord[]): number {
     const speakerCounts = new Map<number, number>();
@@ -987,96 +851,122 @@ export class DeepgramStreamingService {
     return majority;
   }
 
-  private determineDeepgramSpeaker(
-    words: DeepgramWord[],
-    selfSpeakerId: number | null,
-    allowAutoLock: boolean,
-  ): { speaker: Speaker; rawId: number } {
+  private getDeepgramRawSpeakerId(words: DeepgramWord[]): number {
     if (words.length === 0) {
-      const result = selfSpeakerId === null ? 'self' : 'other';
-      return { speaker: result as Speaker, rawId: -1 };
+      return -1;
     }
 
     const hasSpeakerField = words.some(
       (w) => w.speaker !== undefined && w.speaker !== null,
     );
     if (!hasSpeakerField) {
-      const result = selfSpeakerId === null ? 'self' : 'other';
-      return { speaker: result as Speaker, rawId: -1 };
+      return -1;
     }
 
     const majority = this.getMajoritySpeaker(words);
-    if (majority === -1) {
-      const result = selfSpeakerId === null ? 'self' : 'other';
-      return { speaker: result as Speaker, rawId: -1 };
+    return majority === -1 ? -1 : majority;
+  }
+
+  private rememberRawSpeakerHint(rawId: number, speaker: Speaker): void {
+    if (rawId === -1) {
+      return;
     }
 
-    if (selfSpeakerId === null) {
-      if (allowAutoLock) {
-        console.log('[Deepgram] Auto-locking selfSpeakerId to', majority);
-        useConversationStore.getState().setSelfSpeakerId(majority);
-        return { speaker: 'self', rawId: majority };
-      }
+    const current = this.rawSpeakerHints.get(rawId) ?? {
+      selfVotes: 0,
+      otherVotes: 0,
+    };
+    if (speaker === 'self') {
+      current.selfVotes += 1;
+    } else {
+      current.otherVotes += 1;
+    }
+    this.rawSpeakerHints.set(rawId, current);
+  }
 
-      return { speaker: this.getBufferedFallbackSpeaker(), rawId: majority };
+  private resolveMappedSpeaker(rawId: number): Speaker | null {
+    if (rawId === -1) {
+      return null;
     }
 
-    const result = majority === selfSpeakerId ? 'self' : 'other';
-    return { speaker: result as Speaker, rawId: majority };
+    const hint = this.rawSpeakerHints.get(rawId);
+    if (!hint) {
+      return null;
+    }
+
+    if (hint.selfVotes === hint.otherVotes) {
+      return null;
+    }
+
+    return hint.selfVotes > hint.otherVotes ? 'self' : 'other';
+  }
+
+  private getLocalVoiceprintRangeMs(
+    words: DeepgramWord[],
+  ): { startMs: number; endMs: number } | null {
+    const timedWords = words.filter(
+      (word) => word.start != null || word.end != null,
+    );
+    if (timedWords.length === 0) {
+      return null;
+    }
+
+    const starts = timedWords
+      .map((word) => word.start ?? word.end)
+      .filter((value): value is number => value != null);
+    const ends = timedWords
+      .map((word) => word.end ?? word.start)
+      .filter((value): value is number => value != null);
+    if (starts.length === 0 || ends.length === 0) {
+      return null;
+    }
+
+    const streamStartSeconds = Math.min(...starts);
+    const streamEndSeconds = Math.max(...ends);
+    return {
+      startMs: Math.max(
+        0,
+        (streamStartSeconds - this.liveTranscriptBoundarySeconds) * 1000,
+      ),
+      endMs: Math.max(
+        0,
+        (streamEndSeconds - this.liveTranscriptBoundarySeconds) * 1000,
+      ),
+    };
   }
 
   private determineSpeaker(words: DeepgramWord[]): SpeakerResolution {
     const store = useConversationStore.getState();
-    const { selfSpeakerId, forcedSpeaker, voiceprintEnrollmentReady } = store;
-    const voiceprint = voiceprintService.getCurrentDecision();
+    const { forcedSpeaker } = store;
+    const voiceprintRange = this.getLocalVoiceprintRangeMs(words);
+    const voiceprint = voiceprintRange
+      ? voiceprintService.getDecisionForAudioRange(
+          voiceprintRange.startMs,
+          voiceprintRange.endMs,
+        )
+      : voiceprintService.getCurrentDecision();
+    const rawId = this.getDeepgramRawSpeakerId(words);
     const voiceprintSimilarity = voiceprint.similarity;
     const voiceprintDecision = voiceprint.label;
 
     if (forcedSpeaker) {
+      this.rememberRawSpeakerHint(rawId, forcedSpeaker);
       store.setSpeakerDecisionSource('forced');
       return {
         speaker: forcedSpeaker,
-        rawId: -1,
+        rawId,
         source: 'forced',
         voiceprintSimilarity,
         voiceprintDecision,
       };
     }
 
-    const allowAutoLock =
-      (voiceprintDecision !== 'other' && voiceprintEnrollmentReady) ||
-      this.isPrimingEnrollment;
-    const deepgramResolution = this.determineDeepgramSpeaker(
-      words,
-      selfSpeakerId,
-      allowAutoLock,
-    );
-
-    // When Deepgram already provides a concrete speaker id, keep turn partitioning
-    // and left/right ownership primarily driven by Deepgram. Voiceprint remains a
-    // supporting signal for auto-locking and debug visibility, but should not
-    // split one sentence into mixed-side bubbles at word-run granularity.
-    if (deepgramResolution.rawId !== -1) {
-      const source =
-        (voiceprintDecision === 'self' && deepgramResolution.speaker === 'self') ||
-        (voiceprintDecision === 'other' && deepgramResolution.speaker === 'other')
-          ? 'hybrid'
-          : 'deepgram';
-      store.setSpeakerDecisionSource(source);
-      return {
-        speaker: deepgramResolution.speaker,
-        rawId: deepgramResolution.rawId,
-        source,
-        voiceprintSimilarity,
-        voiceprintDecision,
-      };
-    }
-
     if (voiceprintDecision === 'self') {
+      this.rememberRawSpeakerHint(rawId, 'self');
       store.setSpeakerDecisionSource('voiceprint');
       return {
         speaker: 'self',
-        rawId: deepgramResolution.rawId,
+        rawId,
         source: 'voiceprint',
         voiceprintSimilarity,
         voiceprintDecision,
@@ -1084,25 +974,34 @@ export class DeepgramStreamingService {
     }
 
     if (voiceprintDecision === 'other') {
-      const speaker =
-        this.bufferedTurns.length > 0
-          ? this.getBufferedFallbackSpeaker()
-          : deepgramResolution.speaker;
-      const source = speaker === 'other' ? 'voiceprint' : 'deepgram';
-      store.setSpeakerDecisionSource(source);
+      this.rememberRawSpeakerHint(rawId, 'other');
+      store.setSpeakerDecisionSource('voiceprint');
       return {
-        speaker,
-        rawId: deepgramResolution.rawId,
-        source,
+        speaker: 'other',
+        rawId,
+        source: 'voiceprint',
         voiceprintSimilarity,
         voiceprintDecision,
       };
     }
 
+    const mappedSpeaker = this.resolveMappedSpeaker(rawId);
+    if (mappedSpeaker) {
+      store.setSpeakerDecisionSource('hybrid');
+      return {
+        speaker: mappedSpeaker,
+        rawId,
+        source: 'hybrid',
+        voiceprintSimilarity,
+        voiceprintDecision,
+      };
+    }
+
+    const fallbackSpeaker = this.getBufferedFallbackSpeaker();
     store.setSpeakerDecisionSource('deepgram');
     return {
-      speaker: deepgramResolution.speaker,
-      rawId: deepgramResolution.rawId,
+      speaker: fallbackSpeaker,
+      rawId,
       source: 'deepgram',
       voiceprintSimilarity,
       voiceprintDecision,

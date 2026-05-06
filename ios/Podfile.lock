@@ -2322,6 +2322,51 @@ PODS:
     - ReactNativeDependencies
     - Sentry/HybridSDK (= 8.56.1)
     - Yoga
+  - RNSVG (15.15.4):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - RNSVG/common (= 15.15.4)
+    - Yoga
+  - RNSVG/common (15.15.4):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNWorklets (0.5.1):
     - hermes-engine
     - RCTRequired
@@ -2506,6 +2551,7 @@ DEPENDENCIES:
   - "RNReanimated (from `../node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.5.1_react-native@0.81.5_react@19.1.0/node_modules/react-native-reanimated`)"
   - "RNScreens (from `../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_react@19.1.0/node_modules/react-native-screens`)"
   - "RNSentry (from `../node_modules/.pnpm/@sentry+react-native@7.2.0_expo@54.0.33_react-native@0.81.5_react@19.1.0/node_modules/@sentry/react-native`)"
+  - "RNSVG (from `../node_modules/.pnpm/react-native-svg@15.15.4_react-native@0.81.5_react@19.1.0/node_modules/react-native-svg`)"
   - "RNWorklets (from `../node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.29.0_react-native@0.81.5_react@19.1.0/node_modules/react-native-worklets`)"
   - "Yoga (from `../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.0_@types+react@19.1.17_react@19.1.0/node_modules/react-native/ReactCommon/yoga`)"
 
@@ -2744,6 +2790,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_react@19.1.0/node_modules/react-native-screens"
   RNSentry:
     :path: "../node_modules/.pnpm/@sentry+react-native@7.2.0_expo@54.0.33_react-native@0.81.5_react@19.1.0/node_modules/@sentry/react-native"
+  RNSVG:
+    :path: "../node_modules/.pnpm/react-native-svg@15.15.4_react-native@0.81.5_react@19.1.0/node_modules/react-native-svg"
   RNWorklets:
     :path: "../node_modules/.pnpm/react-native-worklets@0.5.1_@babel+core@7.29.0_react-native@0.81.5_react@19.1.0/node_modules/react-native-worklets"
   Yoga:
@@ -2871,6 +2919,7 @@ SPEC CHECKSUMS:
   RNReanimated: 68d7aa8f83a26fe94ea75dbf4fe1447aa17d70d5
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
   RNSentry: 41979b419908128847ef662cc130a400b7576fa9
+  RNSVG: f2641bf17a3e397882659348d7668667a0805f00
   RNWorklets: 2ec3e28c35b3750151b93690d414c0df969c406c
   Sentry: b3ec44d01708fce73f99b544beb57e890eca4406
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a

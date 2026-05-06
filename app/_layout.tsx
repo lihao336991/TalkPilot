@@ -16,6 +16,7 @@ import "../global.css";
 
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { sessionManager } from "@/features/live/services/SessionManager";
+import { analytics } from "@/shared/analytics/analytics";
 import { initAuth } from "@/shared/api/supabase";
 import { useColorScheme } from "@/shared/hooks/useColorScheme";
 import {
@@ -23,6 +24,7 @@ import {
     sentryNavigationIntegration,
 } from "@/shared/monitoring/sentry";
 import { useAuthStore } from "@/shared/store/authStore";
+import { useLocaleStore } from "@/shared/store/localeStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export { ErrorBoundary } from "expo-router";
@@ -66,6 +68,7 @@ function RootLayout() {
 
   useEffect(() => {
     if (loaded && authReady && i18nReady) {
+      analytics.init();
       SplashScreen.hideAsync();
     }
   }, [loaded, authReady, i18nReady]);
@@ -110,6 +113,10 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const authMode = useAuthStore((state) => state.authMode);
   const userId = useAuthStore((state) => state.userId);
+  const subscriptionTier = useAuthStore((state) => state.subscriptionTier);
+  const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
+  const uiLocale = useLocaleStore((state) => state.uiLocale);
+  const learningLanguage = useLocaleStore((state) => state.learningLanguage);
   const navigationRef = useNavigationContainerRef();
 
   useEffect(() => {
@@ -124,6 +131,55 @@ function RootLayoutNav() {
 
     Sentry.setUser(null);
   }, [authMode, userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    analytics.identify(userId, {
+      auth_mode: authMode ?? "unknown",
+      subscription_tier: subscriptionTier,
+      subscription_status: subscriptionStatus,
+      ui_locale: uiLocale,
+      learning_language: learningLanguage,
+    });
+    analytics.capture("auth_session_applied", {
+      auth_mode: authMode ?? "unknown",
+      subscription_tier: subscriptionTier,
+      subscription_status: subscriptionStatus,
+    });
+  }, [
+    authMode,
+    learningLanguage,
+    subscriptionStatus,
+    subscriptionTier,
+    uiLocale,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (!analytics.enabled()) {
+      return;
+    }
+
+    const track = () => {
+      const route = navigationRef.getCurrentRoute?.();
+      if (!route?.name) {
+        return;
+      }
+
+      analytics.screen(route.name);
+    };
+
+    track();
+    const unsubscribe = navigationRef.addListener?.("state", track);
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, [navigationRef]);
 
   useEffect(() => {
     if (authMode !== "authenticated" || !userId) {
@@ -217,16 +273,23 @@ function RootLayoutNav() {
             gestureEnabled: true,
           }}
         />
-        <Stack.Screen name="(dev)/test" options={{ title: "TalkPilot Dev" }} />
-        <Stack.Screen
-          name="(dev)/voiceprint"
-          options={{
-            headerShown: false,
-            presentation: "card",
-            animation: "slide_from_right",
-            gestureEnabled: true,
-          }}
-        />
+        {__DEV__ ? (
+          <>
+            <Stack.Screen
+              name="(dev)/test"
+              options={{ title: "TalkPilot Dev" }}
+            />
+            <Stack.Screen
+              name="(dev)/voiceprint"
+              options={{
+                headerShown: false,
+                presentation: "card",
+                animation: "slide_from_right",
+                gestureEnabled: true,
+              }}
+            />
+          </>
+        ) : null}
       </Stack>
     </ThemeProvider>
   );

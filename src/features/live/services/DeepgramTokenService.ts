@@ -1,11 +1,13 @@
 import { useAccessStore } from '@/features/live/store/accessStore';
 import {
+  isFeatureAccessError,
   normalizeFeatureAccess,
   toFeatureAccessError,
 } from '@/shared/billing/access';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { applyFeatureAccessSummary } from '@/shared/repositories/billingRepository';
+import { getOrCreateInstallId } from '@/shared/device/installId';
 
 class DeepgramTokenService {
   private cachedToken: string | null = null;
@@ -19,6 +21,7 @@ class DeepgramTokenService {
 
   private async fetchToken(): Promise<string> {
     const accessToken = await getValidAccessToken();
+    const installId = await getOrCreateInstallId();
 
     console.log('[DeepgramToken] Fetching token...');
 
@@ -27,7 +30,7 @@ class DeepgramTokenService {
       const result = await invokeEdgeFunction<any>({
         functionName: 'deepgram-token',
         accessToken,
-        body: {},
+        body: { installId },
       });
       body = result.data;
     } catch (error) {
@@ -44,9 +47,12 @@ class DeepgramTokenService {
           applyFeatureAccessSummary(access);
         }
       }
-      console.error('[DeepgramToken] Function error detail:', requestError);
+      const accessError = toFeatureAccessError(error, 'live_minutes');
+      if (!isFeatureAccessError(accessError)) {
+        console.error('[DeepgramToken] Function error detail:', requestError);
+      }
       throw (
-        toFeatureAccessError(error, 'live_minutes') ??
+        accessError ??
         new Error(
           `Failed to get Deepgram token: ${
             requestError.message ?? 'Unknown request failure'

@@ -82,6 +82,11 @@ serve(async (req: Request) => {
   }
 
   const body = await req.json();
+  const installIdRaw = body.install_id ?? body.installId;
+  const installId =
+    typeof installIdRaw === "string" && String(installIdRaw).trim().length > 0
+      ? String(installIdRaw).trim()
+      : "";
   const sessionId = body.session_id ?? body.sessionId;
   const lastUtterance = body.last_utterance ?? body.lastUtterance;
   const scene = body.scene;
@@ -90,7 +95,11 @@ serve(async (req: Request) => {
     ? String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
     : "en";
 
-  if (typeof sessionId !== "string" || typeof lastUtterance !== "string") {
+  if (
+    typeof sessionId !== "string" ||
+    typeof lastUtterance !== "string" ||
+    !installId
+  ) {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
       headers: JSON_HEADERS,
@@ -102,6 +111,7 @@ serve(async (req: Request) => {
     {
       p_user_id: user.id,
       p_feature_key: "suggestion",
+      p_install_id: installId,
     },
   );
 
@@ -169,14 +179,18 @@ ${conversationHistory}
 Last utterance from the other person: "${lastUtterance}"`;
 
   try {
-    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(req, {
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 100,
-      temperature: 0.4,
-    });
+    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(
+      req,
+      {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 100,
+        temperature: 0.4,
+      },
+      { taskKey: "suggest" },
+    );
     const responseHeaders = buildLlmResponseHeaders(runtime, {
       routeMode,
       attempts,

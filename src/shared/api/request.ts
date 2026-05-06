@@ -1,3 +1,5 @@
+import { getRequiredEnv } from '@/shared/config/env';
+
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 type JsonPrimitive = string | number | boolean | null;
@@ -116,6 +118,17 @@ function formatRequestLog(payload: Record<string, unknown>) {
   }
 }
 
+function isExpectedBusinessError(status: number, body: unknown) {
+  if (!body || typeof body !== 'object') {
+    return false;
+  }
+
+  const candidate = body as Record<string, unknown>;
+  const code = typeof candidate.code === 'string' ? candidate.code : null;
+
+  return status === 429 && code === 'feature_access_denied';
+}
+
 export async function requestJson<T>({
   label,
   url,
@@ -151,18 +164,21 @@ export async function requestJson<T>({
       body: parsedBody,
     });
 
-    console.error(
-      '[ApiRequest] Request failed',
-      formatRequestLog({
-        requestId,
-        label,
-        url,
-        method,
-        status: response.status,
-        durationMs,
-        body: safeSerialize(parsedBody),
-      }),
-    );
+    const logPayload = formatRequestLog({
+      requestId,
+      label,
+      url,
+      method,
+      status: response.status,
+      durationMs,
+      body: safeSerialize(parsedBody),
+    });
+
+    if (isExpectedBusinessError(response.status, parsedBody)) {
+      console.warn('[ApiRequest] Request rejected by business rule', logPayload);
+    } else {
+      console.error('[ApiRequest] Request failed', logPayload);
+    }
 
     throw error;
   }
@@ -197,10 +213,8 @@ export async function invokeEdgeFunction<T>({
   method = 'POST',
   logSuccess = false,
 }: EdgeFunctionOptions): Promise<RequestResult<T>> {
-  const supabaseUrl =
-    process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-  const supabaseAnonKey =
-    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+  const supabaseUrl = getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL');
+  const supabaseAnonKey = getRequiredEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
   return requestJson<T>({
     label: `fn:${functionName}`,

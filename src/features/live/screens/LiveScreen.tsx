@@ -16,7 +16,6 @@ import {
 import { ConversationFlow } from "../components/ConversationFlow";
 import { ConversationToolbar } from "../components/ConversationToolbar";
 import { FloatingSimulateButton } from "../components/FloatingSimulateButton";
-import { SkiaListeningWave } from "../components/SkiaListeningWave";
 import { SpeakerCalibration } from "../components/SpeakerCalibration";
 import { StartSessionCard } from "../components/StartSessionCard";
 import SuggestionPanel from "../components/SuggestionPanel";
@@ -100,10 +99,10 @@ export default function LiveScreen() {
         <View style={styles.activeContainer}>
           {isListening && hasMainInput ? (
             <View pointerEvents="none" style={styles.listeningOverlay}>
-              <SkiaListeningWave
+              {/* <SkiaListeningWave
                 level={mainAudioLevel}
                 style={styles.listeningWave}
-              />
+              /> */}
             </View>
           ) : null}
           <View style={styles.wsStatusCard}>

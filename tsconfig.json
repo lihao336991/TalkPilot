@@ -4,9 +4,7 @@
     "strict": true,
     "resolveJsonModule": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
+      "@/*": ["./src/*"],
       "react-native-live-audio-stream": [
         "./src/types/react-native-live-audio-stream"
       ]
@@ -19,7 +17,5 @@
     "expo-env.d.ts",
     "nativewind-env.d.ts"
   ],
-  "exclude": [
-    "supabase/functions/**"
-  ]
+  "exclude": ["supabase/functions/**", "legacy/**"]
 }

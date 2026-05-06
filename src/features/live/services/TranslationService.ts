@@ -5,6 +5,7 @@ import { useDebugStore } from '@/features/live/store/debugStore';
 import { useLocaleStore } from '@/shared/store/localeStore';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+import { analytics } from '@/shared/analytics/analytics';
 
 export type TranslationDirection = 'to_learning' | 'to_native';
 
@@ -106,6 +107,11 @@ class TranslationService {
       return;
     }
 
+    analytics.capture('translation_requested', {
+      direction,
+      text_len: source.length,
+    });
+
     const store = useConversationStore.getState();
     const requestSeq = (this.latestRequestSeqByTurn.get(turnId) ?? 0) + 1;
     this.latestRequestSeqByTurn.set(turnId, requestSeq);
@@ -156,6 +162,11 @@ class TranslationService {
         translationDirection: direction,
       });
       const durationMs = Date.now() - startedAt;
+      analytics.capture('translation_succeeded', {
+        direction,
+        duration_ms: durationMs,
+        translated_len: translated.length,
+      });
       useDebugStore
         .getState()
         .completeTurnTranslation(turnId, `${direction} · ${durationMs} ms`);
@@ -164,6 +175,9 @@ class TranslationService {
         return;
       }
       console.error('[Translation] Failed to translate turn', turnId, error);
+      analytics.captureError('translation_failed', error, {
+        direction,
+      });
       useConversationStore.getState().setTurnTranslation(turnId, {
         translationStatus: 'error',
       });

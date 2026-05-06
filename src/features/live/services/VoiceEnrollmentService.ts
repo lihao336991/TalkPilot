@@ -8,7 +8,7 @@ const SAMPLE_RATE = 16_000;
 const CHANNELS = 1;
 const BITS_PER_SAMPLE = 16;
 const ENROLLMENT_PROFILE_VERSION = 1;
-const VOICEPRINT_MODEL = 'titanet-small-f16-coreml-v2';
+const VOICEPRINT_MODEL = 'titanet-small-f16-coreml-v5-adaptive-window';
 const DEFAULT_TITANET_SELF_HIGH_THRESHOLD = 0.58;
 const DEFAULT_TITANET_SELF_LOW_THRESHOLD = 0.38;
 
@@ -26,6 +26,7 @@ export type VoiceEnrollmentProfile = {
   sampleRate: number;
   durationMs: number;
   embedding: number[];
+  embeddingsByDurationMs: Record<string, number[]>;
   model: string;
   thresholdSelfHigh: number;
   thresholdSelfLow: number;
@@ -42,6 +43,11 @@ export type EnrollmentAvailability =
  * can be locked before the live mic opens.
  */
 class VoiceEnrollmentService {
+  private cachedAvailability: EnrollmentAvailability | null = null;
+  private cachedPcmBase64: string | null | undefined = undefined;
+  private cachedChunks: string[] | null = null;
+  private inflightPrewarmPromise: Promise<void> | null = null;
+
   private base64ToBytes(base64: string): Uint8Array {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -59,6 +65,36 @@ class VoiceEnrollmentService {
       binary += String.fromCharCode(...chunk);
     }
     return btoa(binary);
+  }
+
+  private splitBase64IntoChunks(base64: string): string[] {
+    if (!base64) {
+      return [];
+    }
+
+    // Split into ~64KB chunks to match AudioEngine buffer cadence
+    const chunkSize = 87380; // ~64KB in base64 chars
+    const chunks: string[] = [];
+    for (let i = 0; i < base64.length; i += chunkSize) {
+      chunks.push(base64.slice(i, i + chunkSize));
+    }
+    return chunks;
+  }
+
+  private setCachedPcmBase64(base64: string | null) {
+    this.cachedPcmBase64 = base64;
+    this.cachedChunks = base64 ? this.splitBase64IntoChunks(base64) : [];
+  }
+
+  private async readEnrollmentPcmBase64(): Promise<string | null> {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(ENROLLMENT_FILE_PATH, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return base64 || null;
+    } catch {
+      return null;
+    }
   }
 
   private createWavHeader(pcmByteLength: number): Uint8Array {
@@ -96,16 +132,25 @@ class VoiceEnrollmentService {
   }
 
   async getEnrollmentAvailability(): Promise<EnrollmentAvailability> {
+    if (this.cachedAvailability) {
+      return this.cachedAvailability;
+    }
+
     try {
       const pcmInfo = await FileSystem.getInfoAsync(ENROLLMENT_FILE_PATH);
       const hasPcm = pcmInfo.exists && Number((pcmInfo as any).size ?? 0) > 0;
       if (!hasPcm) {
-        return 'missing';
+        this.cachedAvailability = 'missing';
+        this.setCachedPcmBase64(null);
+        return this.cachedAvailability;
       }
 
       const profile = await this.loadEnrollmentProfile();
-      return profile ? 'ready' : 'legacy_pcm_only';
+      this.cachedAvailability = profile ? 'ready' : 'legacy_pcm_only';
+      return this.cachedAvailability;
     } catch {
+      this.cachedAvailability = 'missing';
+      this.setCachedPcmBase64(null);
       return 'missing';
     }
   }
@@ -126,58 +171,33 @@ class VoiceEnrollmentService {
     await FileSystem.writeAsStringAsync(ENROLLMENT_FILE_PATH, this.bytesToBase64(bytes), {
       encoding: FileSystem.EncodingType.Base64,
     });
+    this.setCachedPcmBase64(this.bytesToBase64(bytes));
+    this.cachedAvailability = 'legacy_pcm_only';
     console.log('[VoiceEnrollment] Saved enrollment audio');
   }
 
   async loadEnrollmentChunks(): Promise<string[]> {
-    try {
-      const base64 = await this.loadEnrollmentPcmBase64();
-      if (!base64) return [];
-      // Split into ~64KB chunks to match AudioEngine buffer cadence
-      const chunkSize = 87380; // ~64KB in base64 chars
-      const chunks: string[] = [];
-      for (let i = 0; i < base64.length; i += chunkSize) {
-        chunks.push(base64.slice(i, i + chunkSize));
-      }
-      return chunks;
-    } catch {
-      return [];
+    if (this.cachedChunks) {
+      return this.cachedChunks;
     }
+
+    const base64 = await this.loadEnrollmentPcmBase64();
+    const chunks = base64 ? this.splitBase64IntoChunks(base64) : [];
+    this.cachedChunks = chunks;
+    return chunks;
   }
 
   async loadEnrollmentPcmBase64(): Promise<string | null> {
-    try {
-      const base64 = await FileSystem.readAsStringAsync(ENROLLMENT_FILE_PATH, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      return base64 || null;
-    } catch {
-      return null;
+    if (this.cachedPcmBase64 !== undefined) {
+      return this.cachedPcmBase64;
     }
+
+    const base64 = await this.readEnrollmentPcmBase64();
+    this.setCachedPcmBase64(base64);
+    return base64;
   }
 
   async saveEnrollmentProfile(profile: VoiceEnrollmentProfile): Promise<void> {
-    // #region debug-point B:save-enrollment-profile
-    fetch('http://10.200.152.245:7777/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'voiceprint-invalid-enrollment',
-        runId: 'pre-fix',
-        hypothesisId: 'B',
-        location: 'VoiceEnrollmentService.ts:saveEnrollmentProfile',
-        msg: '[DEBUG] saving enrollment profile',
-        data: {
-          model: profile.model,
-          embeddingLength: profile.embedding.length,
-          thresholdSelfHigh: profile.thresholdSelfHigh,
-          thresholdSelfLow: profile.thresholdSelfLow,
-          preview: profile.embedding.slice(0, 4),
-        },
-        ts: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     console.log('[VoiceEnrollmentService] Saving enrollment profile', {
       model: profile.model,
       embeddingLength: profile.embedding.length,
@@ -188,6 +208,7 @@ class VoiceEnrollmentService {
       JSON.stringify(profile),
       { encoding: FileSystem.EncodingType.UTF8 },
     );
+    this.cachedAvailability = 'ready';
   }
 
   async loadEnrollmentProfile(): Promise<VoiceEnrollmentProfile | null> {
@@ -200,35 +221,14 @@ class VoiceEnrollmentService {
       }
 
       const parsed = JSON.parse(raw) as Partial<VoiceEnrollmentProfile>;
-      // #region debug-point D:load-enrollment-profile
-      fetch('http://10.200.152.245:7777/event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId: 'voiceprint-invalid-enrollment',
-          runId: 'pre-fix',
-          hypothesisId: 'D',
-          location: 'VoiceEnrollmentService.ts:loadEnrollmentProfile',
-          msg: '[DEBUG] loaded raw enrollment profile',
-          data: {
-            parsedModel: parsed.model ?? null,
-            embeddingLength: Array.isArray(parsed.embedding)
-              ? parsed.embedding.length
-              : null,
-            version: parsed.version ?? null,
-            preview: Array.isArray(parsed.embedding)
-              ? parsed.embedding.slice(0, 4)
-              : null,
-          },
-          ts: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       console.log('[VoiceEnrollmentService] Loaded enrollment profile', {
         parsedModel: parsed.model ?? null,
         embeddingLength: Array.isArray(parsed.embedding)
           ? parsed.embedding.length
           : null,
+        embeddingDurations: parsed.embeddingsByDurationMs
+          ? Object.keys(parsed.embeddingsByDurationMs)
+          : [],
         preview: Array.isArray(parsed.embedding)
           ? parsed.embedding.slice(0, 4)
           : null,
@@ -237,34 +237,17 @@ class VoiceEnrollmentService {
         parsed.version !== ENROLLMENT_PROFILE_VERSION ||
         parsed.model !== VOICEPRINT_MODEL ||
         !Array.isArray(parsed.embedding) ||
+        !parsed.embeddingsByDurationMs ||
+        typeof parsed.embeddingsByDurationMs !== 'object' ||
         parsed.embedding.length === 0 ||
-        !isFiniteEmbeddingArray(parsed.embedding)
+        !Array.isArray(parsed.embeddingsByDurationMs['1000']) ||
+        !Array.isArray(parsed.embeddingsByDurationMs['2000']) ||
+        !Array.isArray(parsed.embeddingsByDurationMs['3000']) ||
+        !isFiniteEmbeddingArray(parsed.embedding) ||
+        !isFiniteEmbeddingArray(parsed.embeddingsByDurationMs['1000']) ||
+        !isFiniteEmbeddingArray(parsed.embeddingsByDurationMs['2000']) ||
+        !isFiniteEmbeddingArray(parsed.embeddingsByDurationMs['3000'])
       ) {
-        // #region debug-point D:reject-enrollment-profile
-        fetch('http://10.200.152.245:7777/event', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId: 'voiceprint-invalid-enrollment',
-            runId: 'pre-fix',
-            hypothesisId: 'D',
-            location: 'VoiceEnrollmentService.ts:loadEnrollmentProfile',
-            msg: '[DEBUG] rejected enrollment profile during load',
-            data: {
-              expectedModel: VOICEPRINT_MODEL,
-              parsedModel: parsed.model ?? null,
-              embeddingLength: Array.isArray(parsed.embedding)
-                ? parsed.embedding.length
-                : null,
-              hasOnlyFiniteValues: Array.isArray(parsed.embedding)
-                ? isFiniteEmbeddingArray(parsed.embedding)
-                : false,
-              version: parsed.version ?? null,
-            },
-            ts: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
         return null;
       }
 
@@ -274,6 +257,7 @@ class VoiceEnrollmentService {
         sampleRate: parsed.sampleRate ?? SAMPLE_RATE,
         durationMs: parsed.durationMs ?? ENROLLMENT_DURATION_MS,
         embedding: parsed.embedding,
+        embeddingsByDurationMs: parsed.embeddingsByDurationMs,
         model: parsed.model,
         thresholdSelfHigh:
           parsed.thresholdSelfHigh ?? DEFAULT_TITANET_SELF_HIGH_THRESHOLD,
@@ -298,6 +282,10 @@ class VoiceEnrollmentService {
     } catch {
       // ignore
     }
+    this.cachedAvailability =
+      this.cachedPcmBase64 && this.cachedPcmBase64.length > 0
+        ? 'legacy_pcm_only'
+        : 'missing';
   }
 
   async clearEnrollment(): Promise<void> {
@@ -313,8 +301,33 @@ class VoiceEnrollmentService {
     } catch {
       // ignore
     }
+    this.cachedAvailability = 'missing';
+    this.setCachedPcmBase64(null);
     await this.clearEnrollmentProfile();
     console.log('[VoiceEnrollment] Cleared enrollment audio');
+  }
+
+  async prewarm(): Promise<void> {
+    if (this.inflightPrewarmPromise) {
+      return this.inflightPrewarmPromise;
+    }
+
+    this.inflightPrewarmPromise = (async () => {
+      const [base64, profile] = await Promise.all([
+        this.loadEnrollmentPcmBase64(),
+        this.loadEnrollmentProfile(),
+      ]);
+      if (!base64) {
+        this.cachedAvailability = 'missing';
+        return;
+      }
+
+      this.cachedAvailability = profile ? 'ready' : 'legacy_pcm_only';
+    })().finally(() => {
+      this.inflightPrewarmPromise = null;
+    });
+
+    return this.inflightPrewarmPromise;
   }
 
   async preparePlaybackUri(): Promise<string | null> {
@@ -351,6 +364,7 @@ class VoiceEnrollmentService {
 
   createProfile(params: {
     embedding: number[];
+    embeddingsByDurationMs: Record<string, number[]>;
     durationMs: number;
     thresholdSelfHigh?: number;
     thresholdSelfLow?: number;
@@ -361,6 +375,7 @@ class VoiceEnrollmentService {
       sampleRate: SAMPLE_RATE,
       durationMs: params.durationMs,
       embedding: params.embedding,
+      embeddingsByDurationMs: params.embeddingsByDurationMs,
       model: VOICEPRINT_MODEL,
       thresholdSelfHigh:
         params.thresholdSelfHigh ?? DEFAULT_TITANET_SELF_HIGH_THRESHOLD,

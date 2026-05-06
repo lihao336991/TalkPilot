@@ -18,6 +18,12 @@ import { useSessionStore } from '@/features/live/store/sessionStore';
 import { useLocaleStore } from '@/shared/store/localeStore';
 import { useAuthStore } from '@/shared/store/authStore';
 import { useLlmDebugStore } from '@/shared/store/llmDebugStore';
+import { getOrCreateInstallId } from '@/shared/device/installId';
+import { analytics } from '@/shared/analytics/analytics';
+
+function getHeaderValue(headers: Headers, key: string) {
+  return headers.get(key) ?? headers.get(key.toLowerCase()) ?? null;
+}
 
 function isSuggestion(value: unknown): value is Suggestion {
   if (!value || typeof value !== 'object') {
@@ -43,10 +49,15 @@ export class SuggestionService {
     const store = useSuggestionStore.getState();
     const accessToken = useAuthStore.getState().accessToken;
     const { learningLanguage } = useLocaleStore.getState();
+    const installId = await getOrCreateInstallId();
 
     store.startLoading(turnId);
 
     console.log('[Suggestion] Fetching for session', sessionId);
+    analytics.capture('llm_suggest_requested', {
+      scene: scene || null,
+      learning_language: learningLanguage,
+    });
     try {
       const { data: payload, headers } = await invokeEdgeFunction<
         FeatureAccessEnvelope & {
@@ -56,6 +67,7 @@ export class SuggestionService {
         accessToken,
         headers: buildLlmDebugHeaders(useLlmDebugStore.getState()),
         body: {
+          installId,
           sessionId,
           lastUtterance,
           scene,
@@ -74,6 +86,12 @@ export class SuggestionService {
       const isStillCurrent = useSuggestionStore.getState().triggerTurnId === turnId;
       const isCopilotEnabled = useSessionStore.getState().copilotEnabled;
       console.log('[Suggestion] Received suggestions:', suggestions.length, llmMeta);
+      analytics.capture('llm_suggest_succeeded', {
+        suggestion_count: suggestions.length,
+        llm_provider: getHeaderValue(headers, 'X-LLM-Provider'),
+        llm_model: getHeaderValue(headers, 'X-LLM-Model'),
+        llm_route_mode: getHeaderValue(headers, 'X-LLM-Route-Mode'),
+      });
       useDebugStore
         .getState()
         .completeTurnLlm(
@@ -93,6 +111,10 @@ export class SuggestionService {
         useAccessStore.getState().setFeatureAccess(accessError.access);
       }
       console.error('[Suggestion] Failed:', error);
+      analytics.captureError('llm_suggest_failed', error, {
+        scene: scene || null,
+        learning_language: learningLanguage,
+      });
       const detail = error instanceof Error ? error.message : 'Suggestion request failed';
       useDebugStore.getState().failTurnLlm(turnId, detail);
       if (useSuggestionStore.getState().triggerTurnId === turnId) {

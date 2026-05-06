@@ -1,7 +1,9 @@
 import { NativeModules, Platform } from 'react-native';
 
 import { useConversationStore } from '@/features/live/store/conversationStore';
+import { useReviewStore } from '@/features/live/store/reviewStore';
 import { useSessionStore, type ScenePreset, type SessionStatus } from '@/features/live/store/sessionStore';
+import { useSuggestionStore, type Suggestion } from '@/features/live/store/suggestionStore';
 
 type LiveActivityModuleShape = {
   sync(payloadJSON: string): Promise<boolean>;
@@ -12,9 +14,21 @@ type LiveActivityPayload = {
   sceneName: string;
   startedAtMs: number;
   sessionStatus: Extract<SessionStatus, 'active' | 'paused'>;
+  isListening: boolean;
+  copilotEnabled: boolean;
+  turnCount: number;
   latestSpeaker: 'self' | 'other' | 'system';
   latestMessage: string;
+  latestTranslation: string | null;
+  latestTranslationIsLoading: boolean;
   latestMessageAtMs: number | null;
+  suggestionStyle: Suggestion['style'] | null;
+  suggestionText: string | null;
+  suggestionIsLoading: boolean;
+  reviewScore: 'green' | 'yellow' | 'red' | null;
+  reviewSummary: string | null;
+  reviewIssueCount: number;
+  reviewIsLoading: boolean;
 };
 
 const liveActivityModule: LiveActivityModuleShape | undefined =
@@ -55,6 +69,8 @@ class LiveActivityService {
 
     useSessionStore.subscribe(sync);
     useConversationStore.subscribe(sync);
+    useSuggestionStore.subscribe(sync);
+    useReviewStore.subscribe(sync);
     sync();
   }
 
@@ -98,21 +114,37 @@ class LiveActivityService {
     }
 
     const conversation = useConversationStore.getState();
+    const suggestions = useSuggestionStore.getState();
+    const review = useReviewStore.getState();
     const latestTurn = [...conversation.turns]
       .reverse()
       .find((turn) => turn.isFinal);
+    const primarySuggestion = suggestions.suggestions[0] ?? null;
+    const currentReview = latestTurn?.review ?? review.currentReview;
 
     return {
       sceneName: this.resolveSceneName(session.sceneDescription, session.scenePreset),
       startedAtMs: session.startedAt ?? Date.now(),
       sessionStatus: session.status,
+      isListening: conversation.isListening,
+      copilotEnabled: session.copilotEnabled,
+      turnCount: conversation.turns.filter((turn) => turn.isFinal).length,
       latestSpeaker: latestTurn?.speaker ?? 'system',
       latestMessage:
         latestTurn?.text ??
         (session.status === 'paused'
           ? 'Session paused. TalkPilot is ready when you come back.'
           : 'Listening for the next message...'),
+      latestTranslation: this.normalizeOptionalText(latestTurn?.translation),
+      latestTranslationIsLoading: latestTurn?.translationStatus === 'loading',
       latestMessageAtMs: latestTurn?.timestamp ?? null,
+      suggestionStyle: primarySuggestion?.style ?? null,
+      suggestionText: this.normalizeOptionalText(primarySuggestion?.text),
+      suggestionIsLoading: suggestions.isLoading,
+      reviewScore: currentReview?.overallScore ?? null,
+      reviewSummary: this.resolveReviewSummary(currentReview),
+      reviewIssueCount: currentReview?.issues.length ?? 0,
+      reviewIsLoading: review.isLoading,
     };
   }
 
@@ -123,6 +155,29 @@ class LiveActivityService {
     }
 
     return scenePresetLabels[scenePreset] ?? 'Live Session';
+  }
+
+  private normalizeOptionalText(value: string | null | undefined): string | null {
+    const trimmed = value?.trim() ?? '';
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private resolveReviewSummary(review: ReturnType<typeof useReviewStore.getState>['currentReview']): string | null {
+    if (!review) {
+      return null;
+    }
+
+    const betterExpression = this.normalizeOptionalText(review.betterExpression);
+    if (betterExpression) {
+      return betterExpression;
+    }
+
+    const firstIssue = review.issues[0];
+    if (firstIssue) {
+      return firstIssue.corrected.trim() || firstIssue.explanation.trim() || null;
+    }
+
+    return this.normalizeOptionalText(review.praise);
   }
 }
 

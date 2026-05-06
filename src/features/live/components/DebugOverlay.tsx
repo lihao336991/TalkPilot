@@ -602,9 +602,9 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
                 onPress={() => setLlmProvider("cerebras")}
               />
               <OptionChip
-                label="Groq"
-                selected={llmProvider === "groq"}
-                onPress={() => setLlmProvider("groq")}
+                label="Together"
+                selected={llmProvider === "together"}
+                onPress={() => setLlmProvider("together")}
               />
             </View>
 
@@ -640,7 +640,9 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
             ]}
           >
             <Text style={styles.toolButtonText}>
-              {isRestartingMainMicrophone ? "正在重启主麦克风…" : "重启主麦克风"}
+              {isRestartingMainMicrophone
+                ? "正在重启主麦克风…"
+                : "重启主麦克风"}
             </Text>
           </Pressable>
           <Pressable

@@ -1,5 +1,5 @@
 export type DebugLlmRouteMode = "auto" | "manual";
-export type DebugLlmProvider = "cerebras" | "groq";
+export type DebugLlmProvider = "cerebras" | "together";
 
 export type DebugLlmModelOption = {
   id: string;
@@ -33,18 +33,18 @@ export const DEBUG_LLM_MODEL_OPTIONS: Record<
       description: "Fast Cerebras baseline for latency comparison only.",
     },
   ],
-  groq: [
+  together: [
     {
-      id: "llama-3.1-8b-instant",
-      label: "Llama 3.1 8B Instant",
-      provider: "groq",
-      description: "Fast Groq small model for low latency tests.",
+      id: "openai/gpt-oss-120b",
+      label: "GPT OSS 120B",
+      provider: "together",
+      description: "Higher-quality Together route for review and session recap.",
     },
     {
-      id: "llama-3.3-70b-versatile",
-      label: "Llama 3.3 70B",
-      provider: "groq",
-      description: "Current Groq larger model for quality comparison.",
+      id: "Qwen/Qwen3.5-9B",
+      label: "Qwen 3.5 9B",
+      provider: "together",
+      description: "Faster Together option for suggestion and comparison tests.",
     },
   ],
 };
@@ -54,7 +54,7 @@ export function getDefaultDebugLlmModel(provider: DebugLlmProvider): string {
 }
 
 export function isDebugLlmProvider(value: string | null | undefined): value is DebugLlmProvider {
-  return value === "cerebras" || value === "groq";
+  return value === "cerebras" || value === "together";
 }
 
 export function buildLlmDebugHeaders(config: {

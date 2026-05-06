@@ -1,19 +1,10 @@
 import {
   GoogleSignin,
-  type User,
 } from '@react-native-google-signin/google-signin';
+import { getRequiredEnv } from '@/shared/config/env';
 import { Platform } from 'react-native';
 
 let googleConfigured = false;
-
-function getRequiredEnv(name: string) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} 未配置。`);
-  }
-
-  return value;
-}
 
 export function configureGoogleSignIn() {
   if (googleConfigured) {
@@ -29,14 +20,18 @@ export function configureGoogleSignIn() {
 }
 
 function getIdTokenFromResponse(
-  response: User | { data?: { idToken?: string | null } } | undefined,
+  response: unknown,
 ) {
-  if (!response) {
+  if (!response || typeof response !== 'object') {
     return null;
   }
 
-  if ('data' in response && response.data?.idToken) {
-    return response.data.idToken;
+  if ('data' in response) {
+    const data = response.data;
+    if (data && typeof data === 'object' && 'idToken' in data) {
+      const token = data.idToken;
+      return typeof token === 'string' && token.length > 0 ? token : null;
+    }
   }
 
   if ('idToken' in response && typeof response.idToken === 'string') {

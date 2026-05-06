@@ -10,7 +10,7 @@ import {
 
 type RecapHighlight = { text: string; explanation: string };
 type RecapImprovement = {
-  type: string;
+  type: "grammar" | "vocabulary" | "naturalness";
   original: string;
   corrected: string;
   explanation: string;
@@ -149,12 +149,7 @@ function normalizeRecapPayload(
         .filter(
           (
             item,
-          ): item is {
-            type: string;
-            original: string;
-            corrected: string;
-            explanation: string;
-          } => item != null,
+          ): item is RecapImprovement => item != null,
         )
         .slice(0, 3)
     : [];
@@ -477,12 +472,7 @@ ${reviewSummary}`;
         max_tokens: 700,
         temperature: 0.2,
       },
-      {
-        providerEnvName: "SESSION_RECAP_LLM_PROVIDER",
-        modelEnvName: "SESSION_RECAP_LLM_MODEL",
-        defaultProvider: "minimax",
-        defaultModel: "MiniMax-M2.5-highspeed",
-      },
+      { taskKey: "session_recap" },
     );
     const responseHeaders = buildLlmResponseHeaders(runtime, {
       routeMode,

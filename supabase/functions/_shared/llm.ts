@@ -3,14 +3,8 @@
 // @ts-ignore Deno resolves this remote dependency at runtime.
 import OpenAI from "https://esm.sh/openai@4";
 
-export type SupportedLlmProvider =
-  | "openai"
-  | "deepseek"
-  | "minimax"
-  | "gemini"
-  | "groq"
-  | "cerebras"
-  | "together";
+export type SupportedLlmProvider = "cerebras" | "together";
+export type LlmTaskKey = "suggest" | "review" | "session_recap";
 
 type LlmRuntime = {
   provider: SupportedLlmProvider;
@@ -18,8 +12,6 @@ type LlmRuntime = {
   client: any;
   apiKeyPrefix: string;
 };
-
-type SupportedAutoLlmProvider = "cerebras" | "groq";
 
 export type LlmRouteMode = "auto" | "manual";
 
@@ -30,48 +22,33 @@ export type LlmAttempt = {
   detail?: string;
 };
 
-export type LlmExecutionOptions = {
-  providerEnvName?: string;
-  modelEnvName?: string;
-  defaultProvider?: SupportedLlmProvider;
-  defaultModel?: string;
+type LlmExecutionOptions = {
+  taskKey?: LlmTaskKey;
 };
 
 const DEFAULT_PROVIDER: SupportedLlmProvider = "cerebras";
 
 const DEFAULT_MODELS: Record<SupportedLlmProvider, string> = {
-  openai: "gpt-4o-mini",
-  deepseek: "deepseek-chat",
-  minimax: "MiniMax-M2.5-highspeed",
-  gemini: "gemini-2.5-flash",
-  groq: "llama-3.3-70b-versatile",
   cerebras: "gpt-oss-120b",
   together: "Qwen/Qwen3.5-9B",
 };
 
-const MINIMAX_MODEL_ALIASES: Record<string, string> = {
-  "minimax-2.5": "MiniMax-M2.5",
-  "minimax-2.5-highspeed": "MiniMax-M2.5-highspeed",
-  "minimax-m2.5": "MiniMax-M2.5",
-  "minimax-m2.5-highspeed": "MiniMax-M2.5-highspeed",
-  "minimax-m2.7": "MiniMax-M2.7",
-  "minimax-m2.7-highspeed": "MiniMax-M2.7-highspeed",
-};
-
-const GEMINI_MODEL_ALIASES: Record<string, string> = {
-  "gemini-2.5-flash": "gemini-2.5-flash",
-  "gemini-2.5-flash-latest": "gemini-2.5-flash",
-  "2.5-flash": "gemini-2.5-flash",
-};
-
-const GROQ_MODEL_ALIASES: Record<string, string> = {
-  "llama-3.1-8b": "llama-3.1-8b-instant",
-  "llama-3.1-8b-instant": "llama-3.1-8b-instant",
-  "llama3.1-8b": "llama-3.1-8b-instant",
-  "llama-3.3-70b": "llama-3.3-70b-versatile",
-  "llama-3.3-70b-versatile": "llama-3.3-70b-versatile",
-  "llama3.3-70b": "llama-3.3-70b-versatile",
-  "groq-llama-3.3-70b": "llama-3.3-70b-versatile",
+const TASK_MODEL_PROFILES: Record<
+  LlmTaskKey,
+  Record<SupportedLlmProvider, string>
+> = {
+  suggest: {
+    cerebras: "llama3.1-8b",
+    together: "Qwen/Qwen3.5-9B",
+  },
+  review: {
+    cerebras: "gpt-oss-120b",
+    together: "openai/gpt-oss-120b",
+  },
+  session_recap: {
+    cerebras: "gpt-oss-120b",
+    together: "openai/gpt-oss-120b",
+  },
 };
 
 const CEREBRAS_MODEL_ALIASES: Record<string, string> = {
@@ -84,6 +61,9 @@ const CEREBRAS_MODEL_ALIASES: Record<string, string> = {
 };
 
 const TOGETHER_MODEL_ALIASES: Record<string, string> = {
+  "openai/gpt-oss-120b": "openai/gpt-oss-120b",
+  "gpt-oss-120b": "openai/gpt-oss-120b",
+  "gpt oss 120b": "openai/gpt-oss-120b",
   "qwen/qwen3.5-9b": "Qwen/Qwen3.5-9B",
   "qwen3.5-9b": "Qwen/Qwen3.5-9B",
 };
@@ -92,7 +72,7 @@ const REQUEST_ROUTE_MODE_HEADER = "x-llm-route-mode";
 const REQUEST_PROVIDER_HEADER = "x-llm-preferred-provider";
 const REQUEST_MODEL_HEADER = "x-llm-preferred-model";
 
-const DEFAULT_AUTO_PROVIDER_ORDER: SupportedAutoLlmProvider[] = ["cerebras", "groq"];
+const DEFAULT_AUTO_PROVIDER_ORDER: SupportedLlmProvider[] = ["cerebras", "together"];
 
 function getRequiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
@@ -111,15 +91,7 @@ function getApiKeyPrefix(apiKey: string): string {
 function normalizeProvider(rawProvider: string | undefined): SupportedLlmProvider {
   const normalized = rawProvider?.trim().toLowerCase();
 
-  if (
-    normalized === "openai" ||
-    normalized === "deepseek" ||
-    normalized === "minimax" ||
-    normalized === "gemini" ||
-    normalized === "groq" ||
-    normalized === "cerebras" ||
-    normalized === "together"
-  ) {
+  if (normalized === "cerebras" || normalized === "together") {
     return normalized;
   }
 
@@ -129,71 +101,38 @@ function normalizeProvider(rawProvider: string | undefined): SupportedLlmProvide
 function parseSupportedProvider(rawProvider: string | undefined): SupportedLlmProvider | null {
   const normalized = rawProvider?.trim().toLowerCase();
 
-  if (
-    normalized === "openai" ||
-    normalized === "deepseek" ||
-    normalized === "minimax" ||
-    normalized === "gemini" ||
-    normalized === "groq" ||
-    normalized === "cerebras" ||
-    normalized === "together"
-  ) {
+  if (normalized === "cerebras" || normalized === "together") {
     return normalized;
   }
 
   return null;
 }
 
-function isAutoCapableProvider(provider: SupportedLlmProvider): provider is SupportedAutoLlmProvider {
-  return provider === "cerebras" || provider === "groq";
-}
-
 function getProviderApiKeyEnvName(provider: SupportedLlmProvider): string {
-  switch (provider) {
-    case "deepseek":
-      return "DEEPSEEK_API_KEY";
-    case "minimax":
-      return "MINIMAX_API_KEY";
-    case "gemini":
-      return "GEMINI_API_KEY";
-    case "groq":
-      return "GROQ_API_KEY";
-    case "cerebras":
-      return "CEREBRAS_API_KEY";
-    case "together":
-      return "TOGETHER_API_KEY";
-    default:
-      return "OPENAI_API_KEY";
-  }
+  return provider === "cerebras" ? "CEREBRAS_API_KEY" : "TOGETHER_API_KEY";
 }
 
-function getProviderModelEnvName(provider: SupportedLlmProvider): string {
-  switch (provider) {
-    case "deepseek":
-      return "DEEPSEEK_LLM_MODEL";
-    case "minimax":
-      return "MINIMAX_LLM_MODEL";
-    case "gemini":
-      return "GEMINI_LLM_MODEL";
-    case "groq":
-      return "GROQ_LLM_MODEL";
-    case "cerebras":
-      return "CEREBRAS_LLM_MODEL";
-    case "together":
-      return "TOGETHER_LLM_MODEL";
-    default:
-      return "OPENAI_LLM_MODEL";
+function getConfiguredTaskModel(
+  provider: SupportedLlmProvider,
+  taskKey?: LlmTaskKey,
+): string | undefined {
+  if (!taskKey) {
+    return undefined;
   }
+
+  return TASK_MODEL_PROFILES[taskKey]?.[provider];
 }
 
-function getConfiguredModel(provider: SupportedLlmProvider, rawModelOverride?: string): string {
+function getConfiguredModel(
+  provider: SupportedLlmProvider,
+  options: {
+    rawModelOverride?: string;
+    taskKey?: LlmTaskKey;
+  } = {},
+): string {
   return resolveModel(
     provider,
-    rawModelOverride ??
-      Deno.env.get(getProviderModelEnvName(provider)) ??
-      (provider === normalizeProvider(Deno.env.get("LLM_PROVIDER"))
-        ? Deno.env.get("LLM_MODEL")
-        : undefined),
+    options.rawModelOverride ?? getConfiguredTaskModel(provider, options.taskKey),
   );
 }
 
@@ -202,16 +141,13 @@ function isProviderConfigured(provider: SupportedLlmProvider): boolean {
   return Boolean(apiKey);
 }
 
-function parseAutoProviderOrder(rawOrder: string | undefined): SupportedAutoLlmProvider[] {
+function parseAutoProviderOrder(rawOrder: string | undefined): SupportedLlmProvider[] {
   const configured = (rawOrder ?? "")
     .split(",")
     .map((value) => parseSupportedProvider(value))
-    .filter(
-      (provider): provider is SupportedAutoLlmProvider =>
-        provider != null && isAutoCapableProvider(provider),
-    );
+    .filter((provider): provider is SupportedLlmProvider => provider != null);
 
-  const deduped: SupportedAutoLlmProvider[] = [];
+  const deduped: SupportedLlmProvider[] = [];
   for (const provider of configured) {
     if (!deduped.includes(provider)) {
       deduped.push(provider);
@@ -241,27 +177,6 @@ function parseRequestedProvider(req?: Request): SupportedLlmProvider | null {
   }
 
   return provider;
-}
-
-function resolvePreferredCandidate(
-  options?: LlmExecutionOptions,
-): { provider: SupportedLlmProvider; model?: string } | null {
-  const envProvider = options?.providerEnvName
-    ? parseSupportedProvider(Deno.env.get(options.providerEnvName))
-    : null;
-  const envModel = options?.modelEnvName
-    ? Deno.env.get(options.modelEnvName)?.trim() || undefined
-    : undefined;
-  const provider = envProvider ?? options?.defaultProvider ?? null;
-
-  if (!provider) {
-    return null;
-  }
-
-  return {
-    provider,
-    model: envModel ?? options?.defaultModel,
-  };
 }
 
 function getAttemptDetail(error: unknown): string {
@@ -308,18 +223,6 @@ function resolveModel(provider: SupportedLlmProvider, rawModel: string | undefin
     return DEFAULT_MODELS[provider];
   }
 
-  if (provider === "minimax") {
-    return MINIMAX_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
-  }
-
-  if (provider === "gemini") {
-    return GEMINI_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
-  }
-
-  if (provider === "groq") {
-    return GROQ_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
-  }
-
   if (provider === "cerebras") {
     return CEREBRAS_MODEL_ALIASES[normalizedModel.toLowerCase()] ?? normalizedModel;
   }
@@ -338,63 +241,12 @@ export function createLlmRuntime(): LlmRuntime {
 
 function createProviderRuntime(
   provider: SupportedLlmProvider,
-  rawModelOverride?: string,
+  options: {
+    rawModelOverride?: string;
+    taskKey?: LlmTaskKey;
+  } = {},
 ): LlmRuntime {
-  const model = getConfiguredModel(provider, rawModelOverride);
-
-  if (provider === "deepseek") {
-    const apiKey = getRequiredEnv("DEEPSEEK_API_KEY");
-    return {
-      provider,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL: Deno.env.get("DEEPSEEK_BASE_URL")?.trim() || "https://api.deepseek.com/v1",
-      }),
-      apiKeyPrefix: getApiKeyPrefix(apiKey),
-    };
-  }
-
-  if (provider === "minimax") {
-    const apiKey = getRequiredEnv("MINIMAX_API_KEY");
-    return {
-      provider,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL: Deno.env.get("MINIMAX_BASE_URL")?.trim() || "https://api.minimax.chat/v1",
-      }),
-      apiKeyPrefix: getApiKeyPrefix(apiKey),
-    };
-  }
-
-  if (provider === "gemini") {
-    const apiKey = getRequiredEnv("GEMINI_API_KEY");
-    return {
-      provider,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL:
-          Deno.env.get("GEMINI_BASE_URL")?.trim() ||
-          "https://generativelanguage.googleapis.com/v1beta/openai/",
-      }),
-      apiKeyPrefix: getApiKeyPrefix(apiKey),
-    };
-  }
-
-  if (provider === "groq") {
-    const apiKey = getRequiredEnv("GROQ_API_KEY");
-    return {
-      provider,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL: Deno.env.get("GROQ_BASE_URL")?.trim() || "https://api.groq.com/openai/v1",
-      }),
-      apiKeyPrefix: getApiKeyPrefix(apiKey),
-    };
-  }
+  const model = getConfiguredModel(provider, options);
 
   if (provider === "cerebras") {
     const apiKey = getRequiredEnv("CEREBRAS_API_KEY");
@@ -409,26 +261,13 @@ function createProviderRuntime(
     };
   }
 
-  if (provider === "together") {
-    const apiKey = getRequiredEnv("TOGETHER_API_KEY");
-    return {
-      provider,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL: Deno.env.get("TOGETHER_BASE_URL")?.trim() || "https://api.together.xyz/v1",
-      }),
-      apiKeyPrefix: getApiKeyPrefix(apiKey),
-    };
-  }
-
-  const apiKey = getRequiredEnv("OPENAI_API_KEY");
+  const apiKey = getRequiredEnv("TOGETHER_API_KEY");
   return {
     provider,
     model,
     client: new OpenAI({
       apiKey,
-      baseURL: Deno.env.get("OPENAI_BASE_URL")?.trim() || undefined,
+      baseURL: Deno.env.get("TOGETHER_BASE_URL")?.trim() || "https://api.together.xyz/v1",
     }),
     apiKeyPrefix: getApiKeyPrefix(apiKey),
   };
@@ -437,7 +276,7 @@ function createProviderRuntime(
 export async function runLlmChatCompletion<T extends Record<string, unknown>>(
   req: Request | undefined,
   payload: T,
-  options?: LlmExecutionOptions,
+  options: LlmExecutionOptions = {},
 ): Promise<{
   runtime: LlmRuntime;
   completion: any;
@@ -448,29 +287,22 @@ export async function runLlmChatCompletion<T extends Record<string, unknown>>(
   const requestedProvider = parseRequestedProvider(req);
   const requestedModel = req?.headers.get(REQUEST_MODEL_HEADER)?.trim() || undefined;
   const attempts: LlmAttempt[] = [];
-  const preferredCandidate =
+  const preferredProvider =
     routeMode === "manual" && requestedProvider
-      ? null
-      : resolvePreferredCandidate(options);
-
-  const manualCandidates =
-    routeMode === "manual" && requestedProvider
-      ? [{ provider: requestedProvider, model: requestedModel }]
-      : [];
-
-  const autoCandidates =
-    routeMode === "manual"
-      ? []
-      : parseAutoProviderOrder(Deno.env.get("LLM_AUTO_PROVIDER_ORDER")).map((provider) => ({
-          provider,
-          model: undefined,
-        }));
-
-  const candidates = [
-    ...manualCandidates,
-    ...(preferredCandidate ? [preferredCandidate] : []),
-    ...autoCandidates,
+      ? requestedProvider
+      : normalizeProvider(Deno.env.get("LLM_PROVIDER"));
+  const fallbackProviders = parseAutoProviderOrder(Deno.env.get("LLM_AUTO_PROVIDER_ORDER"));
+  const orderedProviders = [
+    preferredProvider,
+    ...fallbackProviders.filter((provider) => provider !== preferredProvider),
   ];
+  const candidates = orderedProviders.map((provider, index) => ({
+    provider,
+    model:
+      index === 0 && routeMode === "manual"
+        ? requestedModel
+        : getConfiguredTaskModel(provider, options.taskKey),
+  }));
   const uniqueCandidates = candidates.filter(
     (candidate, index) =>
       candidates.findIndex((other) => other.provider === candidate.provider) === index,
@@ -483,14 +315,20 @@ export async function runLlmChatCompletion<T extends Record<string, unknown>>(
     if (!isProviderConfigured(candidate.provider)) {
       attempts.push({
         provider: candidate.provider,
-        model: getConfiguredModel(candidate.provider, candidate.model),
+        model: getConfiguredModel(candidate.provider, {
+          rawModelOverride: candidate.model,
+          taskKey: options.taskKey,
+        }),
         status: "skipped",
         detail: "missing_api_key",
       });
       continue;
     }
 
-    const runtime = createProviderRuntime(candidate.provider, candidate.model);
+    const runtime = createProviderRuntime(candidate.provider, {
+      rawModelOverride: candidate.model,
+      taskKey: options.taskKey,
+    });
 
     try {
       const completion = await runtime.client.chat.completions.create({

@@ -83,6 +83,11 @@ serve(async (req: Request) => {
   }
 
   const body = await req.json();
+  const installIdRaw = body.install_id ?? body.installId;
+  const installId =
+    typeof installIdRaw === "string" && String(installIdRaw).trim().length > 0
+      ? String(installIdRaw).trim()
+      : "";
   const sessionId = body.session_id ?? body.sessionId;
   const userUtterance = body.user_utterance ?? body.userUtterance;
   const scene = body.scene;
@@ -95,7 +100,11 @@ serve(async (req: Request) => {
     ? String(body.native_language ?? body.nativeLanguage ?? body.review_locale ?? body.reviewLocale).trim()
     : "en";
 
-  if (typeof sessionId !== "string" || typeof userUtterance !== "string") {
+  if (
+    typeof sessionId !== "string" ||
+    typeof userUtterance !== "string" ||
+    !installId
+  ) {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
       headers: JSON_HEADERS,
@@ -122,6 +131,7 @@ serve(async (req: Request) => {
     {
       p_user_id: user.id,
       p_feature_key: "review",
+      p_install_id: installId,
     },
   );
 
@@ -206,12 +216,7 @@ User's utterance to review: "${userUtterance}"`;
         max_tokens: 200,
         temperature: 0.3,
       },
-      {
-        providerEnvName: "REVIEW_LLM_PROVIDER",
-        modelEnvName: "REVIEW_LLM_MODEL",
-        defaultProvider: "cerebras",
-        defaultModel: "gpt-oss-120b",
-      },
+      { taskKey: "review" },
     );
     const responseHeaders = buildLlmResponseHeaders(runtime, {
       routeMode,

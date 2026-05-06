@@ -59,7 +59,7 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = TalkPilot/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = TalkPilot/Info.plist; sourceTree = "<group>"; };
 		1F5BEC411EAFD5762D82B56E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = TalkPilot/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		292331E6350B4450A44AB09E /* TitaNetSmall.mlmodelc */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TitaNetSmall.mlmodelc; path = TitaNetSmall.mlmodelc; sourceTree = "<group>"; };
+		292331E6350B4450A44AB09E /* TitaNetSmall.mlmodelc */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TitaNetSmall.mlmodelc; sourceTree = "<group>"; };
 		2AFC2C89ED2866B11C5A1DC5 /* Pods-TalkPilot.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TalkPilot.debug.xcconfig"; path = "Target Support Files/Pods-TalkPilot/Pods-TalkPilot.debug.xcconfig"; sourceTree = "<group>"; };
 		3508614BD59E76ED0296B6BC /* Pods-TalkPilot.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TalkPilot.release.xcconfig"; path = "Target Support Files/Pods-TalkPilot/Pods-TalkPilot.release.xcconfig"; sourceTree = "<group>"; };
 		51E22F6F608249ABA353285B /* VoiceChatModuleBridge.m */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.c.objc; name = VoiceChatModuleBridge.m; path = TalkPilot/VoiceChatModuleBridge.m; sourceTree = "<group>"; };
@@ -69,10 +69,10 @@
 		A20000000000000000000001 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveActivityManager.swift; path = TalkPilot/LiveActivityManager.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* LiveActivityModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveActivityModule.swift; path = TalkPilot/LiveActivityModule.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* LiveActivityModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LiveActivityModuleBridge.m; path = TalkPilot/LiveActivityModuleBridge.m; sourceTree = "<group>"; };
-		A20000000000000000000004 /* TalkPilotActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TalkPilotActivityAttributes.swift; path = TalkPilotActivityAttributes.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* TalkPilotActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkPilotActivityAttributes.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* TalkPilotLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TalkPilotLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000000000000000000006 /* TalkPilotLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TalkPilotLiveActivityWidget.swift; path = TalkPilotLiveActivityWidget.swift; sourceTree = "<group>"; };
-		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000006 /* TalkPilotLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkPilotLiveActivityWidget.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A5FCDB5C747B41DEAD3E1839 /* VoiceChatModule.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = VoiceChatModule.swift; path = TalkPilot/VoiceChatModule.swift; sourceTree = "<group>"; };
 		A859C72C23314D70A72E7094 /* VoiceprintModule.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = VoiceprintModule.swift; path = TalkPilot/VoiceprintModule.swift; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = TalkPilot/SplashScreen.storyboard; sourceTree = "<group>"; };
@@ -234,6 +234,7 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "TalkPilot" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
+				2BBD79242FA8A31E006693E8 /* ShellScript */,
 				8DBB41773CADF3787AAF7319 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
@@ -392,6 +393,23 @@
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh `${NODE_BINARY:-node} --print \"require('path').dirname(require.resolve('@sentry/react-native/package.json')) + '/scripts/sentry-xcode-debug-files.sh'\"`";
 		};
+		2BBD79242FA8A31E006693E8 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export NODE_BINARY=\"${NODE_BINARY:-node}\"\n  \"$NODE_BINARY\" \"$SRCROOT/../scripts/sync-ios-ats-local-ip.mjs\"\n";
+		};
 		5582F6DCCD613D21E437A0D4 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -434,6 +452,7 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/MMKV/MMKV_Privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC/FBLPromises_Privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/PurchasesHybridCommon/PurchasesHybridCommon.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RevenueCat/RevenueCat.bundle",
@@ -457,6 +476,7 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/MMKV_Privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/FBLPromises_Privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/PurchasesHybridCommon.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNSVGFilters.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RevenueCat.bundle",

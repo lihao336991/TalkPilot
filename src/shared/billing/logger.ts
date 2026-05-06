@@ -21,10 +21,13 @@ export function logBillingEvent(
   payload: Record<string, unknown> = {},
   level: BillingLogLevel = 'info',
 ) {
+  const payloadValue = safeSerialize(payload);
   const serialized = JSON.stringify({
     scope: 'billing-client',
     event,
-    ...safeSerialize(payload),
+    ...(payloadValue && typeof payloadValue === 'object' && !Array.isArray(payloadValue)
+      ? payloadValue
+      : { payload: payloadValue }),
   });
 
   if (level === 'error') {

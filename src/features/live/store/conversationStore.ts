@@ -53,7 +53,6 @@ type ConversationState = {
   currentInterimText: string;
   currentInterimSpeaker: 'self' | 'other' | null;
   pendingTurnTranslations: PendingTranslationMap;
-  selfSpeakerId: number | null;
   forcedSpeaker: 'self' | 'other' | null;
   isListening: boolean;
   mainWsStatus: StreamingConnectionStatus;
@@ -79,7 +78,6 @@ type ConversationState = {
   clearStablePreview: () => void;
   updateInterim: (text: string, speaker: 'self' | 'other') => void;
   clearInterim: () => void;
-  setSelfSpeakerId: (id: number | null) => void;
   setForcedSpeaker: (speaker: 'self' | 'other' | null) => void;
   setListening: (listening: boolean) => void;
   setMainWsStatus: (status: ConversationState['mainWsStatus']) => void;
@@ -112,7 +110,6 @@ const initialState = {
   currentInterimText: '',
   currentInterimSpeaker: null as 'self' | 'other' | null,
   pendingTurnTranslations: {} as PendingTranslationMap,
-  selfSpeakerId: null as number | null,
   forcedSpeaker: null as 'self' | 'other' | null,
   isListening: false,
   mainWsStatus: 'idle' as StreamingConnectionStatus,
@@ -231,9 +228,6 @@ export const useConversationStore = create<ConversationState>((set) => ({
 
   clearInterim: () =>
     set({ currentInterimText: '', currentInterimSpeaker: null }),
-
-  setSelfSpeakerId: (id) =>
-    set({ selfSpeakerId: id }),
 
   setForcedSpeaker: (speaker) =>
     set({ forcedSpeaker: speaker }),

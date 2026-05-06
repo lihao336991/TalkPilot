@@ -2,27 +2,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { translateWithAzure } from "../_shared/azureTranslate.ts";
-import { translateWithGoogle } from "../_shared/googleTranslate.ts";
-import {
-  buildLlmResponseHeaders,
-  extractJsonObject,
-  runLlmChatCompletion,
-} from "../_shared/llm.ts";
 
 type TranslationDirection = "to_learning" | "to_native";
-type TranslationProvider = "llm" | "google" | "azure";
-
-function getTranslationProvider(): TranslationProvider {
-  const raw = Deno.env.get("TRANSLATION_PROVIDER")?.trim().toLowerCase();
-  if (raw === "azure") {
-    return "azure";
-  }
-  if (raw === "google") {
-    return "google";
-  }
-
-  return "llm";
-}
+const TRANSLATION_PROVIDER = "azure";
 
 function normalizeDirection(raw: unknown): TranslationDirection {
   if (raw === "to_native") {
@@ -41,147 +23,6 @@ function readLanguageTag(...candidates: unknown[]): string | null {
 
   return null;
 }
-
-function sanitizeTranslatedText(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    return "";
-  }
-
-  return trimmed
-    .replace(/^translation\s*:\s*/i, "")
-    .replace(/^translated[_\s-]*text\s*:\s*/i, "")
-    .replace(/^reply\s*:\s*/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
-}
-
-function languageDisplayName(tag: string): string {
-  const primary = tag.split("-")[0].toLowerCase();
-  const map: Record<string, string> = {
-    zh: "Chinese (Simplified)",
-    ja: "Japanese",
-    ko: "Korean",
-    es: "Spanish",
-    fr: "French",
-    de: "German",
-    it: "Italian",
-    pt: "Portuguese",
-    ru: "Russian",
-    nl: "Dutch",
-    hi: "Hindi",
-    id: "Indonesian",
-    tr: "Turkish",
-    pl: "Polish",
-    sv: "Swedish",
-    da: "Danish",
-    fi: "Finnish",
-    no: "Norwegian",
-    uk: "Ukrainian",
-    th: "Thai",
-    vi: "Vietnamese",
-    ar: "Arabic",
-    en: "English",
-  };
-  return map[primary] ?? tag;
-}
-
-function buildPrompt(
-  direction: TranslationDirection,
-  sourceText: string,
-  sceneHint: string,
-  targetLanguageTag: string,
-) {
-  if (direction === "to_learning") {
-    const targetName = languageDisplayName(targetLanguageTag);
-    return [
-      {
-        role: "system" as const,
-        content:
-          `You are a faithful real-time translator for a live conversation. Translate the user's utterance into natural, spoken ${targetName} that a native ${targetName} speaker would actually say in this scene. Stay faithful to the speaker's intent; do not add or omit meaning. Keep it concise and conversational. Output only the translated utterance, with no JSON, no labels, and no explanation.`,
-      },
-      {
-        role: "user" as const,
-        content: `Scene hint: ${sceneHint || "general conversation"}\nOriginal text: ${sourceText}`,
-      },
-    ];
-  }
-
-  const targetName = languageDisplayName(targetLanguageTag);
-  return [
-    {
-      role: "system" as const,
-      content: `You are a faithful real-time translator for a live conversation. Translate the utterance into natural, spoken ${targetName}. Preserve the speaker's intent, tone, and register; do not add or omit meaning. Keep it concise. Output only the translated utterance, with no JSON, no labels, and no explanation.`,
-    },
-    {
-      role: "user" as const,
-      content: `Scene hint: ${sceneHint || "general conversation"}\nOriginal text: ${sourceText}`,
-    },
-  ];
-}
-
-async function translateWithLlm(args: {
-  req?: Request;
-  direction: TranslationDirection;
-  sourceText: string;
-  sceneHint: string;
-  targetLanguage: string;
-}) {
-  const translationPrompt = buildPrompt(
-    args.direction,
-    args.sourceText,
-    args.sceneHint,
-    args.targetLanguage,
-  );
-
-  const { completion: translationCompletion, runtime, routeMode, attempts } =
-    await runLlmChatCompletion(args.req, {
-      messages: translationPrompt,
-      max_tokens: 200,
-      temperature: 0.3,
-    });
-  const responseHeaders = buildLlmResponseHeaders(runtime, {
-    routeMode,
-    attempts,
-  }, {
-    "Content-Type": "application/json",
-  });
-
-  const translationRaw = translationCompletion.choices[0]?.message?.content ?? "{}";
-  let translatedText = "";
-  try {
-    const parsed = JSON.parse(extractJsonObject(translationRaw));
-    translatedText =
-      typeof parsed.translated_text === "string"
-        ? parsed.translated_text.trim()
-        : typeof parsed.translation === "string"
-          ? parsed.translation.trim()
-          : typeof parsed.text === "string"
-            ? parsed.text.trim()
-            : typeof parsed.english_reply === "string"
-              ? parsed.english_reply.trim()
-              : "";
-    if (!translatedText) {
-      translatedText = sanitizeTranslatedText(translationRaw);
-    }
-  } catch {
-    translatedText = sanitizeTranslatedText(translationRaw);
-  }
-
-  if (!translatedText) {
-    throw new Error("Failed to translate text");
-  }
-
-  return {
-    translatedText,
-    responseHeaders,
-  };
-}
-
 
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -205,7 +46,6 @@ serve(async (req: Request) => {
   }
 
   let transcript = "";
-  let sceneHint = "";
   let ttsMode = "";
   let direction: TranslationDirection = "to_learning";
   let targetLanguage = "zh-CN";
@@ -217,12 +57,6 @@ serve(async (req: Request) => {
         ? payload.transcript
         : typeof payload.source_text === "string"
           ? payload.source_text
-          : "";
-    sceneHint =
-      typeof payload.scene_hint === "string"
-        ? payload.scene_hint
-        : typeof payload.sceneHint === "string"
-          ? payload.sceneHint
           : "";
     ttsMode =
       typeof payload.tts_mode === "string"
@@ -269,41 +103,20 @@ serve(async (req: Request) => {
     });
   }
 
-  const translationProvider = getTranslationProvider();
-
   try {
-    const translated =
-      translationProvider === "google"
-        ? {
-            translatedText: await translateWithGoogle({
-              text: sourceText,
-              targetLanguage,
-            }),
-            responseHeaders: new Headers({
-              "Content-Type": "application/json",
-            }),
-          }
-        : translationProvider === "azure"
-          ? {
-              translatedText: await translateWithAzure({
-                text: sourceText,
-                targetLanguage,
-              }),
-              responseHeaders: new Headers({
-                "Content-Type": "application/json",
-              }),
-            }
-        : await translateWithLlm({
-            req,
-            direction,
-            sourceText,
-            sceneHint,
-            targetLanguage,
-          });
+    const translated = {
+      translatedText: await translateWithAzure({
+        text: sourceText,
+        targetLanguage,
+      }),
+      responseHeaders: new Headers({
+        "Content-Type": "application/json",
+      }),
+    };
 
     translated.responseHeaders.set(
       "X-Translation-Provider",
-      translationProvider,
+      TRANSLATION_PROVIDER,
     );
     translated.responseHeaders.set(
       "Access-Control-Expose-Headers",
@@ -341,10 +154,8 @@ serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to translate text";
     const isMissingKey =
-      message.includes("Missing GOOGLE_TRANSLATE_API_KEY") ||
       message.includes("Missing AZURE_TRANSLATOR_KEY") ||
-      message.includes("Missing AZURE_TRANSLATOR_REGION") ||
-      message.includes("Missing required env:");
+      message.includes("Missing AZURE_TRANSLATOR_REGION");
     const status = isMissingKey ? 500 : 502;
     return new Response(
       JSON.stringify({ error: message }),
@@ -352,7 +163,7 @@ serve(async (req: Request) => {
         status,
         headers: {
           "Content-Type": "application/json",
-          "X-Translation-Provider": translationProvider,
+          "X-Translation-Provider": TRANSLATION_PROVIDER,
           "Access-Control-Expose-Headers": "X-Translation-Provider",
         },
       },

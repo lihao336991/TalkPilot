@@ -29,9 +29,31 @@ serve(async (req: Request) => {
     return createAuthRequiredResponse("live_minutes");
   }
 
+  let body: Record<string, unknown> = {};
+  try {
+    const parsed = await req.json();
+    if (parsed && typeof parsed === "object") {
+      body = parsed as Record<string, unknown>;
+    }
+  } catch {
+    body = {};
+  }
+
+  const installIdRaw = body.install_id ?? body.installId;
+  const installId =
+    typeof installIdRaw === "string" && installIdRaw.trim().length > 0
+      ? installIdRaw.trim()
+      : "";
+  if (!installId) {
+    return new Response(JSON.stringify({ error: "Missing install_id" }), {
+      status: 400,
+      headers: JSON_HEADERS,
+    });
+  }
+
   const { data: usage, error: usageError } = await supabase.rpc(
     "get_live_minutes_access",
-    { p_user_id: user.id },
+    { p_user_id: user.id, p_install_id: installId },
   );
 
   if (usageError) {

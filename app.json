@@ -49,6 +49,18 @@
             "10.200.152.245": {
               "NSIncludesSubdomains": true,
               "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "10.200.153.50": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "172.20.10.5": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "192.168.3.65": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
             }
           }
         },

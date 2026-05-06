@@ -10,6 +10,7 @@ import {
     reconcileRevenueCatCustomer,
     refreshProfileFromSession,
 } from '@/shared/api/supabase';
+import { analytics } from '@/shared/analytics/analytics';
 import { logBillingEvent } from '@/shared/billing/logger';
 import { syncSubscriptionTierToUsageLimit } from '@/shared/repositories/billingRepository';
 import {
@@ -127,6 +128,9 @@ class RevenueCatService {
       platform: Platform.OS,
       alreadyConfiguredAppUserId: this.configuredAppUserId,
     });
+    analytics.capture('billing_revenuecat_configure_started', {
+      platform: Platform.OS,
+    });
 
     const isConfigured = await Purchases.isConfigured();
 
@@ -149,6 +153,9 @@ class RevenueCatService {
         customerInfo: getCustomerInfoSummary(customerInfo),
         ...getBillingStateSnapshot(useAuthStore.getState()),
       });
+      analytics.capture('billing_revenuecat_configure_completed', {
+        mode: 'initial_configure',
+      });
       return;
     }
 
@@ -165,6 +172,9 @@ class RevenueCatService {
         customerInfo: getCustomerInfoSummary(customerInfo),
         ...getBillingStateSnapshot(useAuthStore.getState()),
       });
+      analytics.capture('billing_revenuecat_configure_completed', {
+        mode: 'reuse_existing_user',
+      });
       return;
     }
 
@@ -177,6 +187,9 @@ class RevenueCatService {
       mode: 'login_switch_user',
       customerInfo: getCustomerInfoSummary(customerInfo),
       ...getBillingStateSnapshot(useAuthStore.getState()),
+    });
+    analytics.capture('billing_revenuecat_configure_completed', {
+      mode: 'login_switch_user',
     });
   }
 
@@ -200,6 +213,10 @@ class RevenueCatService {
       priceString: selectedPackage.product.priceString,
       ...getBillingStateSnapshot(useAuthStore.getState()),
     });
+    analytics.capture('billing_purchase_started', {
+      package_identifier: selectedPackage.identifier,
+      product_identifier: selectedPackage.product.identifier,
+    });
 
     try {
       const result = await Purchases.purchasePackage(selectedPackage);
@@ -211,6 +228,11 @@ class RevenueCatService {
         customerInfo: getCustomerInfoSummary(result.customerInfo),
         ...getBillingStateSnapshot(useAuthStore.getState()),
       });
+      analytics.capture('billing_purchase_succeeded', {
+        product_identifier: selectedPackage.product.identifier,
+        unlocked: summary.unlocked,
+        webhook_synced: summary.webhookSynced,
+      });
       return {
         customerInfo: result.customerInfo,
         summary,
@@ -221,6 +243,9 @@ class RevenueCatService {
           packageIdentifier: selectedPackage.identifier,
           productIdentifier: selectedPackage.product.identifier,
           ...getBillingStateSnapshot(useAuthStore.getState()),
+        });
+        analytics.capture('billing_purchase_cancelled', {
+          product_identifier: selectedPackage.product.identifier,
         });
         throw error;
       }
@@ -237,6 +262,9 @@ class RevenueCatService {
         },
         'error',
       );
+      analytics.captureError('billing_purchase_failed', error, {
+        product_identifier: selectedPackage.product.identifier,
+      });
       throw error;
     }
   }
@@ -246,6 +274,9 @@ class RevenueCatService {
       return RevenueCatUI.PAYWALL_RESULT.NOT_PRESENTED;
     }
 
+    analytics.capture('billing_paywall_present_attempted', {
+      platform: Platform.OS,
+    });
     return RevenueCatUI.presentPaywallIfNeeded({
       requiredEntitlementIdentifier: PRO_ENTITLEMENT_ID,
       displayCloseButton: true,
@@ -312,6 +343,7 @@ class RevenueCatService {
     logBillingEvent('restore_started', {
       ...getBillingStateSnapshot(useAuthStore.getState()),
     });
+    analytics.capture('billing_restore_started', {});
 
     try {
       const customerInfo = await Purchases.restorePurchases();
@@ -320,6 +352,10 @@ class RevenueCatService {
         summary,
         customerInfo: getCustomerInfoSummary(customerInfo),
         ...getBillingStateSnapshot(useAuthStore.getState()),
+      });
+      analytics.capture('billing_restore_succeeded', {
+        unlocked: summary.unlocked,
+        webhook_synced: summary.webhookSynced,
       });
       return {
         customerInfo,
@@ -330,6 +366,7 @@ class RevenueCatService {
         logBillingEvent('restore_cancelled', {
           ...getBillingStateSnapshot(useAuthStore.getState()),
         });
+        analytics.capture('billing_restore_cancelled', {});
         throw error;
       }
       logBillingEvent(
@@ -343,6 +380,7 @@ class RevenueCatService {
         },
         'error',
       );
+      analytics.captureError('billing_restore_failed', error, {});
       throw error;
     }
   }

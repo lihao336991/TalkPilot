@@ -5,9 +5,21 @@ private struct LiveActivitySyncPayload: Decodable {
   let sceneName: String
   let startedAtMs: Double
   let sessionStatus: String
+  let isListening: Bool?
+  let copilotEnabled: Bool?
+  let turnCount: Int?
   let latestSpeaker: String?
   let latestMessage: String?
+  let latestTranslation: String?
+  let latestTranslationIsLoading: Bool?
   let latestMessageAtMs: Double?
+  let suggestionStyle: String?
+  let suggestionText: String?
+  let suggestionIsLoading: Bool?
+  let reviewScore: String?
+  let reviewSummary: String?
+  let reviewIssueCount: Int?
+  let reviewIsLoading: Bool?
 }
 
 enum LiveActivityManagerError: LocalizedError {
@@ -46,9 +58,21 @@ final class LiveActivityManager {
     )
     let state = TalkPilotActivityAttributes.ContentState(
       sessionStatus: status,
+      isListening: payload.isListening ?? false,
+      copilotEnabled: payload.copilotEnabled ?? true,
+      turnCount: max(payload.turnCount ?? 0, 0),
       latestSpeaker: mapSpeaker(payload.latestSpeaker),
       latestMessage: normalizedMessage(payload.latestMessage),
-      latestMessageAt: mapDate(payload.latestMessageAtMs)
+      latestTranslation: normalizedOptionalText(payload.latestTranslation),
+      latestTranslationIsLoading: payload.latestTranslationIsLoading ?? false,
+      latestMessageAt: mapDate(payload.latestMessageAtMs),
+      suggestionStyle: mapSuggestionStyle(payload.suggestionStyle),
+      suggestionText: normalizedOptionalText(payload.suggestionText),
+      suggestionIsLoading: payload.suggestionIsLoading ?? false,
+      reviewScore: mapReviewScore(payload.reviewScore),
+      reviewSummary: normalizedOptionalText(payload.reviewSummary),
+      reviewIssueCount: max(payload.reviewIssueCount ?? 0, 0),
+      reviewIsLoading: payload.reviewIsLoading ?? false
     )
 
     if let activity = activeActivity(matching: attributes) {
@@ -79,9 +103,21 @@ final class LiveActivityManager {
     for activity in activities {
       let finalState = TalkPilotActivityAttributes.ContentState(
         sessionStatus: activity.content.state.sessionStatus,
+        isListening: activity.content.state.isListening,
+        copilotEnabled: activity.content.state.copilotEnabled,
+        turnCount: activity.content.state.turnCount,
         latestSpeaker: activity.content.state.latestSpeaker,
         latestMessage: activity.content.state.latestMessage,
-        latestMessageAt: activity.content.state.latestMessageAt
+        latestTranslation: activity.content.state.latestTranslation,
+        latestTranslationIsLoading: activity.content.state.latestTranslationIsLoading,
+        latestMessageAt: activity.content.state.latestMessageAt,
+        suggestionStyle: activity.content.state.suggestionStyle,
+        suggestionText: activity.content.state.suggestionText,
+        suggestionIsLoading: activity.content.state.suggestionIsLoading,
+        reviewScore: activity.content.state.reviewScore,
+        reviewSummary: activity.content.state.reviewSummary,
+        reviewIssueCount: activity.content.state.reviewIssueCount,
+        reviewIsLoading: activity.content.state.reviewIsLoading
       )
       await activity.end(
         ActivityContent(state: finalState, staleDate: nil),
@@ -127,6 +163,32 @@ final class LiveActivityManager {
     }
   }
 
+  private func mapSuggestionStyle(_ rawValue: String?) -> TalkPilotActivityAttributes.SuggestionStyle? {
+    switch rawValue {
+    case "formal":
+      return .formal
+    case "casual":
+      return .casual
+    case "simple":
+      return .simple
+    default:
+      return nil
+    }
+  }
+
+  private func mapReviewScore(_ rawValue: String?) -> TalkPilotActivityAttributes.ReviewScore? {
+    switch rawValue {
+    case "green":
+      return .green
+    case "yellow":
+      return .yellow
+    case "red":
+      return .red
+    default:
+      return nil
+    }
+  }
+
   private func normalizedSceneName(_ sceneName: String) -> String {
     let trimmed = sceneName.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "Live Session" : trimmed
@@ -135,6 +197,11 @@ final class LiveActivityManager {
   private func normalizedMessage(_ message: String?) -> String {
     let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return trimmed.isEmpty ? "Waiting for the latest message..." : trimmed
+  }
+
+  private func normalizedOptionalText(_ text: String?) -> String? {
+    let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   private func mapDate(_ milliseconds: Double?) -> Date? {

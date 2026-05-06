@@ -1,12 +1,13 @@
+import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, type AppStateStatus } from "react-native";
-import * as Haptics from "expo-haptics";
 
+import { historyService } from "@/features/history/services/historyService";
 import type { PressAndSlideAction } from "@/features/live/components/PressAndSlideButton";
 import { assistReplyService } from "@/features/live/services/AssistReplyService";
 import { assistStreamingService } from "@/features/live/services/AssistStreamingService";
-import { AudioLevelMeter } from "@/features/live/services/AudioLevelMeter";
 import { AudioEngine, audioEngine } from "@/features/live/services/AudioEngine";
+import { AudioLevelMeter } from "@/features/live/services/AudioLevelMeter";
 import { deepgramService } from "@/features/live/services/DeepgramStreamingService";
 import { deepgramTokenService } from "@/features/live/services/DeepgramTokenService";
 import { liveActivityService } from "@/features/live/services/LiveActivityService";
@@ -17,7 +18,6 @@ import { suggestionService } from "@/features/live/services/SuggestionService";
 import { translationService } from "@/features/live/services/TranslationService";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
 import { voiceprintService } from "@/features/live/services/VoiceprintService";
-import { historyService } from "@/features/history/services/historyService";
 import { useAccessStore } from "@/features/live/store/accessStore";
 import { useAudioInputStore } from "@/features/live/store/audioInputStore";
 import { useConversationStore } from "@/features/live/store/conversationStore";
@@ -34,6 +34,7 @@ import { languageMatchesTag } from "@/shared/locale/deviceLanguage";
 import { useLocaleStore } from "@/shared/store/localeStore";
 import { useIsFocused } from "@react-navigation/native";
 import { type Href, useRouter } from "expo-router";
+import { analytics } from "@/shared/analytics/analytics";
 
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 const LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS = 45_000;
@@ -106,7 +107,6 @@ export function useLiveSessionController() {
   const mainWsStatus = useConversationStore((s) => s.mainWsStatus);
   const assistWsStatus = useConversationStore((s) => s.assistWsStatus);
   const setListening = useConversationStore((s) => s.setListening);
-  const setSelfSpeakerId = useConversationStore((s) => s.setSelfSpeakerId);
   const forcedSpeaker = useConversationStore((s) => s.forcedSpeaker);
   const setForcedSpeaker = useConversationStore((s) => s.setForcedSpeaker);
   const nativeLanguage = useLocaleStore((s) => s.uiLocale);
@@ -219,7 +219,17 @@ export function useLiveSessionController() {
         return false;
       }
 
+      analytics.capture("feature_access_denied", {
+        feature: error.access?.feature ?? null,
+        tier: error.access?.tier ?? null,
+        remaining: error.access?.remaining ?? null,
+        reason: error.access?.reason ?? null,
+      });
+
       if (shouldRedirectToLogin(error.access)) {
+        analytics.capture("feature_access_redirect_login", {
+          feature: error.access?.feature ?? null,
+        });
         router.push("/login");
         return true;
       }
@@ -232,6 +242,9 @@ export function useLiveSessionController() {
         if ((error.code as string) !== "feature_access_denied") {
           console.warn("[LiveSession] Redirecting to paywall from legacy access reason");
         }
+        analytics.capture("feature_access_redirect_paywall", {
+          feature: error.access?.feature ?? null,
+        });
         router.push("/paywall" as Href);
         return true;
       }
@@ -553,6 +566,12 @@ export function useLiveSessionController() {
     void voiceprintService.hydrateEnrollmentState();
 
     if (status === "idle" || status === "ended") {
+      void audioEngine.prewarm().catch((error) => {
+        console.warn("[LiveSession] Audio prewarm failed:", error);
+      });
+      void voiceEnrollmentService.prewarm().catch((error) => {
+        console.warn("[LiveSession] Enrollment prewarm failed:", error);
+      });
       void preconnectMainSocket();
     }
   }, [disconnectIdleSockets, isFocused, preconnectMainSocket, status]);
@@ -668,12 +687,12 @@ export function useLiveSessionController() {
   }, [restartMainAudioCapture]);
 
   const startStreaming = useCallback(
-    async (speakerId: number | null, startAttemptId?: number) => {
+    async (startAttemptId?: number) => {
       const debug = useDebugStore.getState();
       let createdSessionId: string | null = null;
+      let sessionCreationPromise: Promise<string> | null = null;
       console.log("[LiveSession] Starting streaming...");
       try {
-        setSelfSpeakerId(speakerId);
         setShowCalibration(false);
         await voiceprintService.hydrateEnrollmentState();
         if (startAttemptId != null) {
@@ -691,50 +710,26 @@ export function useLiveSessionController() {
           assertStartAttemptActive(startAttemptId);
         }
 
-        // Prime Deepgram with the user's enrollment audio so selfSpeakerId is
-        // locked before the live mic opens — no need to repeat each session.
-        const enrollmentChunks = await voiceEnrollmentService.loadEnrollmentChunks();
-        if (startAttemptId != null) {
-          assertStartAttemptActive(startAttemptId);
-        }
-        if (enrollmentChunks.length > 0) {
-          debug.startStep("enroll-prime", "Priming speaker ID...");
-          try {
-            const didLock = await deepgramService.primeWithEnrollment(enrollmentChunks);
-            if (startAttemptId != null) {
-              assertStartAttemptActive(startAttemptId);
-            }
-            if (didLock) {
-              debug.completeStep("enroll-prime", "locked");
-            } else {
-              debug.failStep("enroll-prime", "no speaker detected — clearing enrollment");
-              console.warn(
-                "[LiveSession] Enrollment did not yield a speaker ID; clearing stale enrollment",
-              );
-              await voiceEnrollmentService.clearEnrollment();
-            }
-          } catch (primeErr) {
-            debug.failStep("enroll-prime", "skipped");
-            console.warn("[LiveSession] Enrollment prime failed, continuing:", primeErr);
-          }
-        }
+        sessionCreationPromise = (async () => {
+          debug.startStep("session", "Creating session...");
+          const sessionId = await sessionManager.createSession({
+            scenePreset,
+            sceneDescription,
+          });
+          createdSessionId = sessionId;
+          debug.completeStep("session", sessionId);
+          console.log("[LiveSession] Session created:", sessionId);
+          return sessionId;
+        })();
 
         deepgramService.disableLiveTranscripts();
         if (startAttemptId != null) {
           setStartSessionUiState("finalizing");
         }
-
-        debug.startStep("session", "Creating session...");
-        const sessionId = await sessionManager.createSession({
-          scenePreset,
-          sceneDescription,
-        });
+        const sessionId = await sessionCreationPromise;
         if (startAttemptId != null) {
           assertStartAttemptActive(startAttemptId);
         }
-        createdSessionId = sessionId;
-        debug.completeStep("session", sessionId);
-        console.log("[LiveSession] Session created:", sessionId);
         sessionIdRef.current = sessionId;
         startSession(sessionId);
         await startAudioCapture();
@@ -761,10 +756,18 @@ export function useLiveSessionController() {
             error instanceof Error ? error.message : String(error),
           );
         }
-        if (createdSessionId) {
+        let settledSessionId: string | null = createdSessionId;
+        if (!settledSessionId && sessionCreationPromise) {
+          try {
+            settledSessionId = await sessionCreationPromise;
+          } catch {
+            settledSessionId = null;
+          }
+        }
+        if (settledSessionId) {
           try {
             await sessionManager.endSession({
-              sessionId: createdSessionId,
+              sessionId: settledSessionId,
               durationSeconds: 0,
             });
           } catch (sessionCleanupError) {
@@ -785,7 +788,10 @@ export function useLiveSessionController() {
         setListening(false);
         setSessionStarting(false);
         setStartSessionUiState("idle");
-        handleFeatureAccessDenied(error);
+        const didHandleAccessDenied = handleFeatureAccessDenied(error);
+        if (didHandleAccessDenied) {
+          return;
+        }
         console.error("[LiveSession] Failed to start streaming:", error);
       }
     },
@@ -796,7 +802,6 @@ export function useLiveSessionController() {
       startAudioCapture,
       startSession,
       endSession,
-      setSelfSpeakerId,
       setListening,
       handleFeatureAccessDenied,
       assertStartAttemptActive,
@@ -864,6 +869,7 @@ export function useLiveSessionController() {
 
   const handleStartSession = useCallback(async () => {
     if (isDailyLimitReached) {
+      analytics.capture("live_start_blocked", { reason: "daily_limit" });
       Alert.alert(
         "今日免费额度已用完",
         "升级到 Pro 后，每天可使用 120 分钟实时对话。",
@@ -872,6 +878,9 @@ export function useLiveSessionController() {
           {
             text: "查看方案",
             onPress: () => {
+              analytics.capture("live_start_blocked_opened_paywall", {
+                reason: "daily_limit",
+              });
               router.push("/paywall" as Href);
             },
           },
@@ -882,6 +891,12 @@ export function useLiveSessionController() {
 
     const debug = useDebugStore.getState();
     const startAttemptId = beginStartAttempt();
+    analytics.capture("live_start_attempted", {
+      attempt_id: startAttemptId,
+      scene_preset: scenePreset ?? null,
+      has_scene_description: Boolean(sceneDescription?.trim()),
+      copilot_enabled: copilotEnabled,
+    });
 
     try {
       useConversationStore.getState().reset();
@@ -904,6 +919,10 @@ export function useLiveSessionController() {
         debug.failStep("mic", "Permission denied");
         setSessionStarting(false);
         setStartSessionUiState("idle");
+        analytics.capture("live_start_failed", {
+          attempt_id: startAttemptId,
+          reason: "mic_permission_denied",
+        });
         console.error("[LiveSession] Mic permission denied");
         return;
       }
@@ -911,37 +930,49 @@ export function useLiveSessionController() {
       console.log("[LiveSession] Mic permission granted");
 
       debug.startStep("audio-init", "Initializing audio engine...");
-      await audioEngine.init();
+      const audioInitPromise = audioEngine.init();
+      const voiceprintHydrationPromise = voiceprintService.hydrateEnrollmentState();
+      const enrollmentAvailabilityPromise =
+        voiceEnrollmentService.getEnrollmentAvailability();
+      await audioInitPromise;
       assertStartAttemptActive(startAttemptId);
       debug.completeStep("audio-init");
-      await voiceprintService.hydrateEnrollmentState();
+      await voiceprintHydrationPromise;
       assertStartAttemptActive(startAttemptId);
       voiceprintService.resetSessionState();
       deepgramTokenService.prewarm();
 
       // Show enrollment setup if the user hasn't recorded a voice sample yet
-      const enrollmentAvailability =
-        await voiceEnrollmentService.getEnrollmentAvailability();
+      const enrollmentAvailability = await enrollmentAvailabilityPromise;
       assertStartAttemptActive(startAttemptId);
       if (enrollmentAvailability === "missing") {
         setSessionStarting(false);
         setStartSessionUiState("idle");
         setShowEnrollment(true);
+        analytics.capture("live_start_requires_enrollment", {
+          attempt_id: startAttemptId,
+        });
         return;
       }
 
-      void startStreaming(null, startAttemptId);
+      void startStreaming(startAttemptId);
     } catch (error) {
       if (isStartSessionCancelledError(error)) {
         setSessionStarting(false);
         setStartSessionUiState("idle");
         await cleanupAbortedStart();
+        analytics.capture("live_start_cancelled", {
+          attempt_id: startAttemptId,
+        });
         console.log("[LiveSession] Session start cancelled before streaming");
         return;
       }
 
       setSessionStarting(false);
       setStartSessionUiState("idle");
+      analytics.captureError("live_start_failed", error, {
+        attempt_id: startAttemptId,
+      });
       console.error("[LiveSession] Failed before streaming start:", error);
     }
   }, [
@@ -959,7 +990,7 @@ export function useLiveSessionController() {
     const startAttemptId = beginStartAttempt();
     setShowEnrollment(false);
     setStartSessionUiState("connecting");
-    void startStreaming(null, startAttemptId);
+    void startStreaming(startAttemptId);
   }, [beginStartAttempt, startStreaming]);
 
   const handleEnrollmentSkip = useCallback(() => {
@@ -971,13 +1002,13 @@ export function useLiveSessionController() {
     const startAttemptId = beginStartAttempt();
     console.log("[LiveSession] Voice detection acknowledged, auto-lock enabled");
     setStartSessionUiState("connecting");
-    void startStreaming(null, startAttemptId);
+    void startStreaming(startAttemptId);
   }, [beginStartAttempt, startStreaming]);
 
   const handleCalibrationSkip = useCallback(() => {
     const startAttemptId = beginStartAttempt();
     setStartSessionUiState("connecting");
-    void startStreaming(null, startAttemptId);
+    void startStreaming(startAttemptId);
   }, [beginStartAttempt, startStreaming]);
 
   const handleCancelStartSession = useCallback(() => {
@@ -1006,6 +1037,7 @@ export function useLiveSessionController() {
   const handleToggleCopilot = useCallback(() => {
     const nextEnabled = !copilotEnabled;
     setCopilotEnabled(nextEnabled);
+    analytics.capture("copilot_toggled", { enabled: nextEnabled });
     void Haptics.impactAsync(
       nextEnabled
         ? Haptics.ImpactFeedbackStyle.Medium
@@ -1365,6 +1397,11 @@ export function useLiveSessionController() {
   const handleEnd = useCallback(async () => {
     console.log("[LiveSession] Ending session...");
     const currentSessionId = sessionIdRef.current;
+    analytics.capture("live_session_end_requested", {
+      duration_seconds: duration,
+      has_session_id: Boolean(currentSessionId),
+      copilot_enabled: copilotEnabled,
+    });
 
     voiceprintService.resetSessionState();
     await audioEngine.stop();
@@ -1404,6 +1441,10 @@ export function useLiveSessionController() {
     await sessionManager.clearActiveSession();
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
+    analytics.capture("live_session_ended", {
+      duration_seconds: duration,
+      had_session_id: Boolean(currentSessionId),
+    });
     useDebugStore.getState().reset();
     if (isFocused) {
       void preconnectMainSocket();

@@ -4,6 +4,7 @@ import { mapFeatureAccessRpcRow } from '@/shared/billing/access';
 import { getValidAccessToken, supabase } from '@/shared/api/supabase';
 import type { FeatureAccessSummary, FeatureKey } from '@/shared/billing/accessTypes';
 import { useAuthStore, type SubscriptionTier } from '@/shared/store/authStore';
+import { getOrCreateInstallId } from '@/shared/device/installId';
 
 export function getDailyMinutesLimitForTier(tier: SubscriptionTier) {
   switch (tier) {
@@ -73,11 +74,13 @@ export async function consumeLiveSessionAccess(args: {
   sessionId: string;
   durationSeconds: number;
 }) {
+  const installId = await getOrCreateInstallId();
   return requireFeatureAccessSummary(
     'consume_live_session_access',
     {
       p_session_id: args.sessionId,
       p_duration_seconds: Math.max(0, Math.round(args.durationSeconds)),
+      p_install_id: installId,
     },
     'live_minutes',
   );
@@ -86,12 +89,15 @@ export async function consumeLiveSessionAccess(args: {
 export async function resetFreeAccessDebug() {
   await getValidAccessToken();
   const userId = useAuthStore.getState().userId;
+  const installId = await getOrCreateInstallId();
 
   if (!userId) {
     throw new Error('Cannot reset free access without an active user session.');
   }
 
-  const { error } = await supabase.rpc('reset_free_access_debug');
+  const { error } = await supabase.rpc('reset_free_access_debug', {
+    p_install_id: installId,
+  });
   if (error) {
     throw new Error(error.message || 'Failed to reset free access.');
   }
@@ -99,7 +105,7 @@ export async function resetFreeAccessDebug() {
   useAccessStore.getState().clear();
   return requireFeatureAccessSummary(
     'get_live_minutes_access',
-    { p_user_id: userId },
+    { p_user_id: userId, p_install_id: installId },
     'live_minutes',
   );
 }
