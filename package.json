@@ -22,6 +22,7 @@
     "legal:build": "node scripts/generate-legal-html.mjs",
     "legal:publish": "node scripts/publish-legal-html.mjs",
     "eas:build": "bash scripts/eas-build.sh",
+    "eas:update": "bash scripts/eas-update.sh",
     "auth:apple-secret": "node scripts/generate-apple-client-secret.mjs",
     "sentry:upload-sourcemaps": "sentry-expo-upload-sourcemaps dist"
   },
