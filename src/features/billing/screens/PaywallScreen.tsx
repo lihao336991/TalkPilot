@@ -1,7 +1,13 @@
 import { refreshProfileFromSession } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
-import { type Href, Stack, useFocusEffect, useRouter } from "expo-router";
+import {
+  type Href,
+  Stack,
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
 import type { TFunction } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -182,6 +188,7 @@ function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
 
 export default function PaywallScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ source?: string }>();
   const insets = useSafeAreaInsets();
   const { i18n, t } = useTranslation();
   const authMode = useAuthStore((state) => state.authMode);
@@ -200,15 +207,30 @@ export default function PaywallScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const hasFocusedOnceRef = useRef(false);
+  const isLiveSessionTimeoutFlow = params.source === "live_session_timeout";
+
+  const closeToPreviousScreen = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.navigate("/(tabs)");
+  }, [router]);
 
   const goToProfile = useCallback(() => {
+    if (isLiveSessionTimeoutFlow) {
+      closeToPreviousScreen();
+      return;
+    }
+
     if (router.canGoBack()) {
       router.back();
       return;
     }
 
     router.navigate("/(tabs)/profile");
-  }, [router]);
+  }, [closeToPreviousScreen, isLiveSessionTimeoutFlow, router]);
 
   const closeScreen = useCallback(() => {
     if (router.canGoBack()) {
@@ -356,7 +378,9 @@ export default function PaywallScreen() {
       if (restoreResult.summary.unlocked) {
         Alert.alert(t("billing.paywall.restoreCompleteTitle"), message, [
           {
-            text: t("common.actions.goToProfile"),
+            text: isLiveSessionTimeoutFlow
+              ? t("common.actions.continue")
+              : t("common.actions.goToProfile"),
             onPress: goToProfile,
           },
           {
@@ -388,7 +412,9 @@ export default function PaywallScreen() {
     if (summary.unlocked) {
       Alert.alert(t("billing.paywall.purchaseCompleteTitle"), message, [
         {
-          text: t("common.actions.goToProfile"),
+          text: isLiveSessionTimeoutFlow
+            ? t("common.actions.continue")
+            : t("common.actions.goToProfile"),
           onPress: goToProfile,
         },
       ]);

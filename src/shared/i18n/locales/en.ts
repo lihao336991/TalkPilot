@@ -267,13 +267,26 @@ export const en = {
       copilotEnabledToast: "Copilot on",
       copilotDisabledToast: "Copilot off",
       holdToSpeak: "Hold to speak",
-      assistOverlayTitle: "Say it in your native language when you get stuck.",
-      assistOverlaySubtitle:
-        "I turn it into the learning language live. Release for text only, or slide right to speak it out.",
+      assistOverlayTitle: "Stuck? Say it in your native language.",
+      assistOverlaySubtitle: "Instantly translated. Release for text, slide right to speak.",
       releaseToSend: "Release to send",
       sosCaption: "Native language assist",
       endConversation: "End conversation",
       end: "End",
+    },
+    sessionLimit: {
+      warningEyebrow: "Free time left",
+      warningBody: "{{time}} left in this session",
+    },
+    alerts: {
+      noSpeechTitle: "No clear speech detected",
+      noSpeechBody: "Please move closer to the microphone and try again.",
+      translateFailedTitle: "Translation failed",
+      translateFailedBody:
+        "TalkPilot couldn't translate to your learning language right now. Please try again shortly.",
+      sendSuggestionFailedTitle: "Couldn't send suggestion",
+      sendSuggestionFailedBody:
+        "TalkPilot couldn't send and play this suggestion right now. Please try again shortly.",
     },
     pressAndSlide: {
       editDraftFallback: "Release to turn this into editable text",
@@ -286,6 +299,7 @@ export const en = {
       slideToSpeak: "Slide here to speak",
       releaseSend: "Release to send",
       releaseTranslateOnly: "Release for text only",
+      releaseCancelOrSlideSpeak: "Release to cancel, slide right to speak",
     },
     conversationFlow: {
       listening: "Listening...",
@@ -370,16 +384,16 @@ export const en = {
   },
   settings: {
     title: "Settings",
-    subtitle: "Choose the app language and the language you want to learn.",
+    subtitle: "Choose your native language and the language you want to learn.",
     section: {
-      appLanguage: "App language",
+      appLanguage: "Native language",
       learningLanguage: "Learning language",
       legal: "Legal and privacy",
       debug: "Debug",
     },
     appLanguage: {
       description:
-        "This changes navigation, buttons, alerts, and other interface text.",
+        "This is also used for navigation, buttons, alerts, and rescue input.",
       followSystemTitle: "Follow system",
       followSystemDescription:
         "Use your device language automatically. Current: {{language}}",
@@ -388,7 +402,7 @@ export const en = {
       description:
         "This saves which language you want to learn in TalkPilot.",
       supportNote:
-        "The main live WebSocket listens to your learning language, while Assist listens to your native language for rescue input.",
+        "Native language and learning language cannot be the same.",
     },
     voiceEnrollment: {
       title: "Voice sample",
@@ -428,12 +442,6 @@ export const en = {
       termsTitle: "Terms of Service",
       termsDescription:
         "Review the product terms, AI feature limits, subscriptions, and acceptable use.",
-      deleteDataTitle: "Request data deletion",
-      deleteDataDescription:
-        "Send a deletion or privacy request to {{email}}.",
-      emailUnavailableTitle: "Email unavailable",
-      emailUnavailableBody:
-        "Couldn't open your mail app. Please contact us at {{email}}.",
     },
     debug: {
       description:
@@ -594,8 +602,8 @@ export const en = {
     },
     preferences: {
       title: "Preferences",
-      body: "Adjust app language and choose the language you want to learn.",
-      appLanguage: "App language",
+      body: "Adjust native language and choose the language you want to learn.",
+      appLanguage: "Native language",
       learningLanguage: "Learning language",
     },
     feedback: {

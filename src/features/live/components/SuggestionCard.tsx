@@ -6,6 +6,7 @@ import {
     typography,
 } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { useTranslation } from "react-i18next";
@@ -57,7 +58,10 @@ export default function SuggestionCard({
       </View>
       <Pressable
         style={[styles.actionButton, isSending && styles.actionButtonDisabled]}
-        onPress={onSend}
+        onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onSend?.();
+        }}
         disabled={isSending}
         accessibilityLabel={t("live.suggestionPanel.actionSendAndPlay")}
         hitSlop={8}

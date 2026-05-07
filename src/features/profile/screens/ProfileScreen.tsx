@@ -2,6 +2,7 @@ import { revenueCatService } from "@/features/billing/services/RevenueCatService
 import { useFeedbackStore } from "@/features/feedback/feedbackStore";
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
 import { refreshProfileFromSession, signOut } from "@/shared/api/supabase";
+import { getLanguageSelfName } from "@/shared/i18n";
 import {
     type AuthProviderName,
     type SubscriptionStatus,
@@ -210,9 +211,9 @@ export default function ProfileScreen() {
       : t("common.status.synced")
     : t("common.status.loginRequired");
   const appLanguageLabel = followSystemUiLocale
-    ? `${t("common.actions.useSystem")} / ${t(`common.languageName.${uiLocale}`)}`
-    : t(`common.languageName.${uiLocale}`);
-  const learningLanguageLabel = t(`common.languageName.${learningLanguage}`);
+    ? `${t("common.actions.useSystem")} / ${getLanguageSelfName(uiLocale)}`
+    : getLanguageSelfName(uiLocale);
+  const learningLanguageLabel = getLanguageSelfName(learningLanguage);
 
   const initials = (displayName || userEmail || "G")
     .split(" ")

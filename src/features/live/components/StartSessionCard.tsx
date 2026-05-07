@@ -1,6 +1,7 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -371,7 +372,10 @@ export function StartSessionCard({
           <View style={[styles.glowRing, styles.glowRingMid]} />
 
           <Pressable
-            onPress={onStart}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onStart();
+            }}
             accessibilityLabel={t("live.startSession.accessibilityLabel")}
             disabled={isLimitReached || isStarting}
           >
@@ -520,13 +524,35 @@ export function StartSessionCard({
           {connectionCopy ? (
             <>
               <Pressable
-                onPress={onCancelStart}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onCancelStart();
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={t("live.startSession.cancelAccessibilityLabel")}
                 style={styles.glassButtonWrap}
               >
                 <BlurView intensity={32} tint="light" style={styles.glassButtonBlur}>
-                  <Text style={styles.glassButtonText}>{t("common.actions.cancel")}</Text>
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={[
+                      "rgba(255,255,255,0.82)",
+                      "rgba(248,252,240,0.64)",
+                    ]}
+                    start={{ x: 0.2, y: 0 }}
+                    end={{ x: 0.8, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                  <View style={styles.glassButtonContent}>
+                    <Feather
+                      name="x-circle"
+                      size={17}
+                      color="rgba(86,126,0,0.74)"
+                    />
+                    <Text style={styles.glassButtonText}>
+                      {t("common.actions.cancel")}
+                    </Text>
+                  </View>
                 </BlurView>
                 <View style={styles.glassButtonBorder} />
               </Pressable>
@@ -764,29 +790,35 @@ const styles = StyleSheet.create({
     marginTop: 28,
     borderRadius: radii.pill,
     overflow: "hidden",
-    // Outer glow
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
+    shadowColor: "#587600",
+    shadowOpacity: 0.14,
     shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   glassButtonBlur: {
-    paddingHorizontal: 40,
-    paddingVertical: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
+  },
+  glassButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
   glassButtonBorder: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: radii.pill,
-    borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.32)",
+    borderWidth: 1,
+    borderColor: "rgba(134,174,0,0.16)",
   },
   glassButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "rgba(10,20,5,0.68)",
-    letterSpacing: 0.15,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "rgba(42,62,0,0.74)",
+    letterSpacing: 0.2,
   },
   stageStatusText: {
     marginTop: 14,

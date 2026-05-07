@@ -143,6 +143,7 @@ function RootLayoutNav() {
       subscription_tier: subscriptionTier,
       subscription_status: subscriptionStatus,
       ui_locale: uiLocale,
+      native_language: uiLocale,
       learning_language: learningLanguage,
     });
     analytics.capture("auth_session_applied", {

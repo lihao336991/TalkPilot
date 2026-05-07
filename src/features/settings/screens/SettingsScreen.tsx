@@ -6,6 +6,8 @@ import {
   type UiLocale,
   SUPPORTED_LEARNING_LANGUAGES,
   SUPPORTED_UI_LOCALES,
+  getLanguageSelfName,
+  languageTagsMatch,
   useAppLanguage,
 } from "@/shared/i18n";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
@@ -17,7 +19,6 @@ import React from "react";
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,21 +27,27 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { legalContent } from "@/features/billing/legal/legalContent";
 
 function LanguageOption({
   label,
   selected,
+  disabled = false,
   onPress,
 }: {
   label: string;
   selected: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.optionRow, selected && styles.optionRowSelected]}
+      disabled={disabled}
+      style={[
+        styles.optionRow,
+        selected && styles.optionRowSelected,
+        disabled && styles.optionRowDisabled,
+      ]}
     >
       <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
         {label}
@@ -130,7 +137,7 @@ export default function SettingsScreen() {
   const [isPlayingEnrollment, setIsPlayingEnrollment] = React.useState(false);
   const [isEnrollmentBusy, setIsEnrollmentBusy] = React.useState(false);
 
-  const currentAppLanguageName = t(`common.languageName.${uiLocale}`);
+  const currentAppLanguageName = getLanguageSelfName(uiLocale);
 
   const stopEnrollmentPlayback = React.useCallback(async () => {
     const sound = soundRef.current;
@@ -246,24 +253,6 @@ export default function SettingsScreen() {
     );
   }, [isEnrollmentBusy, stopEnrollmentPlayback, t]);
 
-  const handleDeleteDataRequest = React.useCallback(() => {
-    const subject = encodeURIComponent("TalkPilot data deletion request");
-    const body = encodeURIComponent(
-      "Hello TalkPilot,\n\nI would like to request deletion of my account data.\n\nPlease let me know if you need any information to verify this request.\n",
-    );
-
-    void Linking.openURL(
-      `mailto:${legalContent.meta.contact_email}?subject=${subject}&body=${body}`,
-    ).catch(() => {
-      Alert.alert(
-        t("settings.legal.emailUnavailableTitle"),
-        t("settings.legal.emailUnavailableBody", {
-          email: legalContent.meta.contact_email,
-        }),
-      );
-    });
-  }, [t]);
-
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -307,16 +296,24 @@ export default function SettingsScreen() {
             })}
           </Text>
 
-          {SUPPORTED_UI_LOCALES.map((locale) => (
-            <LanguageOption
-              key={locale}
-              label={t(`common.languageName.${locale}`)}
-              selected={!followSystemUiLocale && uiLocale === locale}
-              onPress={() => {
-                void setUiLocale(locale as UiLocale);
-              }}
-            />
-          ))}
+          {SUPPORTED_UI_LOCALES.map((locale) => {
+            const conflictsWithLearningLanguage = languageTagsMatch(
+              locale,
+              learningLanguage,
+            );
+
+            return (
+              <LanguageOption
+                key={locale}
+                label={getLanguageSelfName(locale)}
+                selected={!followSystemUiLocale && uiLocale === locale}
+                disabled={conflictsWithLearningLanguage}
+                onPress={() => {
+                  void setUiLocale(locale as UiLocale);
+                }}
+              />
+            );
+          })}
         </View>
 
         <View style={styles.card}>
@@ -325,16 +322,24 @@ export default function SettingsScreen() {
             {t("settings.learningLanguage.description")}
           </Text>
 
-          {SUPPORTED_LEARNING_LANGUAGES.map((language) => (
-            <LanguageOption
-              key={language}
-              label={t(`common.languageName.${language}`)}
-              selected={learningLanguage === language}
-              onPress={() => {
-                setLearningLanguage(language as LearningLanguage);
-              }}
-            />
-          ))}
+          {SUPPORTED_LEARNING_LANGUAGES.map((language) => {
+            const conflictsWithNativeLanguage = languageTagsMatch(
+              language,
+              uiLocale,
+            );
+
+            return (
+              <LanguageOption
+                key={language}
+                label={getLanguageSelfName(language)}
+                selected={learningLanguage === language}
+                disabled={conflictsWithNativeLanguage}
+                onPress={() => {
+                  setLearningLanguage(language as LearningLanguage);
+                }}
+              />
+            );
+          })}
 
           <View style={styles.notice}>
             <Feather name="info" size={14} color={palette.textSecondary} />
@@ -449,14 +454,6 @@ export default function SettingsScreen() {
             onPress={() => {
               router.push("/terms");
             }}
-          />
-
-          <NavigationRow
-            title={t("settings.legal.deleteDataTitle")}
-            description={t("settings.legal.deleteDataDescription", {
-              email: legalContent.meta.contact_email,
-            })}
-            onPress={handleDeleteDataRequest}
           />
         </View>
 
@@ -633,6 +630,9 @@ const styles = StyleSheet.create({
   optionRowSelected: {
     borderColor: palette.accentBorderStrong,
     backgroundColor: palette.accentMuted,
+  },
+  optionRowDisabled: {
+    opacity: 0.42,
   },
   optionLabel: {
     ...typography.bodyMd,

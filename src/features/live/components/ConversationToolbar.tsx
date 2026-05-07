@@ -1,5 +1,6 @@
 import { palette, spacing } from "@/shared/theme/tokens";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -56,7 +57,7 @@ export function ConversationToolbar({
     starRotation.value = withTiming(0, { duration: 180 });
   }, [copilotEnabled, starRotation]);
 
-  const rotatingStarStyle = useAnimatedStyle(() => ({
+  const orbitingStarStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${starRotation.value}deg` }],
   }));
   return (
@@ -92,18 +93,18 @@ export function ConversationToolbar({
             >
               AI
             </Text>
-            <Animated.View
-              style={[
-                styles.copilotIndicator,
-                copilotEnabled ? rotatingStarStyle : null,
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="star-four-points"
-                size={10}
-                color={copilotEnabled ? "#9FCB28" : "rgba(15,23,42,0.28)"}
-              />
-            </Animated.View>
+            {copilotEnabled ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.copilotOrbit, orbitingStarStyle]}
+              >
+                <MaterialCommunityIcons
+                  name="star-four-points"
+                  size={11}
+                  color="#FFFFFF"
+                />
+              </Animated.View>
+            ) : null}
           </View>
         </Pressable>
 
@@ -111,9 +112,9 @@ export function ConversationToolbar({
           <PressAndSlideButton
             label="SOS"
             defaultColor={palette.textSecondary}
-            activeColor={palette.textOnAccent}
+            activeColor="#FFFFFF"
             defaultBg="rgba(244,248,239,0.9)"
-            activeBg={palette.accent}
+            activeBg={palette.accentDark}
             cancelBg="#FF5A58"
             sendBg={palette.accent}
             onPressIn={onNativeAssistPressIn}
@@ -122,8 +123,10 @@ export function ConversationToolbar({
             slideThresholdLeft={-72}
             slideThresholdRight={72}
             buttonStyle={[styles.controlButton, styles.assistButton]}
+            activeButtonStyle={styles.assistButtonActive}
+            activeContainerStyle={styles.assistActiveGlow}
             labelStyle={styles.assistLabel}
-            neutralHint={t("live.pressAndSlide.releaseTranslateOnly")}
+            neutralHint={t("live.pressAndSlide.releaseCancelOrSlideSpeak")}
             showHoldRipple
             rippleColor="rgba(194,234,69,0.34)"
             overlayTitle={t("live.toolbar.assistOverlayTitle")}
@@ -135,7 +138,10 @@ export function ConversationToolbar({
 
         <Pressable
           style={styles.controlTouch}
-          onPress={onEnd}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            onEnd();
+          }}
           accessibilityLabel={t("live.toolbar.endConversation")}
         >
           <View style={[styles.controlButton, styles.endBtnInner]}>
@@ -189,12 +195,16 @@ const styles = StyleSheet.create({
   copilotButton: {
     width: 56,
     height: 56,
-    borderRadius: 18,
-    overflow: "hidden",
+    borderRadius: 28,
   },
   copilotButtonActive: {
-    borderColor: "rgba(212,226,169,0.9)",
-    backgroundColor: "rgba(252,255,247,0.56)",
+    borderColor: "rgba(255,255,255,0.78)",
+    backgroundColor: palette.accentDark,
+    shadowColor: palette.accentDark,
+    shadowOpacity: 0.34,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   copilotButtonInactive: {
     borderColor: "rgba(15,23,42,0.05)",
@@ -206,19 +216,24 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   copilotTextActive: {
-    color: "#587600",
+    color: "#FFFFFF",
   },
   copilotTextInactive: {
     color: "rgba(15,23,42,0.52)",
   },
-  copilotIndicator: {
+  copilotOrbit: {
     position: "absolute",
-    top: 10,
-    right: 10,
-    width: 12,
-    height: 12,
+    left: -6,
+    top: -6,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: "center",
-    justifyContent: "center",
+    paddingTop: 1,
+    shadowColor: "#FFFFFF",
+    shadowOpacity: 0.9,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 0 },
   },
   endBtnInner: {
     backgroundColor: palette.danger,
@@ -245,6 +260,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
+  },
+  assistButtonActive: {
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.8)",
+  },
+  assistActiveGlow: {
+    shadowColor: "#86AE00",
+    shadowOpacity: 0.48,
+    shadowRadius: 38,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 18,
   },
   assistLabel: {
     fontSize: 14,

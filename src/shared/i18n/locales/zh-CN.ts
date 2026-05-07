@@ -263,12 +263,24 @@ export const zhCN: TranslationSchema = {
       copilotEnabledToast: "辅助建议已开启",
       copilotDisabledToast: "辅助建议已关闭",
       holdToSpeak: "按住说母语",
-      assistOverlayTitle: "卡住时，直接用母语说出你想表达的意思。",
-      assistOverlaySubtitle: "我会把它即时转成学习语言。松手仅翻译，右滑松手会直接朗读。",
+      assistOverlayTitle: "卡住了？用母语说出来。",
+      assistOverlaySubtitle: "即时转成学习语言。松手仅翻译，右滑松手朗读。",
       releaseToSend: "松手发送",
       sosCaption: "母语救场",
       endConversation: "结束对话",
       end: "结束",
+    },
+    sessionLimit: {
+      warningEyebrow: "免费时长提醒",
+      warningBody: "本次会话还剩 {{time}}",
+    },
+    alerts: {
+      noSpeechTitle: "没有识别到清晰语音",
+      noSpeechBody: "请靠近麦克风后再试一次。",
+      translateFailedTitle: "翻译失败",
+      translateFailedBody: "暂时无法翻译成学习语言，请稍后重试。",
+      sendSuggestionFailedTitle: "发送失败",
+      sendSuggestionFailedBody: "暂时无法发送并播放这条建议，请稍后重试。",
     },
     pressAndSlide: {
       editDraftFallback: "松手后转成可编辑文字",
@@ -281,6 +293,7 @@ export const zhCN: TranslationSchema = {
       slideToSpeak: "滑到这里朗读",
       releaseSend: "松开发送",
       releaseTranslateOnly: "松手仅翻译",
+      releaseCancelOrSlideSpeak: "松手取消，右滑朗读",
     },
     conversationFlow: {
       listening: "聆听中…",
@@ -361,22 +374,21 @@ export const zhCN: TranslationSchema = {
   },
   settings: {
     title: "设置",
-    subtitle: "选择界面语言，以及你想学习的目标语言。",
+    subtitle: "选择你的母语，以及你想学习的目标语言。",
     section: {
-      appLanguage: "界面语言",
+      appLanguage: "母语",
       learningLanguage: "学习语言",
       legal: "法律与隐私",
       debug: "调试",
     },
     appLanguage: {
-      description: "这会影响导航、按钮、弹窗和其他界面文案。",
+      description: "这也会用于界面文案、母语救场输入和翻译辅助。",
       followSystemTitle: "跟随系统",
       followSystemDescription: "自动使用设备语言。当前：{{language}}",
     },
     learningLanguage: {
       description: "保存你希望练习的目标语言。",
-      supportNote:
-        "实时对话会识别学习语言，母语救场会识别你的界面语言。",
+      supportNote: "母语和学习语言不能相同。",
     },
     voiceEnrollment: {
       title: "声音样本",
@@ -414,10 +426,6 @@ export const zhCN: TranslationSchema = {
       termsTitle: "用户协议",
       termsDescription:
         "查看产品条款、AI 功能边界、订阅规则与使用规范。",
-      deleteDataTitle: "申请删除数据",
-      deleteDataDescription: "通过 {{email}} 提交删除数据或隐私请求。",
-      emailUnavailableTitle: "无法打开邮件应用",
-      emailUnavailableBody: "请直接发送邮件联系：{{email}}",
     },
     debug: {
       description: "仅供开发包使用的调试项，用来验证首次引导等流程；正式包里不会显示。",
@@ -568,8 +576,8 @@ export const zhCN: TranslationSchema = {
     },
     preferences: {
       title: "偏好设置",
-      body: "调整界面语言，并选择你希望练习的目标语言。",
-      appLanguage: "界面语言",
+      body: "调整母语，并选择你希望练习的目标语言。",
+      appLanguage: "母语",
       learningLanguage: "学习语言",
     },
     feedback: {

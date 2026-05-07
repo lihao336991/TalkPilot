@@ -192,6 +192,7 @@ export function ConversationFlow() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    zIndex: 1,
   },
   list: {
     zIndex: 1,

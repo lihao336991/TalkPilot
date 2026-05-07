@@ -26,16 +26,18 @@ import { useDebugStore } from "@/features/live/store/debugStore";
 import { useReviewStore } from "@/features/live/store/reviewStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
 import { useSuggestionStore } from "@/features/live/store/suggestionStore";
+import { analytics } from "@/shared/analytics/analytics";
 import {
   isFeatureAccessError,
   shouldRedirectToLogin,
   shouldRedirectToPaywall,
 } from "@/shared/billing/access";
 import { languageMatchesTag } from "@/shared/locale/deviceLanguage";
+import { useAuthStore } from "@/shared/store/authStore";
 import { useLocaleStore } from "@/shared/store/localeStore";
 import { useIsFocused } from "@react-navigation/native";
 import { type Href, useRouter } from "expo-router";
-import { analytics } from "@/shared/analytics/analytics";
+import { useTranslation } from "react-i18next";
 
 const PAUSED_WS_IDLE_TIMEOUT_MS = 60_000;
 const LIVE_PAGE_PRECONNECT_IDLE_TIMEOUT_MS = 45_000;
@@ -43,6 +45,12 @@ const SESSION_HEARTBEAT_INTERVAL_MS = 60_000;
 const MAIN_AUDIO_STALE_TIMEOUT_MS = 6_500;
 const MAIN_AUDIO_WATCHDOG_INTERVAL_MS = 3_000;
 const MAIN_AUDIO_RESTART_COOLDOWN_MS = 15_000;
+const SESSION_TIMEOUT_WARNING_SECONDS = 180;
+const LIVE_TIMEOUT_PAYWALL_SOURCE = "live_session_timeout";
+
+function hasPaidAccess(subscriptionTier: "free" | "pro" | "unlimited") {
+  return subscriptionTier === "pro" || subscriptionTier === "unlimited";
+}
 
 export function getWsStatusMeta(
   status: StreamingConnectionStatus,
@@ -90,6 +98,7 @@ function isStartSessionCancelledError(error: unknown) {
 export function useLiveSessionController() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  const { t } = useTranslation();
 
   const status = useSessionStore((s) => s.status);
   const scenePreset = useSessionStore((s) => s.scenePreset);
@@ -100,9 +109,12 @@ export function useLiveSessionController() {
   const isSessionStarting = useSessionStore((s) => s.isStarting);
   const copilotEnabled = useSessionStore((s) => s.copilotEnabled);
   const startSession = useSessionStore((s) => s.startSession);
+  const pauseSession = useSessionStore((s) => s.pauseSession);
+  const resumeSession = useSessionStore((s) => s.resumeSession);
   const endSession = useSessionStore((s) => s.endSession);
   const setSessionStarting = useSessionStore((s) => s.setStarting);
   const setCopilotEnabled = useSessionStore((s) => s.setCopilotEnabled);
+  const subscriptionTier = useAuthStore((s) => s.subscriptionTier);
 
   const isListening = useConversationStore((s) => s.isListening);
   const mainWsStatus = useConversationStore((s) => s.mainWsStatus);
@@ -123,9 +135,14 @@ export function useLiveSessionController() {
     useState<StartSessionUiState>("idle");
   const [copilotToastState, setCopilotToastState] =
     useState<CopilotToastState>(null);
+  const [sessionRemainingSecondsAtStart, setSessionRemainingSecondsAtStart] =
+    useState<number | null>(null);
+  const [isResolvingSessionTimeout, setIsResolvingSessionTimeout] =
+    useState(false);
 
   const sessionIdRef = useRef<string | null>(null);
   const assistShouldResumeRef = useRef(false);
+  const sessionTimeoutPendingRef = useRef(false);
   const startAttemptRef = useRef(0);
   const cancelledStartAttemptRef = useRef<number | null>(null);
   const copilotToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -146,6 +163,11 @@ export function useLiveSessionController() {
   const resetAssistAudioLevel = useCallback(() => {
     assistAudioLevelMeterRef.current.reset();
     useAudioInputStore.getState().resetAssist();
+  }, []);
+
+  const clearSessionTimeoutResolution = useCallback(() => {
+    sessionTimeoutPendingRef.current = false;
+    setIsResolvingSessionTimeout(false);
   }, []);
 
   const sendAudioRef = useRef((base64: string) => {
@@ -254,6 +276,65 @@ export function useLiveSessionController() {
     },
     [router],
   );
+
+  const handleSessionTimeLimitReached = useCallback(async () => {
+    if (sessionTimeoutPendingRef.current || !sessionIdRef.current) {
+      return;
+    }
+
+    sessionTimeoutPendingRef.current = true;
+    setIsResolvingSessionTimeout(true);
+    assistShouldResumeRef.current = true;
+    analytics.capture("live_session_timeout_reached", {
+      duration_seconds: duration,
+      subscription_tier: subscriptionTier,
+    });
+
+    pauseSession();
+    setForcedSpeaker(null);
+    setAssistPreviewText("");
+    setAssistState("idle");
+    setListening(false);
+
+    try {
+      voiceprintService.stopSessionAnalysis();
+      await audioEngine.stop();
+    } catch (error) {
+      console.warn("[LiveSession] Failed to stop audio after timeout:", error);
+    }
+
+    resetMainAudioLevel();
+    resetAssistAudioLevel();
+    assistStreamingService.cancelCapture();
+    assistStreamingService.disconnect();
+    deepgramService.beginPausedRetention(PAUSED_WS_IDLE_TIMEOUT_MS);
+
+    try {
+      await assistReplyService.stopPlayback();
+    } catch (error) {
+      console.warn("[LiveSession] Failed to stop assist playback after timeout:", error);
+    }
+
+    try {
+      await translationService.stopPlayback();
+    } catch (error) {
+      console.warn("[LiveSession] Failed to stop translation playback after timeout:", error);
+    }
+
+    router.push({
+      pathname: "/paywall",
+      params: { source: LIVE_TIMEOUT_PAYWALL_SOURCE },
+    });
+  }, [
+    duration,
+    pauseSession,
+    resetAssistAudioLevel,
+    resetMainAudioLevel,
+    router,
+    setForcedSpeaker,
+    setListening,
+    subscriptionTier,
+  ]);
 
   const handleUtteranceEnd = useCallback(
     ({
@@ -517,7 +598,9 @@ export function useLiveSessionController() {
     setAssistState("idle");
     setAssistPreviewText("");
     setDuration(0);
+    setSessionRemainingSecondsAtStart(null);
     setSessionStarting(false);
+    clearSessionTimeoutResolution();
     endSession();
     useConversationStore.getState().reset();
     useSuggestionStore.getState().clear();
@@ -530,6 +613,7 @@ export function useLiveSessionController() {
     setForcedSpeaker,
     setListening,
     setSessionStarting,
+    clearSessionTimeoutResolution,
   ]);
 
   const disconnectIdleSockets = useCallback(() => {
@@ -732,6 +816,17 @@ export function useLiveSessionController() {
           assertStartAttemptActive(startAttemptId);
         }
         sessionIdRef.current = sessionId;
+        clearSessionTimeoutResolution();
+        setSessionRemainingSecondsAtStart(
+          hasPaidAccess(useAuthStore.getState().subscriptionTier)
+            ? null
+            : Math.max(
+                0,
+                (useSessionStore.getState().dailyMinutesLimit -
+                  useSessionStore.getState().dailyMinutesUsed) *
+                  60,
+              ),
+        );
         startSession(sessionId);
         await startAudioCapture();
         if (startAttemptId != null) {
@@ -807,6 +902,7 @@ export function useLiveSessionController() {
       handleFeatureAccessDenied,
       assertStartAttemptActive,
       cleanupAbortedStart,
+      clearSessionTimeoutResolution,
       resetAssistAudioLevel,
       resetMainAudioLevel,
     ],
@@ -844,6 +940,33 @@ export function useLiveSessionController() {
     );
     return () => clearInterval(interval);
   }, [restartMainAudioCapture, shouldKeepMainMicActive, status]);
+
+  const isPaidSubscriber = hasPaidAccess(subscriptionTier);
+  const remainingSecondsUntilTimeout =
+    sessionRemainingSecondsAtStart == null
+      ? null
+      : Math.max(0, sessionRemainingSecondsAtStart - duration);
+
+  useEffect(() => {
+    const remainingSeconds = remainingSecondsUntilTimeout;
+    if (
+      status !== "active" ||
+      isPaidSubscriber ||
+      remainingSeconds === null ||
+      sessionTimeoutPendingRef.current
+    ) {
+      return;
+    }
+
+    if (remainingSeconds <= 0) {
+      void handleSessionTimeLimitReached();
+    }
+  }, [
+    handleSessionTimeLimitReached,
+    isPaidSubscriber,
+    remainingSecondsUntilTimeout,
+    status,
+  ]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -1061,7 +1184,11 @@ export function useLiveSessionController() {
   }, [copilotEnabled, setCopilotEnabled]);
 
   const restoreMainConversationCapture = useCallback(async () => {
-    if (!assistShouldResumeRef.current) {
+    if (
+      !assistShouldResumeRef.current ||
+      status !== "active" ||
+      sessionTimeoutPendingRef.current
+    ) {
       return;
     }
 
@@ -1074,7 +1201,7 @@ export function useLiveSessionController() {
       await connectStreamingSocket();
     }
     await startAudioCapture();
-  }, [connectStreamingSocket, learningLanguage, startAudioCapture]);
+  }, [connectStreamingSocket, startAudioCapture, status]);
 
   const handleSendSuggestion = useCallback(
     async (rawSuggestion: string) => {
@@ -1129,10 +1256,10 @@ export function useLiveSessionController() {
         }
         console.error("[Suggestion] Failed to send and play suggestion:", error);
         Alert.alert(
-          "发送失败",
+          t("live.alerts.sendSuggestionFailedTitle"),
           error instanceof Error
             ? error.message
-            : "暂时无法发送并播放这条建议，请稍后重试。",
+            : t("live.alerts.sendSuggestionFailedBody"),
         );
       } finally {
         try {
@@ -1175,7 +1302,10 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert("没有识别到清晰语音", "请靠近麦克风后再试一次。");
+        Alert.alert(
+          t("live.alerts.noSpeechTitle"),
+          t("live.alerts.noSpeechBody"),
+        );
         return;
       }
 
@@ -1231,10 +1361,10 @@ export function useLiveSessionController() {
         }
         console.error("[NativeAssist] Failed to translate/play:", error);
         Alert.alert(
-          "翻译失败",
+          t("live.alerts.translateFailedTitle"),
           error instanceof Error
             ? error.message
-            : "暂时无法翻译成学习语言，请稍后重试。",
+            : t("live.alerts.translateFailedBody"),
         );
       } finally {
         setAssistState("idle");
@@ -1379,7 +1509,10 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert("没有识别到清晰语音", "请靠近麦克风后再试一次。");
+        Alert.alert(
+          t("live.alerts.noSpeechTitle"),
+          t("live.alerts.noSpeechBody"),
+        );
         return;
       }
 
@@ -1460,6 +1593,8 @@ export function useLiveSessionController() {
     setAssistPreviewText("");
     setSessionStarting(false);
     setStartSessionUiState("idle");
+    setSessionRemainingSecondsAtStart(null);
+    clearSessionTimeoutResolution();
     await sessionManager.clearActiveSession();
     useAccessStore.getState().clear();
     console.log("[LiveSession] Session ended");
@@ -1480,6 +1615,44 @@ export function useLiveSessionController() {
     resetAssistAudioLevel,
     resetMainAudioLevel,
     setForcedSpeaker,
+    clearSessionTimeoutResolution,
+  ]);
+
+  useEffect(() => {
+    if (!isFocused || !sessionTimeoutPendingRef.current) {
+      return;
+    }
+
+    if (hasPaidAccess(subscriptionTier)) {
+      clearSessionTimeoutResolution();
+      resumeSession();
+      void restoreMainConversationCapture().catch((error) => {
+        console.error(
+          "[LiveSession] Failed to resume conversation after upgrading:",
+          error,
+        );
+      });
+      analytics.capture("live_session_timeout_upgraded", {
+        duration_seconds: duration,
+        subscription_tier: subscriptionTier,
+      });
+      return;
+    }
+
+    clearSessionTimeoutResolution();
+    void handleEnd();
+    analytics.capture("live_session_timeout_ended_without_upgrade", {
+      duration_seconds: duration,
+      subscription_tier: subscriptionTier,
+    });
+  }, [
+    clearSessionTimeoutResolution,
+    duration,
+    handleEnd,
+    isFocused,
+    restoreMainConversationCapture,
+    resumeSession,
+    subscriptionTier,
   ]);
 
   const isIdle = status === "idle" || status === "ended";
@@ -1492,6 +1665,13 @@ export function useLiveSessionController() {
   const effectiveStartSessionUiState: StartSessionUiState = isSessionStarting
     ? startSessionUiState
     : "idle";
+  const shouldShowSessionTimeoutCountdown =
+    status === "active" &&
+    !isPaidSubscriber &&
+    remainingSecondsUntilTimeout != null &&
+    remainingSecondsUntilTimeout > 0 &&
+    remainingSecondsUntilTimeout <= SESSION_TIMEOUT_WARNING_SECONDS &&
+    !isResolvingSessionTimeout;
 
   return {
     scenePreset,
@@ -1507,6 +1687,8 @@ export function useLiveSessionController() {
     copilotEnabled,
     copilotToastState,
     duration,
+    remainingSessionSeconds: remainingSecondsUntilTimeout,
+    shouldShowSessionTimeoutCountdown,
     showCalibration,
     assistState,
     assistPreviewText,

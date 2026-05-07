@@ -5,8 +5,13 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import {
   DEFAULT_LEARNING_LANGUAGE,
   DEFAULT_UI_LOCALE,
+  getFallbackLearningLanguage,
+  getFallbackUiLocale,
+  languageTagsMatch,
   type LearningLanguage,
   type UiLocale,
+  normalizeLearningLanguage,
+  normalizeUiLocale,
 } from "@/shared/i18n/config";
 
 type LocaleState = {
@@ -31,19 +36,31 @@ export const useLocaleStore = create<LocaleState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
       setFollowSystemUiLocale: (value) => set({ followSystemUiLocale: value }),
       setUiLocale: (locale) =>
-        set({
+        set((state) => ({
           uiLocale: locale,
           followSystemUiLocale: false,
-        }),
+          learningLanguage: languageTagsMatch(locale, state.learningLanguage)
+            ? getFallbackLearningLanguage(locale)
+            : state.learningLanguage,
+        })),
       setSystemUiLocale: (locale) =>
-        set({
+        set((state) => ({
           uiLocale: locale,
-        }),
-      setLearningLanguage: (language) => set({ learningLanguage: language }),
+          learningLanguage: languageTagsMatch(locale, state.learningLanguage)
+            ? getFallbackLearningLanguage(locale)
+            : state.learningLanguage,
+        })),
+      setLearningLanguage: (language) =>
+        set((state) => ({
+          learningLanguage: language,
+          uiLocale: languageTagsMatch(language, state.uiLocale)
+            ? getFallbackUiLocale(language)
+            : state.uiLocale,
+        })),
     }),
     {
       name: "talkpilot-locale-settings",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         followSystemUiLocale: state.followSystemUiLocale,
@@ -57,14 +74,23 @@ export const useLocaleStore = create<LocaleState>()(
           learningLanguage?: LearningLanguage;
           targetLanguage?: LearningLanguage;
         };
+        const rawUiLocale = normalizeUiLocale(state.uiLocale);
+        const rawLearningLanguage = normalizeLearningLanguage(
+          state.learningLanguage ??
+            state.targetLanguage ??
+            DEFAULT_LEARNING_LANGUAGE,
+        );
+        const learningLanguage = languageTagsMatch(rawUiLocale, rawLearningLanguage)
+          ? getFallbackLearningLanguage(rawUiLocale)
+          : rawLearningLanguage;
+        const uiLocale = languageTagsMatch(rawUiLocale, learningLanguage)
+          ? getFallbackUiLocale(learningLanguage)
+          : rawUiLocale;
 
         return {
           ...state,
-          learningLanguage:
-            state.learningLanguage ??
-            state.targetLanguage ??
-            DEFAULT_LEARNING_LANGUAGE,
-          uiLocale: state.uiLocale ?? DEFAULT_UI_LOCALE,
+          learningLanguage,
+          uiLocale,
           followSystemUiLocale: state.followSystemUiLocale ?? true,
           hasHydrated: false,
           setHasHydrated: undefined,

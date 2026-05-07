@@ -49,6 +49,8 @@ type PressAndSlideButtonProps = {
   slideThresholdLeft?: number;
   slideThresholdRight?: number;
   buttonStyle?: StyleProp<ViewStyle>;
+  activeButtonStyle?: StyleProp<ViewStyle>;
+  activeContainerStyle?: StyleProp<ViewStyle>;
   labelStyle?: StyleProp<TextStyle>;
   neutralHint?: string;
   showHoldRipple?: boolean;
@@ -74,6 +76,8 @@ export function PressAndSlideButton({
   slideThresholdLeft = -60,
   slideThresholdRight = 60,
   buttonStyle,
+  activeButtonStyle,
+  activeContainerStyle,
   labelStyle,
   neutralHint,
   showHoldRipple = false,
@@ -100,11 +104,11 @@ export function PressAndSlideButton({
   }, [activeColor, defaultColor, isActive]);
 
   const handleRelease = (finalAction: "neutral" | "cancel" | "speak") => {
-    if (finalAction === "cancel") {
+    if (finalAction === "cancel" || finalAction === "neutral") {
       onPressOut("cancel");
       return;
     }
-    onPressOut(finalAction === "speak" ? "speak" : "send");
+    onPressOut("speak");
   };
 
   const panGesture = Gesture.Pan()
@@ -227,7 +231,13 @@ export function PressAndSlideButton({
   }));
 
   return (
-    <View style={[styles.container, overlayVisible && styles.containerActive]}>
+    <View
+      style={[
+        styles.container,
+        isActive ? activeContainerStyle : null,
+        overlayVisible && styles.containerActive,
+      ]}
+    >
       <Modal
         visible={overlayVisible}
         transparent
@@ -414,7 +424,14 @@ export function PressAndSlideButton({
       </Modal>
 
       <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.button, animatedButtonStyle, buttonStyle]}>
+        <Animated.View
+          style={[
+            styles.button,
+            animatedButtonStyle,
+            buttonStyle,
+            isActive ? activeButtonStyle : null,
+          ]}
+        >
           {showHoldRipple ? (
             <>
               <Animated.View

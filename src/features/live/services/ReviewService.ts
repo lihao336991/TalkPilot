@@ -54,6 +54,7 @@ export class ReviewService {
       analytics.capture('llm_review_requested', {
         scene: scene || null,
         learning_language: learningLanguage,
+        native_language: uiLocale,
         ui_locale: uiLocale,
       });
       const { data: rawResult, headers } = await invokeEdgeFunction<ReviewApiResponse>({
