@@ -9,28 +9,6 @@ PODS:
     - GoogleUtilities/Environment (~> 8.0)
     - GoogleUtilities/UserDefaults (~> 8.0)
     - PromisesObjC (~> 2.4)
-  - AsyncStorage (3.0.2):
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
   - EASClient (1.0.8):
     - ExpoModulesCore
   - EXAV (16.0.8):
@@ -245,7 +223,7 @@ PODS:
     - ExpoModulesCore
   - ExpoAsset (12.0.13):
     - ExpoModulesCore
-  - ExpoBlur (55.0.14):
+  - ExpoBlur (15.0.8):
     - ExpoModulesCore
   - ExpoFileSystem (19.0.22):
     - ExpoModulesCore
@@ -258,7 +236,7 @@ PODS:
     - RNScreens
   - ExpoKeepAwake (15.0.8):
     - ExpoModulesCore
-  - ExpoLinearGradient (55.0.13):
+  - ExpoLinearGradient (15.0.8):
     - ExpoModulesCore
   - ExpoLinking (8.0.12):
     - ExpoModulesCore
@@ -289,11 +267,11 @@ PODS:
     - Yoga
   - ExpoSecureStore (15.0.8):
     - ExpoModulesCore
-  - ExpoSpeech (13.0.1):
+  - ExpoSpeech (14.0.8):
     - ExpoModulesCore
   - ExpoSplashScreen (31.0.13):
     - ExpoModulesCore
-  - ExpoSQLite (55.0.15):
+  - ExpoSQLite (16.0.10):
     - ExpoModulesCore
   - ExpoWebBrowser (15.0.11):
     - ExpoModulesCore
@@ -1779,7 +1757,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-skia (2.6.2):
+  - react-native-skia (2.2.12):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2156,7 +2134,29 @@ PODS:
   - RevenueCat (5.67.1)
   - RevenueCatUI (5.67.1):
     - RevenueCat (= 5.67.1)
-  - RNGestureHandler (2.31.2):
+  - RNCAsyncStorage (2.2.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - RNGestureHandler (2.28.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2474,7 +2474,6 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
-  - "AsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - EASClient (from `../node_modules/expo-eas-client/ios`)
   - EXAV (from `../node_modules/expo-av/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
@@ -2578,6 +2577,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
+  - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNLiveAudioStream (from `../node_modules/react-native-live-audio-stream`)
@@ -2609,8 +2609,6 @@ SPEC REPOS:
     - Sentry
 
 EXTERNAL SOURCES:
-  AsyncStorage:
-    :path: "../node_modules/@react-native-async-storage/async-storage"
   EASClient:
     :path: "../node_modules/expo-eas-client/ios"
   EXAV:
@@ -2816,6 +2814,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNCAsyncStorage:
+    :path: "../node_modules/@react-native-async-storage/async-storage"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
   RNGoogleSignin:
@@ -2842,7 +2842,6 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
-  AsyncStorage: 2e1d431842588f5af845737e6435c1fcbecdab51
   EASClient: 40dd9e740684782610c49becab2643782ea1a20c
   EXAV: b60fcf142fae6684d295bc28cd7cfcb3335570ea
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
@@ -2856,20 +2855,20 @@ SPEC CHECKSUMS:
   ExpoAdapterGoogleSignIn: ab4d9fc38cb91077a4138d178395525ec65d0c2e
   ExpoAppleAuthentication: 9413ae9a5e631a424cc04c1b13b0694dbab7d594
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
-  ExpoBlur: 7a86e84e7728108fa6908d7103fa527705a3dbbf
+  ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoFileSystem: ad991457efaa14253723f1dda997eac6024c700d
   ExpoFont: f543ce20a228dd702813668b1a07b46f51878d47
   ExpoHaptics: d3a6375d8dcc3a1083d003bc2298ff654fafb536
   ExpoHead: 7e19b2272edf492262acf8afb391a295198a6b23
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
-  ExpoLinearGradient: c654e92d726a6d64c588a0988bb22bea331d5e79
+  ExpoLinearGradient: 809102bdb979f590083af49f7fa4805cd931bd58
   ExpoLinking: 2ef632ad5013e3f1568fae9408d56ab9af5efc55
   ExpoLocalization: d9168d5300a5b03e5e78b986124d11fb6ec3ebbd
   ExpoModulesCore: 9e6a5514828e7dd5ded9e99d33557be2d284e660
   ExpoSecureStore: d32f751874a2ceb5aaeebeb3578e165c1ba2b24a
-  ExpoSpeech: 8f74347608243ee8fdc2faa14e7d2cd5503f33f8
+  ExpoSpeech: d22b56570ccfab5a27112dc9691f1ac83537de26
   ExpoSplashScreen: bc3cffefca2716e5f22350ca109badd7e50ec14d
-  ExpoSQLite: f63db535d24c59722971241ea9ade2a878dfabea
+  ExpoSQLite: 7eedbe476870a5f18d6b89c817c4ac6f299830ad
   ExpoWebBrowser: 970dd4c64c29c955c3af664c8058ba768a4c9187
   EXStructuredHeaders: c951e77f2d936f88637421e9588c976da5827368
   EXUpdates: 0de6a4c54030b7070da16126cc481912004ec705
@@ -2923,7 +2922,7 @@ SPEC CHECKSUMS:
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
   react-native-background-downloader: 4dbba24f7cc023edcd7503881fd091ec4fd9016a
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
-  react-native-skia: e8b9354dc16c4099537ba0659cd70ea4adf8efc4
+  react-native-skia: 05327e7acee05e7c27b68a5da0bc80d65f5d790c
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c
   React-perflogger: 02b010e665772c7dcb859d85d44c1bfc5ac7c0e4
@@ -2957,7 +2956,8 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
   RevenueCat: 9357239a9f0978285e68983637b8a602e65c94f0
   RevenueCatUI: 6f9291da540f98baf405b5bdfc46b2d5547b704a
-  RNGestureHandler: 41c79ac93bfc34000872f08d2d480bb0fa685f02
+  RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
+  RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
   RNGoogleSignin: 104dd7238c56fe354e4b0a8fd267f866039ffdf3
   RNLiveAudioStream: 93ac2bb6065be9018d0b00157b220f11cebc1513
   RNPaywalls: 26e03d5c8ca04e9d89319eebbe8d26c14faa0a5e

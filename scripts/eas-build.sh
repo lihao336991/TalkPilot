@@ -9,8 +9,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 resolve_env_name() {
   case "$1" in
-    development|preview) echo "development" ;;
-    production) echo "production" ;;
+    development) echo "development" ;;
+    preview|production) echo "production" ;;
     *)
       echo "Error: invalid profile '$1'" >&2
       exit 1
