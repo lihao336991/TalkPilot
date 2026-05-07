@@ -19,6 +19,14 @@
         "APP_ENV": "production"
       }
     },
+    "preview-devtools": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "preview-devtools",
+      "env": {
+        "APP_ENV": "production"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production",

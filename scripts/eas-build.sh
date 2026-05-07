@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 resolve_env_name() {
   case "$1" in
     development) echo "development" ;;
-    preview|production) echo "production" ;;
+    preview|preview-devtools|production) echo "production" ;;
     *)
       echo "Error: invalid profile '$1'" >&2
       exit 1
@@ -21,17 +21,18 @@ resolve_env_name() {
 usage() {
   echo "Usage: $0 [profile] [platform]"
   echo
-  echo "profile: development | preview | production (default: development)"
+  echo "profile: development | preview | preview-devtools | production (default: development)"
   echo "platform: ios | android | all (default: ios)"
   echo
   echo "Examples:"
   echo "  $0"
   echo "  $0 preview ios"
+  echo "  $0 preview-devtools ios"
   echo "  $0 production all"
 }
 
 case "$PROFILE" in
-  development|preview|production) ;;
+  development|preview|preview-devtools|production) ;;
   -h|--help)
     usage
     exit 0

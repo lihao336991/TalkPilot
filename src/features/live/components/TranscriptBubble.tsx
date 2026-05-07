@@ -101,6 +101,7 @@ export function TranscriptBubble({
           }
         }}
         disabled={!hasVisibleReviewIndicator}
+        style={styles.bubblePressable}
       >
         <Animated.View
           style={[
@@ -210,11 +211,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   bubble: {
-    maxWidth: "80%",
+    maxWidth: "100%",
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
     overflow: "hidden",
+  },
+  bubblePressable: {
+    maxWidth: "80%",
   },
   bubbleSelf: {
     backgroundColor: "#F2F2F7",
@@ -264,7 +268,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   translationTextWrap: {
-    flex: 1,
     minWidth: 88,
     flexShrink: 1,
   },

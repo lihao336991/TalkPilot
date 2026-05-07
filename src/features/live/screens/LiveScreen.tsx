@@ -729,13 +729,15 @@ export default function LiveScreen() {
             onSendSuggestion={handleSendSuggestion}
             isSendingSuggestion={isSendingSuggestion}
           />
-          <FloatingSimulateButton
-            onRecordStart={handleSimulateOtherPressIn}
-            onRecordEnd={handleSimulateOtherPressOut}
-            isRecording={forcedSpeaker === "other"}
-            initialBottom={getTabBarHeight(insets.bottom) + 140}
-            initialRight={20}
-          />
+          {__DEV__ ? (
+            <FloatingSimulateButton
+              onRecordStart={handleSimulateOtherPressIn}
+              onRecordEnd={handleSimulateOtherPressOut}
+              isRecording={forcedSpeaker === "other"}
+              initialBottom={getTabBarHeight(insets.bottom) + 140}
+              initialRight={20}
+            />
+          ) : null}
           <ConversationToolbar
             copilotEnabled={copilotEnabled}
             onToggleCopilot={handleToggleCopilot}
