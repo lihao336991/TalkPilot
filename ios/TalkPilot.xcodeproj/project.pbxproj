@@ -118,7 +118,7 @@
 				F11748442D0722820044C1D9 /* TalkPilot-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
-				9389D62A39E2411097DF2306 /* TalkPilot/Models */,
+				9389D62A39E2411097DF2306 /* Models */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				51E22F6F608249ABA353285B /* VoiceChatModuleBridge.m */,
@@ -183,7 +183,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9389D62A39E2411097DF2306 /* TalkPilot/Models */ = {
+		9389D62A39E2411097DF2306 /* Models */ = {
 			isa = PBXGroup;
 			children = (
 				292331E6350B4450A44AB09E /* TitaNetSmall.mlmodelc */,

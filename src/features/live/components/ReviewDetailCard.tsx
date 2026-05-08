@@ -77,7 +77,7 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
                   <View style={styles.correctionRow}>
                     <Text style={styles.corrected}>{issue.corrected}</Text>
                   </View>
-                  <Text style={styles.explanation} numberOfLines={2}>{issue.explanation}</Text>
+                  <Text style={styles.explanation}>{issue.explanation}</Text>
                 </View>
               ))}
             </View>
@@ -94,7 +94,7 @@ export default function ReviewDetailCard({ review, onClose }: Props) {
             </View>
           )}
 
-          {review.praise !== null && review.issues.length === 0 && (
+          {review.praise !== null && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('live.reviewDetail.goodPart')}</Text>
               <Text style={styles.praiseText}>{review.praise}</Text>

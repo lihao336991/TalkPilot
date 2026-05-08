@@ -13,7 +13,7 @@
     "ios": "bash scripts/run-with-env.sh development expo run:ios",
     "ios:dev": "bash scripts/run-with-env.sh development expo run:ios",
     "ios:prod": "bash scripts/run-with-env.sh production expo run:ios",
-    "pods:ios": "cd ios && pod install",
+    "pods:ios": "cd ios && LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 pod install",
     "web": "bash scripts/run-with-env.sh development expo start --web",
     "web:dev": "bash scripts/run-with-env.sh development expo start --web",
     "web:prod": "bash scripts/run-with-env.sh production expo start --web",
