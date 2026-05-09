@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/shared/components';
 import { AudioEngine, audioEngine } from '@/features/live/services/AudioEngine';
 import { voiceEnrollmentService } from '@/features/live/services/VoiceEnrollmentService';
 import { voiceprintService, type VoiceprintDecision } from '@/features/live/services/VoiceprintService';
@@ -153,6 +153,7 @@ function getDecisionTone(label: VoiceprintDecisionLabel | null) {
 
 export default function VoiceprintDebugScreen() {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const voiceprintEnabled = useConversationStore((state) => state.voiceprintEnabled);
   const voiceprintEnrollmentReady = useConversationStore(
     (state) => state.voiceprintEnrollmentReady,
@@ -248,27 +249,27 @@ export default function VoiceprintDebugScreen() {
 
     const latestStoreState = useConversationStore.getState();
     if (!latestStoreState.voiceprintEnabled) {
-      Alert.alert(
-        t('dev.voiceprintDebug.alerts.unavailableTitle'),
-        t('dev.voiceprintDebug.alerts.unavailableBody'),
-      );
+      showAlert({
+        title: t('dev.voiceprintDebug.alerts.unavailableTitle'),
+        message: t('dev.voiceprintDebug.alerts.unavailableBody'),
+      });
       return;
     }
 
     if (!latestStoreState.voiceprintEnrollmentReady) {
-      Alert.alert(
-        t('dev.voiceprintDebug.alerts.enrollmentMissingTitle'),
-        t('dev.voiceprintDebug.alerts.enrollmentMissingBody'),
-      );
+      showAlert({
+        title: t('dev.voiceprintDebug.alerts.enrollmentMissingTitle'),
+        message: t('dev.voiceprintDebug.alerts.enrollmentMissingBody'),
+      });
       return;
     }
 
     const granted = await AudioEngine.requestPermission();
     if (!granted) {
-      Alert.alert(
-        t('dev.voiceprintDebug.alerts.permissionDeniedTitle'),
-        t('dev.voiceprintDebug.alerts.permissionDeniedBody'),
-      );
+      showAlert({
+        title: t('dev.voiceprintDebug.alerts.permissionDeniedTitle'),
+        message: t('dev.voiceprintDebug.alerts.permissionDeniedBody'),
+      });
       return;
     }
 
@@ -321,10 +322,13 @@ export default function VoiceprintDebugScreen() {
       try {
         await audioEngine.stop();
       } catch {}
-      Alert.alert(
-        t('dev.voiceprintDebug.alerts.startFailedTitle'),
-        error instanceof Error ? error.message : t('dev.voiceprintDebug.alerts.startFailedBody'),
-      );
+      showAlert({
+        title: t('dev.voiceprintDebug.alerts.startFailedTitle'),
+        message:
+          error instanceof Error
+            ? error.message
+            : t('dev.voiceprintDebug.alerts.startFailedBody'),
+      });
     }
   }, [clearSnapshotTimer, isRecording, startRecording, stopRecording, t]);
 

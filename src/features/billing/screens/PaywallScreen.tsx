@@ -1,3 +1,4 @@
+import { useAlert } from "@/shared/components";
 import { refreshProfileFromSession } from "@/shared/api/supabase";
 import { useAuthStore } from "@/shared/store/authStore";
 import { Feather } from "@expo/vector-icons";
@@ -13,7 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
     ActivityIndicator,
-    Alert,
     Platform,
     Pressable,
     ScrollView,
@@ -191,6 +191,7 @@ export default function PaywallScreen() {
   const params = useLocalSearchParams<{ source?: string }>();
   const insets = useSafeAreaInsets();
   const { i18n, t } = useTranslation();
+  const { showAlert } = useAlert();
   const authMode = useAuthStore((state) => state.authMode);
   const userId = useAuthStore((state) => state.userId);
   const subscriptionSyncState = useAuthStore(
@@ -376,29 +377,38 @@ export default function PaywallScreen() {
       setStatusMessage(message);
 
       if (restoreResult.summary.unlocked) {
-        Alert.alert(t("billing.paywall.restoreCompleteTitle"), message, [
-          {
-            text: isLiveSessionTimeoutFlow
-              ? t("common.actions.continue")
-              : t("common.actions.goToProfile"),
-            onPress: goToProfile,
-          },
-          {
-            text: t("common.actions.stayHere"),
-            style: "cancel",
-          },
-        ]);
+        showAlert({
+          title: t("billing.paywall.restoreCompleteTitle"),
+          message,
+          buttons: [
+            {
+              text: isLiveSessionTimeoutFlow
+                ? t("common.actions.continue")
+                : t("common.actions.goToProfile"),
+              variant: "primary",
+              onPress: goToProfile,
+            },
+            {
+              text: t("common.actions.stayHere"),
+              variant: "cancel",
+            },
+          ],
+        });
         return;
       }
 
-      Alert.alert(t("billing.paywall.restoreMissingTitle"), message);
+      showAlert({
+        title: t("billing.paywall.restoreMissingTitle"),
+        message,
+      });
     } catch (error) {
-      Alert.alert(
-        t("billing.paywall.restoreFailedTitle"),
-        error instanceof Error
-          ? error.message
-          : t("billing.paywall.restoreFailedFallback"),
-      );
+      showAlert({
+        title: t("billing.paywall.restoreFailedTitle"),
+        message:
+          error instanceof Error
+            ? error.message
+            : t("billing.paywall.restoreFailedFallback"),
+      });
       setStatusMessage(null);
     } finally {
       setIsRestoring(false);
@@ -410,18 +420,26 @@ export default function PaywallScreen() {
     setStatusMessage(message);
 
     if (summary.unlocked) {
-      Alert.alert(t("billing.paywall.purchaseCompleteTitle"), message, [
-        {
-          text: isLiveSessionTimeoutFlow
-            ? t("common.actions.continue")
-            : t("common.actions.goToProfile"),
-          onPress: goToProfile,
-        },
-      ]);
+      showAlert({
+        title: t("billing.paywall.purchaseCompleteTitle"),
+        message,
+        buttons: [
+          {
+            text: isLiveSessionTimeoutFlow
+              ? t("common.actions.continue")
+              : t("common.actions.goToProfile"),
+            variant: "primary",
+            onPress: goToProfile,
+          },
+        ],
+      });
       return;
     }
 
-    Alert.alert(t("billing.paywall.purchaseReceivedTitle"), message);
+    showAlert({
+      title: t("billing.paywall.purchaseReceivedTitle"),
+      message,
+    });
   }
 
   function getPackageTitle(pkg: PurchasesPackage) {
@@ -480,12 +498,13 @@ export default function PaywallScreen() {
       }
 
       setStatusMessage(null);
-      Alert.alert(
-        t("billing.paywall.purchaseFailedTitle"),
-        error instanceof Error
-          ? error.message
-          : t("billing.paywall.purchaseFailedFallback"),
-      );
+      showAlert({
+        title: t("billing.paywall.purchaseFailedTitle"),
+        message:
+          error instanceof Error
+            ? error.message
+            : t("billing.paywall.purchaseFailedFallback"),
+      });
     } finally {
       setIsPurchasing(false);
     }

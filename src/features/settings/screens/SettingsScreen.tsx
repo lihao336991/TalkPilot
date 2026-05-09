@@ -10,6 +10,7 @@ import {
   languageTagsMatch,
   useAppLanguage,
 } from "@/shared/i18n";
+import { useAlert } from "@/shared/components";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
 import { useOnboardingState } from "@/features/onboarding/hooks/useOnboardingState";
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
@@ -18,7 +19,6 @@ import { useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -114,6 +114,7 @@ function NavigationRow({
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const {
     t,
     uiLocale,
@@ -183,10 +184,10 @@ export default function SettingsScreen() {
       await stopEnrollmentPlayback();
       const playbackUri = await voiceEnrollmentService.preparePlaybackUri();
       if (!playbackUri) {
-        Alert.alert(
-          t("settings.voiceEnrollment.unavailableTitle"),
-          t("settings.voiceEnrollment.unavailableBody"),
-        );
+        showAlert({
+          title: t("settings.voiceEnrollment.unavailableTitle"),
+          message: t("settings.voiceEnrollment.unavailableBody"),
+        });
         return;
       }
 
@@ -206,10 +207,10 @@ export default function SettingsScreen() {
       });
     } catch (error) {
       console.error("[Settings] Failed to play enrollment sample:", error);
-      Alert.alert(
-        t("settings.voiceEnrollment.playbackErrorTitle"),
-        t("settings.voiceEnrollment.playbackErrorBody"),
-      );
+      showAlert({
+        title: t("settings.voiceEnrollment.playbackErrorTitle"),
+        message: t("settings.voiceEnrollment.playbackErrorBody"),
+      });
     } finally {
       setIsEnrollmentBusy(false);
     }
@@ -225,17 +226,17 @@ export default function SettingsScreen() {
       return;
     }
 
-    Alert.alert(
-      t("settings.voiceEnrollment.resetConfirmTitle"),
-      t("settings.voiceEnrollment.resetConfirmBody"),
-      [
+    showAlert({
+      title: t("settings.voiceEnrollment.resetConfirmTitle"),
+      message: t("settings.voiceEnrollment.resetConfirmBody"),
+      buttons: [
         {
           text: t("common.actions.cancel"),
-          style: "cancel",
+          variant: "cancel",
         },
         {
           text: t("settings.voiceEnrollment.resetAction"),
-          style: "destructive",
+          variant: "destructive",
           onPress: () => {
             void (async () => {
               setIsEnrollmentBusy(true);
@@ -250,7 +251,7 @@ export default function SettingsScreen() {
           },
         },
       ],
-    );
+    });
   }, [isEnrollmentBusy, stopEnrollmentPlayback, t]);
 
   return (

@@ -16,6 +16,7 @@ import "../global.css";
 
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { FeedbackModal } from "@/features/feedback/components/FeedbackModal";
+import { AlertProvider } from "@/shared/components";
 import { sessionManager } from "@/features/live/services/SessionManager";
 import { analytics } from "@/shared/analytics/analytics";
 import { initAuth } from "@/shared/api/supabase";
@@ -210,7 +211,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <>
+      <AlertProvider>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
@@ -295,7 +296,7 @@ function RootLayoutNav() {
           ) : null}
         </Stack>
         <FeedbackModal />
-      </>
+      </AlertProvider>
     </ThemeProvider>
   );
 }

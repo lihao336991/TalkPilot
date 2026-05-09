@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from "@/shared/components";
 import { Sentry } from '@/shared/monitoring/sentry';
 import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
@@ -16,6 +17,7 @@ const checks = [
 export default function TestScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const [status, setStatus] = useState<string | null>(null);
 
   const sendTestMessage = async () => {
@@ -23,7 +25,7 @@ export default function TestScreen() {
     await Sentry.flush();
 
     setStatus(`Message sent: ${eventId}`);
-    Alert.alert('Sentry test sent', `Message event id:\n${eventId}`);
+    showAlert({ title: 'Sentry test sent', message: `Message event id:\n${eventId}` });
   };
 
   const sendTestException = async () => {
@@ -37,7 +39,7 @@ export default function TestScreen() {
     await Sentry.flush();
 
     setStatus(`Exception sent: ${eventId}`);
-    Alert.alert('Sentry test sent', `Exception event id:\n${eventId}`);
+    showAlert({ title: 'Sentry test sent', message: `Exception event id:\n${eventId}` });
   };
 
   return (

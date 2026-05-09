@@ -1,3 +1,4 @@
+import { useAlert } from "@/shared/components";
 import { deepgramTokenService } from "@/features/live/services/DeepgramTokenService";
 import { DEBUG_LLM_MODEL_OPTIONS } from "@/shared/llm/debugConfig";
 import { getDeepgramLanguageForTag } from "@/shared/locale/deviceLanguage";
@@ -7,7 +8,6 @@ import { useLocaleStore } from "@/shared/store/localeStore";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   PanResponder,
   Pressable,
   ScrollView,
@@ -276,6 +276,7 @@ type DebugOverlayProps = {
 
 function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
   const steps = useDebugStore((s) => s.steps);
   const turnTraces = useDebugStore((s) => s.turnTraces);
   const uiLocale = useLocaleStore((s) => s.uiLocale);
@@ -443,17 +444,18 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
     try {
       deepgramTokenService.invalidate();
       await resetFreeAccessDebug();
-      Alert.alert(
-        t("settings.debug.resetFreeAccessAction"),
-        t("settings.debug.resetFreeAccessSuccess"),
-      );
+      showAlert({
+        title: t("settings.debug.resetFreeAccessAction"),
+        message: t("settings.debug.resetFreeAccessSuccess"),
+      });
     } catch (error) {
-      Alert.alert(
-        t("settings.debug.resetFreeAccessAction"),
-        error instanceof Error
-          ? error.message
-          : t("settings.debug.resetFreeAccessFailure"),
-      );
+      showAlert({
+        title: t("settings.debug.resetFreeAccessAction"),
+        message:
+          error instanceof Error
+            ? error.message
+            : t("settings.debug.resetFreeAccessFailure"),
+      });
     } finally {
       setIsResettingFreeAccess(false);
     }

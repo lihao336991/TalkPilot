@@ -1,3 +1,4 @@
+import { useAlert } from "@/shared/components";
 import { revenueCatService } from "@/features/billing/services/RevenueCatService";
 import { useFeedbackStore } from "@/features/feedback/feedbackStore";
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
@@ -23,7 +24,6 @@ import { type Href, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
     Animated,
     Easing,
     Pressable,
@@ -89,6 +89,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = getTabBarHeight(insets.bottom);
   const { i18n, t } = useTranslation();
+  const { showAlert } = useAlert();
 
   const authMode = useAuthStore((s) => s.authMode);
   const displayName = useAuthStore((s) => s.displayName);
@@ -159,18 +160,18 @@ export default function ProfileScreen() {
 
   function handleSignOut() {
     if (!isAuthenticated || isSigningOut) return;
-    Alert.alert(
-      t("profile.signOutConfirmTitle"),
-      t("profile.signOutConfirmMessage"),
-      [
-        { text: t("common.actions.cancel"), style: "cancel" },
+    showAlert({
+      title: t("profile.signOutConfirmTitle"),
+      message: t("profile.signOutConfirmMessage"),
+      buttons: [
+        { text: t("common.actions.cancel"), variant: "cancel" },
         {
           text: t("common.actions.logOut"),
-          style: "destructive",
+          variant: "destructive",
           onPress: () => void performSignOut(),
         },
       ],
-    );
+    });
   }
 
   function handleHeaderAction() {

@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState, type AppStateStatus } from "react-native";
+import { AppState, type AppStateStatus } from "react-native";
 
 import { maybeOpenLiveSessionFeedback } from "@/features/feedback/feedbackPromptService";
 import { historyService } from "@/features/history/services/historyService";
@@ -26,6 +26,7 @@ import { useDebugStore } from "@/features/live/store/debugStore";
 import { useReviewStore } from "@/features/live/store/reviewStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
 import { useSuggestionStore } from "@/features/live/store/suggestionStore";
+import { useAlert } from "@/shared/components";
 import { analytics } from "@/shared/analytics/analytics";
 import {
   isFeatureAccessError,
@@ -99,6 +100,7 @@ export function useLiveSessionController() {
   const router = useRouter();
   const isFocused = useIsFocused();
   const { t } = useTranslation();
+  const { showAlert } = useAlert();
 
   const status = useSessionStore((s) => s.status);
   const scenePreset = useSessionStore((s) => s.scenePreset);
@@ -994,13 +996,14 @@ export function useLiveSessionController() {
   const handleStartSession = useCallback(async () => {
     if (isDailyLimitReached) {
       analytics.capture("live_start_blocked", { reason: "daily_limit" });
-      Alert.alert(
-        "今日免费额度已用完",
-        "升级到 Pro 后，每天可使用 120 分钟实时对话。",
-        [
-          { text: "稍后再说", style: "cancel" },
+      showAlert({
+        title: "今日免费额度已用完",
+        message: "升级到 Pro 后，每天可使用 120 分钟实时对话。",
+        buttons: [
+          { text: "稍后再说", variant: "cancel" },
           {
             text: "查看方案",
+            variant: "primary",
             onPress: () => {
               analytics.capture("live_start_blocked_opened_paywall", {
                 reason: "daily_limit",
@@ -1009,7 +1012,7 @@ export function useLiveSessionController() {
             },
           },
         ],
-      );
+      });
       return;
     }
 
@@ -1255,12 +1258,13 @@ export function useLiveSessionController() {
           useConversationStore.getState().removeTurn(turnId);
         }
         console.error("[Suggestion] Failed to send and play suggestion:", error);
-        Alert.alert(
-          t("live.alerts.sendSuggestionFailedTitle"),
-          error instanceof Error
-            ? error.message
-            : t("live.alerts.sendSuggestionFailedBody"),
-        );
+        showAlert({
+          title: t("live.alerts.sendSuggestionFailedTitle"),
+          message:
+            error instanceof Error
+              ? error.message
+              : t("live.alerts.sendSuggestionFailedBody"),
+        });
       } finally {
         try {
           await restoreMainConversationCapture();
@@ -1302,10 +1306,10 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert(
-          t("live.alerts.noSpeechTitle"),
-          t("live.alerts.noSpeechBody"),
-        );
+        showAlert({
+          title: t("live.alerts.noSpeechTitle"),
+          message: t("live.alerts.noSpeechBody"),
+        });
         return;
       }
 
@@ -1360,12 +1364,13 @@ export function useLiveSessionController() {
           debug.failStep("assist-tts", "Skipped due to error");
         }
         console.error("[NativeAssist] Failed to translate/play:", error);
-        Alert.alert(
-          t("live.alerts.translateFailedTitle"),
-          error instanceof Error
-            ? error.message
-            : t("live.alerts.translateFailedBody"),
-        );
+        showAlert({
+          title: t("live.alerts.translateFailedTitle"),
+          message:
+            error instanceof Error
+              ? error.message
+              : t("live.alerts.translateFailedBody"),
+        });
       } finally {
         setAssistState("idle");
         setAssistPreviewText("");
@@ -1509,10 +1514,10 @@ export function useLiveSessionController() {
             restoreError,
           );
         }
-        Alert.alert(
-          t("live.alerts.noSpeechTitle"),
-          t("live.alerts.noSpeechBody"),
-        );
+        showAlert({
+          title: t("live.alerts.noSpeechTitle"),
+          message: t("live.alerts.noSpeechBody"),
+        });
         return;
       }
 
