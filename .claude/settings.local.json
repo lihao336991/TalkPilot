@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(md5 *)",
+      "Bash(xcodebuild -project Pods/Pods.xcodeproj -list)",
+      "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme ExpoSQLite -sdk iphonesimulator -configuration Debug -showBuildSettings)",
+      "Bash(xargs cat)",
+      "Bash(xcodebuild -project /Users/bytedance/Desktop/money/TalkPilot/ios/Pods/Pods.xcodeproj -target ExpoSQLite -showBuildSettings)",
+      "Bash(ruby -e ' *)",
+      "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme TalkPilot -sdk iphonesimulator -configuration Debug build)",
+      "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme ExpoSQLite -sdk iphoneos -configuration Debug -showBuildSettings)",
+      "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme ExpoSQLite -sdk iphoneos -configuration Debug build)"
     ]
   }
 }
