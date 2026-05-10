@@ -167,7 +167,9 @@ function RootLayoutNav() {
     }
 
     const track = () => {
-      const route = navigationRef.getCurrentRoute?.();
+      const route = navigationRef.getCurrentRoute?.() as
+        | { name?: string }
+        | undefined;
       if (!route?.name) {
         return;
       }

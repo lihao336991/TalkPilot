@@ -10,7 +10,11 @@ import {
 import { supabaseStorage } from '@/shared/auth/supabaseStorage';
 import { createClient, type Session } from '@supabase/supabase-js';
 import { AppState, type AppStateStatus } from 'react-native';
-import { syncSubscriptionTierToUsageLimit } from '../repositories/billingRepository';
+import {
+    refreshLiveMinutesAccess,
+    resetLiveAccessState,
+    syncSubscriptionTierToUsageLimit,
+} from '../repositories/billingRepository';
 import {
     type AuthMode,
     type AuthProviderName,
@@ -135,6 +139,13 @@ async function syncProfile(session: Session) {
     revenuecatAppUserId: refreshedProfile?.revenuecat_app_user_id ?? null,
   });
   syncSubscriptionTierToUsageLimit(subscriptionTier);
+
+  try {
+    await refreshLiveMinutesAccess(session.user.id);
+  } catch (error) {
+    console.warn('[Billing] Failed to refresh live minutes access:', error);
+  }
+
   logBillingEvent('profile_sync_completed', {
     userId: session.user.id,
     ...getBillingStateSnapshot(useAuthStore.getState()),
@@ -174,8 +185,14 @@ async function applySession(session: Session | null) {
   const { setSession, signOut } = useAuthStore.getState();
 
   if (!session) {
+    resetLiveAccessState();
     signOut();
     return;
+  }
+
+  const previousUserId = useAuthStore.getState().userId;
+  if (previousUserId !== session.user.id) {
+    resetLiveAccessState();
   }
 
   setSession({

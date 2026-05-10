@@ -8,18 +8,26 @@ import { invokeEdgeFunction } from '@/shared/api/request';
 import { getValidAccessToken } from '@/shared/api/supabase';
 import { applyFeatureAccessSummary } from '@/shared/repositories/billingRepository';
 import { getOrCreateInstallId } from '@/shared/device/installId';
+import { useAuthStore } from '@/shared/store/authStore';
 
 class DeepgramTokenService {
   private cachedToken: string | null = null;
+  private cachedUserId: string | null = null;
   private expiresAt = 0;
   private inflightTokenPromise: Promise<string> | null = null;
+  private inflightUserId: string | null = null;
 
   private hasValidCachedToken() {
     const now = Date.now();
-    return Boolean(this.cachedToken) && now < this.expiresAt - 60_000;
+    const currentUserId = useAuthStore.getState().userId;
+    return (
+      Boolean(this.cachedToken) &&
+      this.cachedUserId === currentUserId &&
+      now < this.expiresAt - 60_000
+    );
   }
 
-  private async fetchToken(): Promise<string> {
+  private async fetchToken(requestUserId: string | null): Promise<string> {
     const accessToken = await getValidAccessToken();
     const installId = await getOrCreateInstallId();
 
@@ -67,6 +75,7 @@ class DeepgramTokenService {
     }
 
     this.cachedToken = body.deepgram_token;
+    this.cachedUserId = requestUserId;
     this.expiresAt = Date.now() + (body.expires_in ?? 600) * 1000;
     console.log('[DeepgramToken] Token acquired, expires in', body.expires_in ?? 600, 's');
 
@@ -74,24 +83,36 @@ class DeepgramTokenService {
   }
 
   prewarm(): void {
-    if (this.hasValidCachedToken() || this.inflightTokenPromise) {
+    const currentUserId = useAuthStore.getState().userId;
+    if (
+      this.hasValidCachedToken() ||
+      (this.inflightTokenPromise && this.inflightUserId === currentUserId)
+    ) {
       return;
     }
 
-    this.inflightTokenPromise = this.fetchToken().finally(() => {
-      this.inflightTokenPromise = null;
+    this.inflightUserId = currentUserId;
+    this.inflightTokenPromise = this.fetchToken(currentUserId).finally(() => {
+      if (this.inflightUserId === currentUserId) {
+        this.inflightTokenPromise = null;
+        this.inflightUserId = null;
+      }
     });
   }
 
   async getToken(): Promise<string> {
-    const now = Date.now();
-    if (this.cachedToken && now < this.expiresAt - 60_000) {
-      return this.cachedToken;
+    const currentUserId = useAuthStore.getState().userId;
+    if (this.hasValidCachedToken()) {
+      return this.cachedToken!;
     }
 
-    if (!this.inflightTokenPromise) {
-      this.inflightTokenPromise = this.fetchToken().finally(() => {
-        this.inflightTokenPromise = null;
+    if (!this.inflightTokenPromise || this.inflightUserId !== currentUserId) {
+      this.inflightUserId = currentUserId;
+      this.inflightTokenPromise = this.fetchToken(currentUserId).finally(() => {
+        if (this.inflightUserId === currentUserId) {
+          this.inflightTokenPromise = null;
+          this.inflightUserId = null;
+        }
       });
     }
 
@@ -100,8 +121,10 @@ class DeepgramTokenService {
 
   invalidate(): void {
     this.cachedToken = null;
+    this.cachedUserId = null;
     this.expiresAt = 0;
     this.inflightTokenPromise = null;
+    this.inflightUserId = null;
   }
 }
 

@@ -47,6 +47,14 @@ export function syncSubscriptionTierToUsageLimit(tier: SubscriptionTier) {
     .setUsageLimit(getDailyMinutesLimitForTier(tier));
 }
 
+export function resetLiveAccessState(tier: SubscriptionTier = 'free') {
+  useAccessStore.getState().clear();
+  useSessionStore.getState().setUsageSummary({
+    minutesUsed: 0,
+    minutesLimit: getDailyMinutesLimitForTier(tier),
+  });
+}
+
 async function requireFeatureAccessSummary(
   rpcName: string,
   args: Record<string, unknown>,
@@ -68,6 +76,20 @@ async function requireFeatureAccessSummary(
 
   applyFeatureAccessSummary(summary);
   return summary;
+}
+
+export async function refreshLiveMinutesAccess(userId = useAuthStore.getState().userId) {
+  if (!userId) {
+    resetLiveAccessState();
+    return null;
+  }
+
+  const installId = await getOrCreateInstallId();
+  return requireFeatureAccessSummary(
+    'get_live_minutes_access',
+    { p_user_id: userId, p_install_id: installId },
+    'live_minutes',
+  );
 }
 
 export async function consumeLiveSessionAccess(args: {
