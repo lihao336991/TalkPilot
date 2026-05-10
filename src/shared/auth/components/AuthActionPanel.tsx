@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { signInWithApple, signInWithGoogle } from '@/shared/api/supabase';
+import { AuthFlowError } from '@/shared/auth/authErrors';
 import { palette, radii, spacing, typography } from '@/shared/theme/tokens';
 
 type AuthActionPanelProps = {
@@ -31,7 +31,11 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
       await onSuccess?.();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : t('auth.login.fallbackError'),
+        error instanceof AuthFlowError
+          ? t(`auth.login.errors.${error.code}`)
+          : error instanceof Error
+            ? error.message
+            : t('auth.login.fallbackError'),
       );
     } finally {
       setPendingProvider(null);
@@ -51,13 +55,23 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
 
   return (
     <View style={styles.container}>
-      <AppleAuthentication.AppleAuthenticationButton
-        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-        cornerRadius={16}
+      <Pressable
+        disabled={pendingProvider !== null}
         onPress={() => void handleSignIn('apple')}
-        style={styles.appleButton}
-      />
+        style={({ pressed }) => [
+          styles.appleButton,
+          pressed && pendingProvider === null ? styles.appleButtonPressed : null,
+          pendingProvider !== null ? styles.buttonDisabled : null,
+        ]}>
+        {pendingProvider === 'apple' ? (
+          <ActivityIndicator color={palette.textPrimary} />
+        ) : (
+          <View style={styles.authButtonContent}>
+            <FontAwesome name="apple" size={20} color={palette.textPrimary} />
+            <Text style={styles.appleButtonText}>{t('auth.login.appleButton')}</Text>
+          </View>
+        )}
+      </Pressable>
 
       <Pressable
         disabled={pendingProvider !== null}
@@ -70,19 +84,12 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
         {pendingProvider === 'google' ? (
           <ActivityIndicator color={palette.textOnAccent} />
         ) : (
-          <View style={styles.googleButtonContent}>
+          <View style={styles.authButtonContent}>
             <FontAwesome name="google" size={18} color={palette.textOnAccent} />
             <Text style={styles.googleButtonText}>{t('auth.login.googleButton')}</Text>
           </View>
         )}
       </Pressable>
-
-      {pendingProvider === 'apple' ? (
-        <View style={styles.inlineLoading}>
-          <ActivityIndicator color={palette.textPrimary} />
-          <Text style={styles.inlineLoadingText}>{t('auth.login.appleLoading')}</Text>
-        </View>
-      ) : null}
 
       <Text style={styles.legalHint}>
         {t('auth.login.legalHint')}
@@ -100,6 +107,22 @@ const styles = StyleSheet.create({
   appleButton: {
     width: '100%',
     height: 54,
+    minHeight: 54,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: palette.bgCardSolid,
+    borderWidth: 1,
+    borderColor: palette.neutralBorder,
+    zIndex: 1,
+  },
+  appleButtonPressed: {
+    opacity: 0.78,
+  },
+  appleButtonText: {
+    ...typography.bodyMd,
+    fontWeight: '700',
+    color: palette.textPrimary,
   },
   googleButton: {
     height: 54,
@@ -113,7 +136,7 @@ const styles = StyleSheet.create({
   googleButtonPressed: {
     opacity: 0.8,
   },
-  googleButtonContent: {
+  authButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -126,16 +149,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
-  },
-  inlineLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  inlineLoadingText: {
-    ...typography.bodySm,
-    color: palette.textSecondary,
   },
   legalHint: {
     marginTop: 2,

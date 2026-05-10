@@ -68,6 +68,32 @@ export const ko = createLocale({
       signingOut: "로그아웃 중...",
     },
   },
+  auth: {
+    login: {
+      closeAccessibilityLabel: "로그인 닫기",
+      title: "계정으로 계속하기",
+      subtitle:
+        "Apple 또는 Google로 로그인하여 이 기기에서 진행 상황을 동기화하세요.",
+      fallbackError: "로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+      appleButton: "Apple로 계속하기",
+      googleButton: "Google로 계속하기",
+      appleLoading: "Apple 로그인 완료 중...",
+      legalHint:
+        "계속하면 이 기기에서 Apple 또는 Google 계정을 사용하는 데 동의하게 됩니다.",
+      unsupportedTitle: "현재 iOS만 지원",
+      unsupportedBody:
+        "첫 출시 버전에서는 Apple 및 Google 로그인이 iOS 빌드에서만 활성화되어 있습니다.",
+      errors: {
+        appleUnsupportedPlatform: "Apple 로그인은 현재 iOS에서만 사용할 수 있습니다.",
+        appleUnavailable: "이 기기에서는 Apple 로그인을 사용할 수 없습니다.",
+        appleMissingToken: "Apple 로그인이 identity token을 반환하지 않았습니다.",
+        appleCancelled: "Apple 로그인이 취소되었습니다.",
+        googleUnsupportedPlatform: "Google 로그인은 현재 iOS에서만 사용할 수 있습니다.",
+        googleMissingToken: "Google 로그인이 ID token을 반환하지 않았습니다.",
+        googleCancelled: "Google 로그인이 취소되었습니다.",
+      },
+    },
+  },
   settings: {
     title: "설정",
     subtitle: "모국어와 배우고 싶은 언어를 선택하세요.",
@@ -88,6 +114,10 @@ export const ko = createLocale({
       description: "TalkPilot에서 연습할 언어를 저장합니다.",
       supportNote: "모국어와 학습 언어는 같을 수 없습니다.",
     },
+    legal: {
+      termsDescription:
+        "제품 약관, 구독, 허용되는 사용 기준을 확인하세요.",
+    },
   },
   profile: {
     headerEyebrow: "계정",
@@ -98,6 +128,14 @@ export const ko = createLocale({
     signOutConfirmTitle: "로그아웃할까요?",
     signOutConfirmMessage:
       "게스트 모드로 돌아갑니다. 언제든 다시 로그인할 수 있습니다.",
+    membershipBody: {
+      free:
+        "무료 플랜은 하루 10분의 라이브 대화를 제공합니다. AI 리뷰와 답변 제안은 무제한입니다.",
+    },
+    limits: {
+      reviewFree: "무제한",
+      suggestFree: "무제한",
+    },
     detail: {
       status: "상태",
       sync: "동기화",
@@ -114,6 +152,14 @@ export const ko = createLocale({
     feedback: {
       title: "피드백",
       body: "제품 문제, 아이디어, 불편했던 경험을 공유해 주세요.",
+    },
+  },
+  billing: {
+    paywall: {
+      benefits: {
+        review: "모든 플랜에서 AI 리뷰 무제한",
+        suggest: "모든 플랜에서 AI 답변 제안 무제한",
+      },
     },
   },
 });

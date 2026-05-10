@@ -68,6 +68,32 @@ export const de = createLocale({
       signingOut: "Abmeldung...",
     },
   },
+  auth: {
+    login: {
+      closeAccessibilityLabel: "Login schließen",
+      title: "Mit deinem Konto fortfahren",
+      subtitle:
+        "Melde dich mit Apple oder Google an, damit dein Fortschritt auf diesem Gerät synchron bleibt.",
+      fallbackError: "Anmeldung fehlgeschlagen. Bitte versuche es später erneut.",
+      appleButton: "Mit Apple fortfahren",
+      googleButton: "Mit Google fortfahren",
+      appleLoading: "Apple-Anmeldung wird abgeschlossen...",
+      legalHint:
+        "Wenn du fortfährst, stimmst du zu, dein Apple- oder Google-Konto auf diesem Gerät zu verwenden.",
+      unsupportedTitle: "Derzeit nur iOS",
+      unsupportedBody:
+        "Apple- und Google-Anmeldung sind in dieser ersten Version derzeit für den iOS-Build aktiviert.",
+      errors: {
+        appleUnsupportedPlatform: "Apple-Anmeldung ist derzeit nur auf iOS verfügbar.",
+        appleUnavailable: "Apple-Anmeldung ist auf diesem Gerät nicht verfügbar.",
+        appleMissingToken: "Apple-Anmeldung hat kein Identity Token zurückgegeben.",
+        appleCancelled: "Apple-Anmeldung wurde abgebrochen.",
+        googleUnsupportedPlatform: "Google-Anmeldung ist derzeit nur auf iOS verfügbar.",
+        googleMissingToken: "Google-Anmeldung hat kein ID-Token zurückgegeben.",
+        googleCancelled: "Google-Anmeldung wurde abgebrochen.",
+      },
+    },
+  },
   settings: {
     title: "Einstellungen",
     subtitle:
@@ -90,6 +116,10 @@ export const de = createLocale({
       supportNote:
         "Muttersprache und Lernsprache dürfen nicht identisch sein.",
     },
+    legal: {
+      termsDescription:
+        "Lies die Produktbedingungen, Abonnements und Regeln zur zulässigen Nutzung.",
+    },
   },
   profile: {
     headerEyebrow: "Konto",
@@ -100,6 +130,14 @@ export const de = createLocale({
     signOutConfirmTitle: "Ausloggen?",
     signOutConfirmMessage:
       "Du kehrst in den Gastmodus zurück. Du kannst dich jederzeit wieder anmelden.",
+    membershipBody: {
+      free:
+        "Free enthält 10 Live-Minuten pro Tag. KI-Review und Antwortvorschläge sind unbegrenzt.",
+    },
+    limits: {
+      reviewFree: "Unbegrenzt",
+      suggestFree: "Unbegrenzt",
+    },
     detail: {
       status: "Status",
       sync: "Synchronisierung",
@@ -118,6 +156,14 @@ export const de = createLocale({
       title: "Feedback",
       body:
         "Teile Produktprobleme, Ideen oder etwas, das sich nicht richtig angefühlt hat.",
+    },
+  },
+  billing: {
+    paywall: {
+      benefits: {
+        review: "Unbegrenztes KI-Review in jedem Plan",
+        suggest: "Unbegrenzte KI-Antwortvorschläge in jedem Plan",
+      },
     },
   },
 });

@@ -99,6 +99,7 @@ export const en = {
       subtitle:
         "Use Apple or Google to keep your progress synced on this device.",
       fallbackError: "Sign in failed. Please try again later.",
+      appleButton: "Continue with Apple",
       googleButton: "Continue with Google",
       appleLoading: "Completing Apple sign-in...",
       legalHint:
@@ -106,6 +107,15 @@ export const en = {
       unsupportedTitle: "iOS only for now",
       unsupportedBody:
         "Apple and Google sign-in are currently enabled for the iOS build in this first release.",
+      errors: {
+        appleUnsupportedPlatform: "Apple sign-in is currently available on iOS only.",
+        appleUnavailable: "Apple sign-in is not available on this device.",
+        appleMissingToken: "Apple sign-in did not return an identity token.",
+        appleCancelled: "Apple sign-in was cancelled.",
+        googleUnsupportedPlatform: "Google sign-in is currently available on iOS only.",
+        googleMissingToken: "Google sign-in did not return an ID token.",
+        googleCancelled: "Google sign-in was cancelled.",
+      },
     },
   },
   feedback: {

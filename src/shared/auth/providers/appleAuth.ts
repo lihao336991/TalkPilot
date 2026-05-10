@@ -1,14 +1,15 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
+import { AuthFlowError } from '@/shared/auth/authErrors';
 
 export async function getAppleSignInCredentials() {
   if (Platform.OS !== 'ios') {
-    throw new Error('Apple 登录当前仅支持 iOS。');
+    throw new AuthFlowError('appleUnsupportedPlatform');
   }
 
   const isAvailable = await AppleAuthentication.isAvailableAsync();
   if (!isAvailable) {
-    throw new Error('当前设备不支持 Apple 登录。');
+    throw new AuthFlowError('appleUnavailable');
   }
 
   try {
@@ -20,7 +21,7 @@ export async function getAppleSignInCredentials() {
     });
 
     if (!credential.identityToken) {
-      throw new Error('Apple 登录未返回 identity token。');
+      throw new AuthFlowError('appleMissingToken');
     }
 
     return {
@@ -33,7 +34,7 @@ export async function getAppleSignInCredentials() {
       'code' in error &&
       error.code === 'ERR_REQUEST_CANCELED'
     ) {
-      throw new Error('你已取消 Apple 登录。');
+      throw new AuthFlowError('appleCancelled');
     }
 
     throw error;

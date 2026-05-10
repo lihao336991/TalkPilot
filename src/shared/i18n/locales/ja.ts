@@ -68,6 +68,32 @@ export const ja = createLocale({
       signingOut: "ログアウト中...",
     },
   },
+  auth: {
+    login: {
+      closeAccessibilityLabel: "ログインを閉じる",
+      title: "アカウントで続行",
+      subtitle:
+        "Apple または Google でログインして、この端末で進捗を同期します。",
+      fallbackError: "ログインに失敗しました。しばらくしてからもう一度お試しください。",
+      appleButton: "Apple で続行",
+      googleButton: "Google で続行",
+      appleLoading: "Apple ログインを完了しています...",
+      legalHint:
+        "続行すると、この端末で Apple または Google アカウントを使用することに同意したものとみなされます。",
+      unsupportedTitle: "現在は iOS のみ",
+      unsupportedBody:
+        "この初回リリースでは、Apple と Google のログインは iOS ビルドでのみ有効です。",
+      errors: {
+        appleUnsupportedPlatform: "Apple ログインは現在 iOS のみ対応しています。",
+        appleUnavailable: "この端末では Apple ログインを利用できません。",
+        appleMissingToken: "Apple ログインで identity token が返されませんでした。",
+        appleCancelled: "Apple ログインはキャンセルされました。",
+        googleUnsupportedPlatform: "Google ログインは現在 iOS のみ対応しています。",
+        googleMissingToken: "Google ログインで ID token が返されませんでした。",
+        googleCancelled: "Google ログインはキャンセルされました。",
+      },
+    },
+  },
   settings: {
     title: "設定",
     subtitle: "母語と学習したい言語を選択します。",
@@ -88,6 +114,10 @@ export const ja = createLocale({
       description: "TalkPilot で練習したい言語を保存します。",
       supportNote: "母語と学習言語を同じにすることはできません。",
     },
+    legal: {
+      termsDescription:
+        "製品規約、サブスクリプション、利用可能な範囲を確認します。",
+    },
   },
   profile: {
     headerEyebrow: "アカウント",
@@ -98,6 +128,14 @@ export const ja = createLocale({
     signOutConfirmTitle: "ログアウトしますか？",
     signOutConfirmMessage:
       "ゲストモードに戻ります。いつでも再度ログインできます。",
+    membershipBody: {
+      free:
+        "無料版ではライブ会話を1日10分利用できます。AIレビューと返信提案は無制限です。",
+    },
+    limits: {
+      reviewFree: "無制限",
+      suggestFree: "無制限",
+    },
     detail: {
       status: "状態",
       sync: "同期",
@@ -114,6 +152,14 @@ export const ja = createLocale({
     feedback: {
       title: "フィードバック",
       body: "問題、アイデア、気になった体験を共有してください。",
+    },
+  },
+  billing: {
+    paywall: {
+      benefits: {
+        review: "すべてのプランでAIレビューを無制限に利用",
+        suggest: "すべてのプランでAI返信提案を無制限に利用",
+      },
     },
   },
 });

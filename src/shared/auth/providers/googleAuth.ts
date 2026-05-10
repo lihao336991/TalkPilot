@@ -1,6 +1,7 @@
 import {
   GoogleSignin,
 } from '@react-native-google-signin/google-signin';
+import { AuthFlowError } from '@/shared/auth/authErrors';
 import { getRequiredEnv } from '@/shared/config/env';
 import { Platform } from 'react-native';
 
@@ -43,7 +44,7 @@ function getIdTokenFromResponse(
 
 export async function getGoogleSignInCredentials() {
   if (Platform.OS !== 'ios') {
-    throw new Error('Google 登录当前仅在 iOS 完成接入。');
+    throw new AuthFlowError('googleUnsupportedPlatform');
   }
 
   try {
@@ -52,7 +53,7 @@ export async function getGoogleSignInCredentials() {
     const token = getIdTokenFromResponse(response);
 
     if (!token) {
-      throw new Error('Google 登录未返回 id token。');
+      throw new AuthFlowError('googleMissingToken');
     }
 
     return { token };
@@ -64,7 +65,7 @@ export async function getGoogleSignInCredentials() {
       typeof error.code === 'string' &&
       error.code.toUpperCase().includes('CANCEL')
     ) {
-      throw new Error('你已取消 Google 登录。');
+      throw new AuthFlowError('googleCancelled');
     }
 
     throw error;

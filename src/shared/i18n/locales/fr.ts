@@ -68,6 +68,32 @@ export const fr = createLocale({
       signingOut: "Déconnexion...",
     },
   },
+  auth: {
+    login: {
+      closeAccessibilityLabel: "Fermer la connexion",
+      title: "Continuez avec votre compte",
+      subtitle:
+        "Utilisez Apple ou Google pour garder votre progression synchronisée sur cet appareil.",
+      fallbackError: "Échec de la connexion. Veuillez réessayer plus tard.",
+      appleButton: "Continuer avec Apple",
+      googleButton: "Continuer avec Google",
+      appleLoading: "Finalisation de la connexion Apple...",
+      legalHint:
+        "En continuant, vous acceptez d'utiliser votre compte Apple ou Google sur cet appareil.",
+      unsupportedTitle: "iOS uniquement pour le moment",
+      unsupportedBody:
+        "La connexion Apple et Google est actuellement activée pour la version iOS de cette première sortie.",
+      errors: {
+        appleUnsupportedPlatform: "La connexion Apple est actuellement disponible uniquement sur iOS.",
+        appleUnavailable: "La connexion Apple n'est pas disponible sur cet appareil.",
+        appleMissingToken: "La connexion Apple n'a pas renvoyé de jeton d'identité.",
+        appleCancelled: "La connexion Apple a été annulée.",
+        googleUnsupportedPlatform: "La connexion Google est actuellement disponible uniquement sur iOS.",
+        googleMissingToken: "La connexion Google n'a pas renvoyé de jeton d'identification.",
+        googleCancelled: "La connexion Google a été annulée.",
+      },
+    },
+  },
   settings: {
     title: "Réglages",
     subtitle:
@@ -90,6 +116,10 @@ export const fr = createLocale({
       supportNote:
         "La langue maternelle et la langue d'apprentissage ne peuvent pas être identiques.",
     },
+    legal: {
+      termsDescription:
+        "Consultez les conditions du produit, les abonnements et l'utilisation acceptable.",
+    },
   },
   profile: {
     headerEyebrow: "Compte",
@@ -100,6 +130,14 @@ export const fr = createLocale({
     signOutConfirmTitle: "Se déconnecter ?",
     signOutConfirmMessage:
       "Vous reviendrez en mode invité. Vous pourrez vous reconnecter à tout moment.",
+    membershipBody: {
+      free:
+        "La formule gratuite inclut 10 min de live par jour. Les corrections IA et suggestions de réponse sont illimitées.",
+    },
+    limits: {
+      reviewFree: "Illimité",
+      suggestFree: "Illimité",
+    },
     detail: {
       status: "Statut",
       sync: "Synchronisation",
@@ -118,6 +156,14 @@ export const fr = createLocale({
       title: "Retour",
       body:
         "Partagez les problèmes produit, vos idées ou ce qui vous a semblé étrange.",
+    },
+  },
+  billing: {
+    paywall: {
+      benefits: {
+        review: "Correction IA illimitée dans toutes les formules",
+        suggest: "Suggestions de réponse IA illimitées dans toutes les formules",
+      },
     },
   },
 });
