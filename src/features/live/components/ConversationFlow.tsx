@@ -30,6 +30,7 @@ export function ConversationFlow() {
   const hasMountedRef = useRef(false);
   const prevTurnCountRef = useRef(0);
   const prevInterimTextRef = useRef("");
+  const contentHeightRef = useRef(0);
 
   const hasInterim = currentInterimText.trim().length > 0;
   const hasStablePreview =
@@ -62,6 +63,26 @@ export function ConversationFlow() {
       autoFollowRef.current = distanceToBottom <= NEAR_BOTTOM_THRESHOLD;
     },
     [],
+  );
+
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      const previousHeight = contentHeightRef.current;
+      contentHeightRef.current = height;
+
+      if (previousHeight === 0 || height <= previousHeight) {
+        return;
+      }
+
+      if (!autoFollowRef.current) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
+    },
+    [scrollToBottom],
   );
 
   useEffect(() => {
@@ -182,6 +203,7 @@ export function ConversationFlow() {
         showsVerticalScrollIndicator={false}
         onScrollBeginDrag={handleScrollBeginDrag}
         onScroll={handleScroll}
+        onContentSizeChange={handleContentSizeChange}
         scrollEventThrottle={16}
         style={styles.list}
       />
