@@ -1,11 +1,18 @@
+/// <reference path="../_shared/editor-shims.d.ts" />
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createAuthRequiredResponse,
+  createFeatureAccessDeniedResponse,
+  JSON_HEADERS,
+  mapFeatureAccessRow,
+} from "../_shared/access.ts";
 
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY")!;
-  const dgProjectId = Deno.env.get("DG_PROJECT_ID")!;
 
   const authorization = req.headers.get("Authorization") ?? "";
 
@@ -19,55 +26,83 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
+    return createAuthRequiredResponse("live_minutes");
+  }
+
+  let body: Record<string, unknown> = {};
+  try {
+    const parsed = await req.json();
+    if (parsed && typeof parsed === "object") {
+      body = parsed as Record<string, unknown>;
+    }
+  } catch {
+    body = {};
+  }
+
+  const installIdRaw = body.install_id ?? body.installId;
+  const installId =
+    typeof installIdRaw === "string" && installIdRaw.trim().length > 0
+      ? installIdRaw.trim()
+      : "";
+  if (!installId) {
+    return new Response(JSON.stringify({ error: "Missing install_id" }), {
+      status: 400,
+      headers: JSON_HEADERS,
     });
   }
 
   const { data: usage, error: usageError } = await supabase.rpc(
-    "check_daily_usage",
-    { p_user_id: user.id },
+    "get_live_minutes_access",
+    { p_user_id: user.id, p_install_id: installId },
   );
 
   if (usageError) {
     return new Response(JSON.stringify({ error: "Usage check failed" }), {
       status: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
-  if (usage?.[0]?.is_limit_reached) {
-    return new Response(
-      JSON.stringify({ error: "Daily usage limit reached" }),
-      {
-        status: 429,
-        headers: { "Content-Type": "application/json" },
+  const access = mapFeatureAccessRow("live_minutes", usage?.[0]);
+
+  if (!access.allowed) {
+    return createFeatureAccessDeniedResponse({
+      access,
+      error: "Live minutes exhausted",
+      extra: {
+        tier: access.tier,
+        minutes_used: access.used,
+        minutes_remaining: access.remaining,
+        daily_minutes_limit: access.limit,
+        upgrade_required: true,
       },
-    );
+    });
   }
 
-  const dgResponse = await fetch(
-    `https://api.deepgram.com/v1/keys/${dgProjectId}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${deepgramApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        scopes: ["usage:write"],
-        time_to_live_in_seconds: 600,
-      }),
+  // Use Deepgram Token-Based Authentication to mint a short-lived JWT for client WS auth.
+  // Docs: https://developers.deepgram.com/reference/auth/tokens/grant
+  const ttlSeconds = 600; // 10 minutes; must be valid at connection time only.
+  const dgResponse = await fetch("https://api.deepgram.com/v1/auth/grant", {
+    method: "POST",
+    headers: {
+      Authorization: `Token ${deepgramApiKey}`,
+      "Content-Type": "application/json",
     },
-  );
+    body: JSON.stringify({ ttl_seconds: ttlSeconds }),
+  });
 
   if (!dgResponse.ok) {
+    const text = await dgResponse.text().catch(() => "");
     return new Response(
-      JSON.stringify({ error: "Failed to create Deepgram token" }),
+      JSON.stringify({
+        error: "Failed to create Deepgram token",
+        code: "DEEPGRAM_TOKEN_GRANT_FAILED",
+        status: dgResponse.status,
+        body: text,
+      }),
       {
         status: 502,
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
       },
     );
   }
@@ -76,12 +111,19 @@ serve(async (req: Request) => {
 
   return new Response(
     JSON.stringify({
-      deepgram_token: dgData.key,
-      expires_in: 600,
+      deepgram_token: dgData.access_token,
+      expires_in: dgData.expires_in ?? ttlSeconds,
+      usage: {
+        tier: access.tier,
+        minutes_used: access.used,
+        minutes_remaining: access.remaining,
+        daily_minutes_limit: access.limit,
+      },
+      access,
     }),
     {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     },
   );
 });

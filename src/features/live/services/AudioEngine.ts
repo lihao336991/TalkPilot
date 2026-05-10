@@ -2,7 +2,9 @@ import LiveAudioStream from 'react-native-live-audio-stream';
 import type { Options } from 'react-native-live-audio-stream';
 import { Platform } from 'react-native';
 import type { EmitterSubscription } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import { voiceChatAudioSession } from './VoiceChatAudioSession';
+import { useAudioDebugStore } from '@/features/live/store/audioDebugStore';
 
 const AUDIO_CONFIG: Options = {
   sampleRate: 16000,
@@ -14,8 +16,9 @@ const AUDIO_CONFIG: Options = {
 
 export class AudioEngine {
   private subscription: EmitterSubscription | null = null;
+  private isInitialized = false;
 
-  init(): void {
+  private createConfig(): Options {
     const config: Options = {
       sampleRate: AUDIO_CONFIG.sampleRate,
       channels: AUDIO_CONFIG.channels,
@@ -25,20 +28,104 @@ export class AudioEngine {
     if (Platform.OS === 'android') {
       config.audioSource = AUDIO_CONFIG.audioSource;
     }
-    LiveAudioStream.init(config);
+    return config;
   }
 
-  start(onAudioData: (base64: string) => void): void {
-    this.subscription = LiveAudioStream.on('data', onAudioData);
-    LiveAudioStream.start();
+  private initializeRecorder(): void {
+    if (this.isInitialized) {
+      return;
+    }
+
+    LiveAudioStream.init(this.createConfig());
+    this.isInitialized = true;
   }
 
-  stop(): void {
-    LiveAudioStream.stop();
+  private async configureRecordingAudioMode(): Promise<void> {
+    const iosAudioSessionMode = useAudioDebugStore.getState().iosAudioSessionMode;
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      shouldDuckAndroid: false,
+      playThroughEarpieceAndroid: false,
+    });
+    await voiceChatAudioSession.setRecordingMode(iosAudioSessionMode);
+  }
+
+  private async restoreDefaultAudioMode(): Promise<void> {
+    await voiceChatAudioSession.disable();
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: false,
+      staysActiveInBackground: false,
+      interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    });
+  }
+
+  async init(): Promise<void> {
+    console.log('[AudioEngine] Initializing...');
+    await this.configureRecordingAudioMode();
+    this.initializeRecorder();
+    console.log('[AudioEngine] Initialized');
+  }
+
+  async prewarm(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    console.log('[AudioEngine] Prewarming recorder...');
+    this.initializeRecorder();
+    console.log('[AudioEngine] Recorder prewarmed');
+  }
+
+  async start(onAudioData: (base64: string) => void): Promise<void> {
+    console.log('[AudioEngine] Starting recording...');
+    if (!this.isInitialized) {
+      await this.init();
+    } else {
+      await this.configureRecordingAudioMode();
+    }
+
     if (this.subscription) {
       this.subscription.remove();
       this.subscription = null;
     }
+    this.subscription = LiveAudioStream.on('data', onAudioData);
+    LiveAudioStream.start();
+    await voiceChatAudioSession.setRecordingMode(
+      useAudioDebugStore.getState().iosAudioSessionMode,
+    );
+    console.log('[AudioEngine] Started recording');
+  }
+
+  async switchInput(onAudioData: (base64: string) => void): Promise<void> {
+    if (!this.isInitialized || !this.subscription) {
+      await this.start(onAudioData);
+      return;
+    }
+
+    console.log('[AudioEngine] Switching recording input handler...');
+    this.subscription.remove();
+    this.subscription = LiveAudioStream.on('data', onAudioData);
+    console.log('[AudioEngine] Switched recording input handler');
+  }
+
+  async stop(): Promise<void> {
+    console.log('[AudioEngine] Stopping recording...');
+    await LiveAudioStream.stop();
+    if (this.subscription) {
+      this.subscription.remove();
+      this.subscription = null;
+    }
+    await this.restoreDefaultAudioMode();
+    console.log('[AudioEngine] Stopped recording');
   }
 
   static async requestPermission(): Promise<boolean> {

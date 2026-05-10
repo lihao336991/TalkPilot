@@ -8,11 +8,9 @@ export type Suggestion = {
 type SuggestionState = {
   suggestions: Suggestion[];
   isLoading: boolean;
-  streamBuffer: string;
   triggerTurnId: string | null;
 
   startLoading: (turnId: string) => void;
-  appendChunk: (chunk: string) => void;
   finalizeSuggestions: (suggestions: Suggestion[]) => void;
   clear: () => void;
 };
@@ -20,7 +18,6 @@ type SuggestionState = {
 const initialState = {
   suggestions: [] as Suggestion[],
   isLoading: false,
-  streamBuffer: '',
   triggerTurnId: null as string | null,
 };
 
@@ -28,13 +25,10 @@ export const useSuggestionStore = create<SuggestionState>((set) => ({
   ...initialState,
 
   startLoading: (turnId) =>
-    set({ isLoading: true, streamBuffer: '', suggestions: [], triggerTurnId: turnId }),
-
-  appendChunk: (chunk) =>
-    set((state) => ({ streamBuffer: state.streamBuffer + chunk })),
+    set({ isLoading: true, suggestions: [], triggerTurnId: turnId }),
 
   finalizeSuggestions: (suggestions) =>
-    set({ suggestions, isLoading: false, streamBuffer: '' }),
+    set({ suggestions, isLoading: false }),
 
   clear: () =>
     set(initialState),

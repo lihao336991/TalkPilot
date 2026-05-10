@@ -1,5 +1,11 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+
+import { useAlert } from "@/shared/components";
+import { Sentry } from '@/shared/monitoring/sentry';
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 const checks = [
   'Expo Router entry is active.',
@@ -9,6 +15,33 @@ const checks = [
 ];
 
 export default function TestScreen() {
+  const router = useRouter();
+  const { t } = useTranslation();
+  const { showAlert } = useAlert();
+  const [status, setStatus] = useState<string | null>(null);
+
+  const sendTestMessage = async () => {
+    const eventId = Sentry.captureMessage('TalkPilot manual Sentry test message', 'info');
+    await Sentry.flush();
+
+    setStatus(`Message sent: ${eventId}`);
+    showAlert({ title: 'Sentry test sent', message: `Message event id:\n${eventId}` });
+  };
+
+  const sendTestException = async () => {
+    const error = new Error('TalkPilot manual Sentry test exception');
+    const eventId = Sentry.captureException(error, {
+      tags: {
+        source: 'dev-test-screen',
+      },
+    });
+
+    await Sentry.flush();
+
+    setStatus(`Exception sent: ${eventId}`);
+    showAlert({ title: 'Sentry test sent', message: `Exception event id:\n${eventId}` });
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>TalkPilot Dev</Text>
@@ -21,6 +54,23 @@ export default function TestScreen() {
           </View>
         ))}
       </View>
+      <View style={styles.actions}>
+        <Pressable onPress={() => void sendTestMessage()} style={[styles.button, styles.secondaryButton]}>
+          <Text style={styles.secondaryButtonText}>Send test message</Text>
+        </Pressable>
+        <Pressable onPress={() => void sendTestException()} style={[styles.button, styles.primaryButton]}>
+          <Text style={styles.primaryButtonText}>Send test exception</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/(dev)/voiceprint')}
+          style={[styles.button, styles.secondaryButton]}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {t('dev.testScreen.voiceprintDebugEntry')}
+          </Text>
+        </Pressable>
+      </View>
+      {status ? <Text style={styles.status}>{status}</Text> : null}
     </View>
   );
 }
@@ -28,46 +78,82 @@ export default function TestScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F2ED',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    backgroundColor: palette.bgBase,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.xxxl,
   },
   title: {
-    fontSize: 32,
+    ...typography.displayLg,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 10,
+    color: palette.textPrimary,
+    marginBottom: spacing.sm + 2,
   },
   subtitle: {
-    fontSize: 15,
+    ...typography.bodyMd,
     lineHeight: 22,
-    color: 'rgba(26,26,26,0.7)',
-    marginBottom: 24,
+    color: palette.textSecondary,
+    marginBottom: spacing.xxl,
   },
   card: {
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
+    borderRadius: radii.xl,
+    backgroundColor: palette.bgCard,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
+    borderColor: palette.accentBorder,
+    ...shadows.card,
+  },
+  actions: {
+    marginTop: spacing.lg + 2,
+    gap: spacing.md,
+  },
+  button: {
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    backgroundColor: palette.accent,
+  },
+  secondaryButton: {
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+  },
+  primaryButtonText: {
+    ...typography.bodyMd,
+    fontWeight: '600',
+    color: palette.textOnAccent,
+  },
+  secondaryButtonText: {
+    ...typography.bodyMd,
+    fontWeight: '600',
+    color: palette.textPrimary,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 14,
+    gap: spacing.sm + 2,
+    marginBottom: spacing.md + 2,
   },
   dot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#151619',
+    borderRadius: radii.xs / 2,
+    backgroundColor: palette.accentDark,
     marginTop: 7,
   },
   rowText: {
     flex: 1,
-    fontSize: 14,
+    ...typography.bodySm,
     lineHeight: 22,
-    color: '#1A1A1A',
+    color: palette.textPrimary,
+  },
+  status: {
+    marginTop: spacing.md + 2,
+    ...typography.bodySm,
+    lineHeight: 18,
+    color: palette.textSecondary,
   },
 });

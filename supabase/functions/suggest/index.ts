@@ -1,6 +1,64 @@
+/// <reference path="../_shared/editor-shims.d.ts" />
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createLlmRuntime, withLlmDefaults } from "../_shared/llm.ts";
+import {
+    createAuthRequiredResponse,
+    JSON_HEADERS,
+} from "../_shared/access.ts";
+import {
+    buildLlmResponseHeaders,
+    runLlmChatCompletion,
+} from "../_shared/llm.ts";
+
+function languageDisplayName(tag: string): string {
+  const primary = tag.split("-")[0].toLowerCase();
+  const map: Record<string, string> = {
+    zh: "Chinese (Simplified)",
+    ja: "Japanese",
+    ko: "Korean",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    ru: "Russian",
+    nl: "Dutch",
+    hi: "Hindi",
+    id: "Indonesian",
+    tr: "Turkish",
+    pl: "Polish",
+    sv: "Swedish",
+    da: "Danish",
+    fi: "Finnish",
+    no: "Norwegian",
+    uk: "Ukrainian",
+    th: "Thai",
+    vi: "Vietnamese",
+    ar: "Arabic",
+    en: "English",
+  };
+  return map[primary] ?? tag;
+}
+
+function sanitizeSuggestionText(text: string): string {
+  return text
+    .replace(
+      /^(here is a suggestion|you could say|how about|a natural reply would be|suggestion|reply):\s*/i,
+      "",
+    )
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+function limitSuggestionWords(text: string, maxWords = 50): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return text.trim();
+  }
+
+  return words.slice(0, maxWords).join(" ").trim();
+}
 
 serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -18,21 +76,25 @@ serve(async (req: Request) => {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createAuthRequiredResponse("suggestion");
   }
 
   const body = await req.json();
   const sessionId = body.session_id ?? body.sessionId;
   const lastUtterance = body.last_utterance ?? body.lastUtterance;
   const scene = body.scene;
+  const targetLanguage = typeof (body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage) === "string" &&
+      String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    ? String(body.learning_language ?? body.learningLanguage ?? body.target_language ?? body.targetLanguage).trim()
+    : "en";
 
-  if (typeof sessionId !== "string" || typeof lastUtterance !== "string") {
+  if (
+    typeof sessionId !== "string" ||
+    typeof lastUtterance !== "string"
+  ) {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
     });
   }
 
@@ -41,51 +103,78 @@ serve(async (req: Request) => {
     .select("speaker, text")
     .eq("session_id", sessionId)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(5);
 
   const conversationHistory = (turns ?? [])
     .reverse()
     .map((t: { speaker: string; text: string }) => `${t.speaker}: ${t.text}`)
     .join("\n");
 
-  const systemPrompt = `You are an English conversation coach. The user is practicing English in a "${scene || "general"}" scenario.
+  const targetLanguageName = languageDisplayName(targetLanguage);
 
-Based on the conversation so far and the last thing the other person said, generate 2 reply suggestions for the user: one formal and one casual. Each suggestion should be 1-3 sentences.
+  const systemPrompt = `You are a ${targetLanguageName} conversation coach. The user is practicing ${targetLanguageName} in a "${scene || "general"}" scenario.
 
-Output strictly in JSON format:
-{"suggestions":[{"style":"formal","text":"..."},{"style":"casual","text":"..."}]}
+Based on the conversation so far and the last thing the other person said, generate exactly ONE natural reply suggestion for the user. 
+The reply should be 1-2 sentences. 
+The suggestion MUST be written in ${targetLanguageName}.
+Prefer a compact reply that fits naturally in 2-3 lines on a phone screen.
+Hard limit: 50 words maximum.
 
-Conversation so far:
+CRITICAL INSTRUCTIONS:
+- NEVER include any reasoning, thought process, or explanations.
+- NEVER start with phrases like "Here is a suggestion", "You could say", "How about".
+- NEVER use JSON, XML, or labels.
+- Output ONLY the exact words the user should speak out loud.
+
+Example Output:
+That sounds like a great idea! I'd love to join you.`;
+
+  const userPrompt = `Conversation so far:
 ${conversationHistory}
 
 Last utterance from the other person: "${lastUtterance}"`;
 
-  const llm = createLlmRuntime();
+  try {
+    const { completion, runtime, routeMode, attempts } = await runLlmChatCompletion(
+      req,
+      {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: 100,
+        temperature: 0.4,
+      },
+      { taskKey: "suggest" },
+    );
+    const responseHeaders = buildLlmResponseHeaders(runtime, {
+      routeMode,
+      attempts,
+    }, {
+      "Content-Type": "application/json",
+    });
 
-  const stream = await llm.client.chat.completions.create(withLlmDefaults(llm, {
-    messages: [{ role: "system", content: systemPrompt }],
-    stream: true,
-  }));
+    const rawContent = completion.choices[0]?.message?.content ?? "";
+    const cleanText = limitSuggestionWords(sanitizeSuggestionText(rawContent));
+    const suggestions = cleanText ? [{ style: "simple", text: cleanText }] : [];
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content;
-        if (content) {
-          controller.enqueue(encoder.encode(`data: ${content}\n\n`));
-        }
-      }
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-      controller.close();
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+    return new Response(JSON.stringify({ suggestions }), {
+      status: 200,
+      headers: responseHeaders,
+    });
+  } catch (error: any) {
+    const errorContext = {
+      error: "LLM Provider Error",
+      message: error.message,
+      name: error.name,
+      status: error.status,
+      type: error.type,
+    };
+    console.error("[Suggest] LLM Error:", errorContext);
+    
+    return new Response(JSON.stringify(errorContext), {
+      status: error.status || 500,
+      headers: JSON_HEADERS,
+    });
+  }
 });

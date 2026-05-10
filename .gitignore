@@ -32,14 +32,17 @@ yarn-error.*
 
 # local env files
 .env
-.env*.local
+.env.*
+.env.sentry-build-plugin
 
 # typescript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# native build artifacts
+ios/build/
+android/.gradle/
+android/app/build/
+android/build/
 
 .trae/specs/
 .expo/
@@ -49,3 +52,5 @@ data/novel-import/incoming/*
 data/novel-import/incoming_handled/*
 .tmp-home
 .dbg
+dist-ota-check/
+dist-ota-env-fix/

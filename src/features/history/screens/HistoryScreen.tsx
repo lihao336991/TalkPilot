@@ -1,122 +1,625 @@
-import React from 'react';
-import { Feather } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
-import { TabScrollScreen } from '@/features/navigation/components/TabScrollScreen';
+import {
+    historyService,
+    type HistorySession,
+} from "@/features/history/services/historyService";
+import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
+import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuthStore } from "@/shared/store/authStore";
 
-const sessions = [
-  {
-    title: 'Investor update rehearsal',
-    meta: '18 min · 36 prompts · Confidence 84%',
-    summary: 'Focused on concise status updates and clear follow-up asks.',
-  },
-  {
-    title: 'Coffee chat recovery',
-    meta: '9 min · 14 prompts · Confidence 78%',
-    summary: 'Captured filler-word fixes and smoother small-talk transitions.',
-  },
-  {
-    title: 'Airport support scenario',
-    meta: '6 min · 11 prompts · Confidence 88%',
-    summary: 'Saved practical travel phrases and next-step clarification cues.',
-  },
-];
+const PAGE_SIZE = 30;
+
+function formatDuration(
+  s: number | null,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (!s || s <= 0) return t("history.duration.lessThanOneMinute");
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  if (m === 0) return t("history.duration.seconds", { count: sec });
+  if (sec === 0) return t("history.duration.minutesOnly", { count: m });
+  return t("history.duration.minutesSeconds", { minutes: m, seconds: sec });
+}
+
+function formatSessionDate(iso: string, locale: string): string {
+  return new Date(iso).toLocaleDateString(locale, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatCardTitle(
+  session: HistorySession,
+  t: (key: string) => string,
+): string {
+  if (session.title?.trim()) return session.title.trim();
+  if (session.scene_description?.trim())
+    return session.scene_description.trim();
+  if (session.scene_preset) {
+    return session.scene_preset
+      .split("_")
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(" ");
+  }
+  return t("history.scene.freeConversation");
+}
+
+function statusColor(status: string): string {
+  if (status === "ended") return palette.accentDark;
+  if (status === "paused") return "#B45309";
+  return "#2563EB";
+}
 
 export default function HistoryScreen() {
-  return (
-    <TabScrollScreen title="History" subtitle="Session recap and review" actionIcon="clock">
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryEyebrow}>Recent activity</Text>
-        <Text style={styles.summaryTitle}>Your latest assisted conversations stay organized here for review.</Text>
-        <View style={styles.summaryRow}>
-          <View>
-            <Text style={styles.summaryValue}>3</Text>
-            <Text style={styles.summaryLabel}>saved sessions</Text>
+  const insets = useSafeAreaInsets();
+  const { i18n, t } = useTranslation();
+  const router = useRouter();
+  const historyCacheUserId = useAuthStore((state) => state.userId ?? "anonymous");
+  const tabBarHeight = getTabBarHeight(insets.bottom);
+  const [sessions, setSessions] = useState<HistorySession[]>([]);
+  const [hasLoadedSessions, setHasLoadedSessions] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
+  const loadSessions = useCallback(async (opts?: { force?: boolean }) => {
+    setIsSyncing(true);
+    setErrorMessage(null);
+    const { data, error } = await historyService.loadSessions({
+      ...opts,
+      limit: PAGE_SIZE,
+      offset: 0,
+    });
+    if (error && data.length === 0) {
+      setErrorMessage(error);
+    }
+    setSessions(data);
+    setHasMore(data.length === PAGE_SIZE);
+    setHasLoadedSessions(true);
+    setIsSyncing(false);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function hydrateAndSync() {
+      setErrorMessage(null);
+      const cached = await historyService.loadCachedSessions({
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
+      if (!isMounted) {
+        return;
+      }
+
+      if (cached.length > 0) {
+        setSessions(cached);
+        setHasMore(cached.length === PAGE_SIZE);
+        setHasLoadedSessions(true);
+      }
+
+      await loadSessions({ force: true });
+    }
+
+    void hydrateAndSync();
+    return () => {
+      isMounted = false;
+    };
+  }, [historyCacheUserId, loadSessions]);
+
+  async function handleRefresh() {
+    if (refreshing || isSyncing) {
+      return;
+    }
+    setRefreshing(true);
+    await loadSessions({ force: true });
+    setRefreshing(false);
+  }
+
+  const handleLoadMore = useCallback(async () => {
+    if (isSyncing || isLoadingMore || refreshing || !hasMore || errorMessage) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    const { data, error } = await historyService.loadSessions({
+      limit: PAGE_SIZE,
+      offset: sessions.length,
+    });
+
+    if (error) {
+      setErrorMessage(error);
+      setIsLoadingMore(false);
+      return;
+    }
+
+    setSessions((current) => {
+      const existingIds = new Set(current.map((session) => session.id));
+      const nextPage = data.filter((session) => !existingIds.has(session.id));
+      return [...current, ...nextPage];
+    });
+    setHasMore(data.length === PAGE_SIZE);
+    setIsLoadingMore(false);
+  }, [
+    errorMessage,
+    hasMore,
+    isSyncing,
+    isLoadingMore,
+    refreshing,
+    sessions.length,
+  ]);
+
+  const statsSource = sessions[0];
+  const totalSessions = statsSource?.total_sessions ?? sessions.length;
+  const totalDurationSeconds =
+    statsSource?.total_duration_seconds ??
+    sessions.reduce((sum, s) => sum + Math.max(s.duration_seconds ?? 0, 0), 0);
+  const totalMinutes = Math.round(totalDurationSeconds / 60);
+  const completedCount =
+    statsSource?.completed_count ??
+    sessions.filter((s) => s.status === "ended").length;
+
+  function renderListHeader() {
+    return (
+      <>
+        {/* ── Stats banner ── */}
+        <LinearGradient
+          colors={[palette.accentMuted, palette.bgCardSolid]}
+          style={styles.statsBanner}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{totalSessions}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.sessions")}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{totalMinutes}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.minutesPracticed")}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{completedCount}</Text>
+              <Text style={styles.statLabel}>
+                {t("history.stats.completed")}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.summaryValue}>61</Text>
-            <Text style={styles.summaryLabel}>reply suggestions</Text>
+          <View style={styles.statsAccentLine} />
+        </LinearGradient>
+
+        {/* ── Lightweight sync indicator ── */}
+        {isSyncing && !refreshing && (
+          <View style={styles.inlineLoading}>
+            <ActivityIndicator size="small" color={palette.textAccent} />
+            <Text style={styles.inlineLoadingText}>
+              {t("history.state.loadingTitle")}
+            </Text>
+          </View>
+        )}
+
+        {/* ── Error ── */}
+        {!isSyncing && errorMessage && sessions.length === 0 && (
+          <View style={styles.stateCard}>
+            <View
+              style={[
+                styles.stateIconWrap,
+                { backgroundColor: palette.dangerLight },
+              ]}
+            >
+              <Feather name="alert-circle" size={22} color={palette.danger} />
+            </View>
+            <Text style={styles.stateTitle}>
+              {t("history.state.errorTitle")}
+            </Text>
+            <Text style={styles.stateBody}>{errorMessage}</Text>
+            <Pressable
+              style={styles.retryBtn}
+              onPress={() => void loadSessions({ force: true })}
+            >
+              <Text style={styles.retryBtnText}>
+                {t("common.actions.tryAgain")}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* ── Empty ── */}
+        {hasLoadedSessions && !isSyncing && !errorMessage && sessions.length === 0 && (
+          <View style={styles.stateCard}>
+            <View style={styles.stateIconWrap}>
+              <Feather name="mic-off" size={22} color={palette.textTertiary} />
+            </View>
+            <Text style={styles.stateTitle}>
+              {t("history.state.emptyTitle")}
+            </Text>
+            <Text style={styles.stateBody}>{t("history.state.emptyBody")}</Text>
+          </View>
+        )}
+      </>
+    );
+  }
+
+  function renderSessionCard({ item: session }: { item: HistorySession }) {
+    const accent = statusColor(session.status);
+    const hasRecap = !!session.recap;
+    return (
+      <Pressable
+        style={styles.card}
+        onPress={() => router.push(`/session-detail?id=${session.id}` as any)}
+      >
+        <View style={[styles.cardAccentBar, { backgroundColor: accent }]} />
+
+        <View style={styles.cardInner}>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardTitle} numberOfLines={1}>
+              {formatCardTitle(session, t)}
+            </Text>
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  borderColor: `${accent}40`,
+                  backgroundColor: `${accent}14`,
+                },
+              ]}
+            >
+              <View style={[styles.statusDot, { backgroundColor: accent }]} />
+              <Text style={[styles.statusText, { color: accent }]}>
+                {session.status === "ended"
+                  ? t("history.sessionStatus.ended")
+                  : session.status === "paused"
+                    ? t("history.sessionStatus.paused")
+                    : t("history.sessionStatus.active")}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardMetaRow}>
+            <Feather name="clock" size={12} color={palette.textTertiary} />
+            <Text style={styles.cardMeta}>
+              {formatDuration(session.duration_seconds, t)}
+            </Text>
+            <Text style={styles.cardMetaDot}>·</Text>
+            <Text style={styles.cardMeta}>
+              {formatSessionDate(session.started_at, i18n.language)}
+            </Text>
+            {hasRecap && (
+              <>
+                <Text style={styles.cardMetaDot}>·</Text>
+                <Feather
+                  name="check-circle"
+                  size={11}
+                  color={palette.textAccent}
+                />
+                <Text style={[styles.cardMeta, { color: palette.textAccent }]}>
+                  {t("history.card.recapped")}
+                </Text>
+              </>
+            )}
           </View>
         </View>
+        <View style={styles.cardChevron}>
+          <Feather name="chevron-right" size={16} color={palette.textTertiary} />
+        </View>
+      </Pressable>
+    );
+  }
+
+  function renderListFooter() {
+    if (!isLoadingMore) {
+      return null;
+    }
+
+    return (
+      <View style={styles.loadingMore}>
+        <Feather name="loader" size={16} color={palette.textTertiary} />
+        <Text style={styles.loadingMoreText}>{t("history.state.loadingMore")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      {/* ── Header ── */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View>
+          <Text style={styles.headerEyebrow}>{t("history.headerEyebrow")}</Text>
+          <Text style={styles.headerTitle}>{t("history.headerTitle")}</Text>
+        </View>
+        <Pressable
+          onPress={handleRefresh}
+          style={styles.refreshBtn}
+          accessibilityLabel={t("history.refreshAccessibilityLabel")}
+        >
+          <Feather
+            name="refresh-cw"
+            size={18}
+            color={isSyncing || refreshing ? palette.textAccent : palette.textSecondary}
+          />
+        </Pressable>
       </View>
 
-      {sessions.map((session) => (
-        <View key={session.title} style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>{session.title}</Text>
-            <Feather name="chevron-right" size={18} color="rgba(26,26,26,0.3)" />
-          </View>
-          <Text style={styles.cardMeta}>{session.meta}</Text>
-          <Text style={styles.cardSummary}>{session.summary}</Text>
-        </View>
-      ))}
-    </TabScrollScreen>
+      <FlatList
+        data={sessions}
+        keyExtractor={(session) => session.id}
+        renderItem={renderSessionCard}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarHeight + 80 },
+        ]}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.35}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={palette.textAccent}
+            colors={[palette.textAccent]}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  summaryCard: {
-    borderRadius: 26,
-    padding: 22,
-    backgroundColor: '#FFFFFF',
+  root: {
+    flex: 1,
+    backgroundColor: palette.bgBase,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xxl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.accentBorder,
+    backgroundColor: palette.bgBase,
+  },
+  headerEyebrow: {
+    ...typography.eyebrow,
+    letterSpacing: 2.5,
+    color: palette.textAccent,
+    marginBottom: spacing.xs,
+  },
+  headerTitle: {
+    ...typography.displayLg,
+    fontSize: 30,
+    color: palette.textPrimary,
+    lineHeight: 34,
+  },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 24,
+    borderColor: palette.accentBorder,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  summaryEyebrow: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    color: 'rgba(26,26,26,0.36)',
-    marginBottom: 10,
+  scroll: {
+    flex: 1,
   },
-  summaryTitle: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    gap: spacing.md,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    gap: 24,
-    marginTop: 20,
+  loadingMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
   },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1A1A1A',
+  loadingMoreText: {
+    ...typography.labelMd,
+    color: palette.textSecondary,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: 'rgba(26,26,26,0.52)',
-    marginTop: 4,
+  inlineLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+  },
+  inlineLoadingText: {
+    ...typography.labelMd,
+    color: palette.textSecondary,
+  },
+  statsBanner: {
+    borderRadius: radii.lg,
+    padding: spacing.xl,
+    marginBottom: 4,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    ...shadows.card,
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  statItem: {
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  statValue: {
+    ...typography.displayLg,
+    fontWeight: "800",
+    color: palette.textPrimary,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: palette.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: palette.accentBorder,
+  },
+  statsAccentLine: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: palette.accent,
+    opacity: 0.35,
+  },
+  stateCard: {
+    borderRadius: radii.lg,
+    padding: spacing.xxl,
+    backgroundColor: palette.bgCard,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+    alignItems: "center",
+    gap: spacing.sm + 2,
+    marginTop: spacing.sm,
+    ...shadows.card,
+  },
+  stateIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  stateTitle: {
+    ...typography.bodyLg,
+    fontWeight: "700",
+    color: palette.textPrimary,
+  },
+  stateBody: {
+    ...typography.bodySm,
+    lineHeight: 21,
+    color: palette.textSecondary,
+    textAlign: "center",
+  },
+  retryBtn: {
+    marginTop: 6,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 10,
+    borderRadius: radii.pill,
+    backgroundColor: palette.accent,
+  },
+  retryBtnText: {
+    ...typography.labelLg,
+    color: palette.textOnAccent,
   },
   card: {
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radii.lg,
+    backgroundColor: palette.bgCard,
     borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 12,
+    borderColor: palette.accentBorder,
+    flexDirection: "row",
+    overflow: "hidden",
+    ...shadows.cardSm,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+  cardAccentBar: {
+    width: 3,
+    borderRadius: 2,
+    margin: spacing.md + 2,
+    marginRight: 0,
+    opacity: 0.8,
+  },
+  cardInner: {
+    flex: 1,
+    padding: spacing.md + 2,
+    gap: spacing.sm,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm + 2,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    flex: 1,
+    ...typography.bodyMd,
+    fontWeight: "700",
+    color: palette.textPrimary,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs + 1,
+    paddingHorizontal: spacing.md - 2,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    ...typography.labelSm,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs + 1,
   },
   cardMeta: {
-    fontSize: 12,
-    color: 'rgba(26,26,26,0.42)',
-    marginBottom: 10,
+    ...typography.labelMd,
+    color: palette.textSecondary,
   },
-  cardSummary: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(26,26,26,0.7)',
+  cardMetaDot: {
+    ...typography.labelMd,
+    color: palette.textTertiary,
+  },
+  cardChevron: {
+    justifyContent: "center",
+    paddingRight: spacing.md,
   },
 });

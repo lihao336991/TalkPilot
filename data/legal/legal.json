@@ -1,0 +1,141 @@
+{
+  "meta": {
+    "app_name": "TalkPilot",
+    "publisher_name": "桃李不言",
+    "contact_email": "lihao15510558202@gmail.com",
+    "effective_date": "2026-04-17",
+    "hosting": {
+      "terms_url": "https://lihao336991.github.io/TalkPilotPages/legal/terms.html",
+      "privacy_url": "https://lihao336991.github.io/TalkPilotPages/legal/privacy.html",
+      "repo_url": "https://github.com/lihao336991/TalkPilotPages.git",
+      "repo_local_path": "external/TalkPilotPages",
+      "publish_subdirectory": "legal"
+    }
+  },
+  "subscription_disclosure": {
+    "title": "Subscription terms",
+    "bullets": [
+      "Payment will be charged to your Apple ID account at confirmation of purchase.",
+      "Subscriptions automatically renew unless auto-renew is turned off at least 24 hours before the end of the current period.",
+      "Your account will be charged for renewal within 24 hours prior to the end of the current period.",
+      "You can manage or cancel your subscription in your App Store account settings after purchase.",
+      "If you offer a free trial: any unused portion of a free trial period, if offered, will be forfeited when you purchase a subscription."
+    ],
+    "restore_copy": "If you previously purchased a subscription on this Apple ID, tap Restore Purchases to restore access."
+  },
+  "app_review": {
+    "title": "App Review Notes",
+    "summary": "TalkPilot is a real-time language practice app with speech recognition, translation, AI suggestions, and auto-renewable subscriptions for TalkPilot Pro. The paywall is available from Profile > Upgrade to Pro and may also appear when a signed-in user reaches free usage limits.",
+    "items": [
+      "The app uses auto-renewable subscriptions only. Pricing is shown by the App Store purchase sheet and may vary by region.",
+      "Users can review Terms of Service and Privacy Policy in-app from the paywall and through hosted pages at /legal/terms.html and /legal/privacy.html.",
+      "The app requests microphone access to support live speaking sessions. Spoken audio may be processed by speech recognition, translation, and AI service providers only to deliver the requested real-time features.",
+      "The app may process and store transcripts, generated suggestions, review results, and session metadata when needed to provide conversation history, account sync, customer support, security, or feature continuity.",
+      "Private conversation content is not used for model training by default unless we clearly disclose otherwise and obtain any required consent.",
+      "Users can submit privacy or deletion requests through the in-app legal section or by email at lihao15510558202@gmail.com.",
+      "Restore Purchases is available on the paywall for users who previously subscribed with the same Apple ID.",
+      "Subscription management is available through the in-app customer center and through Apple account subscription settings.",
+      "A signed-in account is required before purchase so subscription access can sync correctly across sessions."
+    ]
+  },
+  "terms": {
+    "title": "Terms of Service",
+    "subtitle": "Please read these Terms of Service carefully before using TalkPilot.",
+    "sections": [
+      {
+        "title": "1. About TalkPilot",
+        "body": "TalkPilot is a language practice app that helps you improve spoken English with real-time speech recognition, translation, AI suggestions, and related support features. These Terms govern your access to and use of the app and related services."
+      },
+      {
+        "title": "2. Accounts",
+        "body": "Some features require you to sign in. You are responsible for the accuracy of the information you provide, the security of your device, and activity that occurs through your account or anonymous app session."
+      },
+      {
+        "title": "3. Microphone, speech, and AI features",
+        "body": "TalkPilot requests microphone access so you can start live speaking sessions. When you choose to use speech, translation, or AI features, your audio, transcripts, and related prompts may be processed by TalkPilot and its service providers to recognize speech, translate content, generate suggestions, or return review results. If you do not want this processing, do not start those features."
+      },
+      {
+        "title": "4. Conversation content and storage",
+        "body": "Depending on the feature you use, TalkPilot may process or store conversation transcripts, generated replies, review results, session metadata, and limited local voice samples so the app can provide history, session continuity, account sync, debugging, fraud prevention, and customer support. Some processing may be transient, while some data may remain associated with your account or device until deleted or no longer needed."
+      },
+      {
+        "title": "5. Model training and product improvement",
+        "body": "Unless we clearly disclose otherwise and obtain any required consent, we do not use your private conversation content to train our own foundation models. We may use de-identified operational metrics, error information, and aggregate usage patterns to improve reliability, abuse prevention, and product performance."
+      },
+      {
+        "title": "6. AI output limitations",
+        "body": "AI-generated suggestions, translations, and reviews may be incomplete, inaccurate, offensive, or unsuitable for your situation. You remain responsible for how you use any output from TalkPilot, especially in legal, medical, financial, employment, safety, or other high-risk situations."
+      },
+      {
+        "title": "7. Subscriptions",
+        "body": "TalkPilot may offer a paid subscription that unlocks premium features. Subscription payments and renewals are processed by the App Store. Prices and availability may vary by region and are shown in the purchase flow."
+      },
+      {
+        "title": "8. Billing, renewal, and cancellation",
+        "body": "Subscriptions renew automatically unless cancelled at least 24 hours before the end of the current period. You can manage or cancel subscriptions in your App Store account settings. Refunds are handled according to App Store policies."
+      },
+      {
+        "title": "9. Restore purchases",
+        "body": "If you reinstall the app or switch devices, you may restore eligible purchases tied to your Apple ID by using the Restore Purchases option in the app. Restoration requires an internet connection and may take time to sync."
+      },
+      {
+        "title": "10. Acceptable use",
+        "body": "You agree not to misuse the app, attempt to disrupt the service, reverse engineer the app, or access the service in an unauthorized way."
+      },
+      {
+        "title": "11. Privacy and data requests",
+        "body": "If you want to access, correct, delete, or inquire about your personal data, contact us at lihao15510558202@gmail.com. We may need to verify your request before taking action."
+      },
+      {
+        "title": "12. Contact",
+        "body": "If you have questions about these Terms, privacy practices, subscriptions, or billing, contact us at: lihao15510558202@gmail.com"
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "subtitle": "This Privacy Policy explains how TalkPilot collects and uses information.",
+    "sections": [
+      {
+        "title": "1. Information we collect",
+        "body": "We collect information needed to operate TalkPilot, including account identifiers such as a user ID, subscription status, app diagnostics, device and usage metadata, and content you choose to submit through speech, text, or support requests."
+      },
+      {
+        "title": "2. Microphone permission and voice data",
+        "body": "TalkPilot requests microphone permission so you can join live speaking sessions. When you actively use those features, we may process spoken audio to perform speech recognition, translation, voice playback, and related AI assistance. If microphone permission is denied, those features will not work."
+      },
+      {
+        "title": "3. Text, transcripts, and conversation content",
+        "body": "Your speech may be converted into text, translated, summarized, reviewed, or used to generate reply suggestions. We may process or store transcripts, generated suggestions, review output, and session records when needed to deliver real-time features, provide conversation history, sync your account, investigate problems, enforce our terms, or support customer requests."
+      },
+      {
+        "title": "4. How we use information",
+        "body": "We use information to authenticate users, provide speech recognition, translation, AI assistance, restore purchases, maintain security, provide customer support, monitor service quality, and improve reliability."
+      },
+      {
+        "title": "5. Analytics and diagnostics",
+        "body": "We may collect app analytics and operational diagnostics, such as app version, runtime version, feature state, and error metadata, to understand product usage and improve stability. By default, we do not include raw private conversation text in our analytics events unless a future feature clearly says otherwise."
+      },
+      {
+        "title": "6. Service providers",
+        "body": "We may use service providers to help run the app, such as the App Store for billing, RevenueCat for subscription management, Supabase and related backend infrastructure, analytics providers, and third-party speech recognition, translation, or AI providers that process content only as needed to deliver the feature you requested."
+      },
+      {
+        "title": "7. Model training",
+        "body": "Unless we clearly disclose otherwise and obtain any required consent, we do not use your private conversation content to train our own foundation models. If this practice changes for any feature, we will update this policy and the relevant product notice before applying that change."
+      },
+      {
+        "title": "8. Data retention",
+        "body": "We retain information for as long as reasonably necessary to provide the service, maintain account history, comply with legal obligations, resolve disputes, enforce agreements, and protect the service. Different categories of data may be kept for different periods depending on their purpose."
+      },
+      {
+        "title": "9. Your choices and deletion requests",
+        "body": "You can manage subscriptions in your App Store account settings. You can also request access, correction, or deletion of your data by emailing lihao15510558202@gmail.com. We may need additional information to verify your request before we act on it."
+      },
+      {
+        "title": "10. Contact",
+        "body": "For questions about this Privacy Policy, privacy requests, or data handling practices, contact: lihao15510558202@gmail.com"
+      }
+    ]
+  }
+}

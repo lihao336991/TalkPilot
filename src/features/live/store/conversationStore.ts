@@ -1,4 +1,24 @@
 import { create } from 'zustand';
+import type { StreamingConnectionStatus } from '@/features/live/services/StreamingWebSocketClient';
+import type { ReviewResult } from '@/features/live/store/reviewStore';
+
+export type TranslationDirection = 'to_learning' | 'to_native';
+export type TranslationStatus = 'idle' | 'loading' | 'done' | 'error';
+export type VoiceprintDecisionLabel = 'self' | 'other' | 'unknown';
+export type SpeakerDecisionSource =
+  | 'deepgram'
+  | 'voiceprint'
+  | 'hybrid'
+  | 'forced'
+  | null;
+export type VoiceprintDecisionConfidence = 'high' | 'medium' | 'low';
+export type VoiceprintDecisionReason =
+  | 'similarity_high'
+  | 'similarity_low'
+  | 'between_thresholds'
+  | 'insufficient_audio'
+  | 'native_unavailable'
+  | 'profile_unavailable';
 
 export type Turn = {
   id: string;
@@ -8,37 +28,203 @@ export type Turn = {
   isFinal: boolean;
   confidence?: number;
   timestamp: number;
+  detectedLanguage?: string;
+  translation?: string;
+  translationStatus?: TranslationStatus;
+  translationDirection?: TranslationDirection;
   reviewScore?: 'green' | 'yellow' | 'red';
+  review?: ReviewResult;
+  isAssist?: boolean;
+  assistSourceText?: string;
 };
+
+type TranslationUpdate = {
+  translation?: string;
+  translationStatus?: TranslationStatus;
+  translationDirection?: TranslationDirection;
+};
+
+type PendingTranslationMap = Record<string, TranslationUpdate | undefined>;
 
 type ConversationState = {
   turns: Turn[];
+  currentStableText: string;
+  currentStableSpeaker: 'self' | 'other' | null;
   currentInterimText: string;
   currentInterimSpeaker: 'self' | 'other' | null;
-  selfSpeakerId: number | null;
+  pendingTurnTranslations: PendingTranslationMap;
+  forcedSpeaker: 'self' | 'other' | null;
   isListening: boolean;
+  mainWsStatus: StreamingConnectionStatus;
+  assistWsStatus: StreamingConnectionStatus;
+  voiceprintEnabled: boolean;
+  voiceprintEnrollmentReady: boolean;
+  lastVoiceprintSimilarity: number | null;
+  lastVoiceprintDecision: VoiceprintDecisionLabel | null;
+  lastVoiceprintConfidence: VoiceprintDecisionConfidence | null;
+  lastVoiceprintReason: VoiceprintDecisionReason | null;
+  lastVoiceprintThresholdHigh: number | null;
+  lastVoiceprintThresholdLow: number | null;
+  lastVoiceprintInputDurationMs: number | null;
+  lastVoiceprintMelFrameCount: number | null;
+  lastVoiceprintEmbeddingLatencyMs: number | null;
+  lastSpeakerDecisionSource: SpeakerDecisionSource;
 
   addTurn: (turn: Turn) => void;
+  updateTurn: (turnId: string, updates: Partial<Turn>) => void;
+  removeTurn: (turnId: string) => void;
+  setTurnReview: (turnId: string, review: ReviewResult) => void;
+  setTurnTranslation: (turnId: string, update: TranslationUpdate) => void;
+  updateStablePreview: (text: string, speaker: 'self' | 'other') => void;
+  clearStablePreview: () => void;
   updateInterim: (text: string, speaker: 'self' | 'other') => void;
   clearInterim: () => void;
-  setSelfSpeakerId: (id: number | null) => void;
+  setForcedSpeaker: (speaker: 'self' | 'other' | null) => void;
   setListening: (listening: boolean) => void;
+  setMainWsStatus: (status: ConversationState['mainWsStatus']) => void;
+  setAssistWsStatus: (status: ConversationState['assistWsStatus']) => void;
+  setVoiceprintState: (
+    state: Partial<
+      Pick<
+        ConversationState,
+        | 'voiceprintEnabled'
+        | 'voiceprintEnrollmentReady'
+        | 'lastVoiceprintSimilarity'
+        | 'lastVoiceprintDecision'
+        | 'lastVoiceprintConfidence'
+        | 'lastVoiceprintReason'
+        | 'lastVoiceprintThresholdHigh'
+        | 'lastVoiceprintThresholdLow'
+        | 'lastVoiceprintInputDurationMs'
+        | 'lastVoiceprintMelFrameCount'
+        | 'lastVoiceprintEmbeddingLatencyMs'
+      >
+    >,
+  ) => void;
+  setSpeakerDecisionSource: (source: SpeakerDecisionSource) => void;
   reset: () => void;
 };
 
 const initialState = {
   turns: [] as Turn[],
+  currentStableText: '',
+  currentStableSpeaker: null as 'self' | 'other' | null,
   currentInterimText: '',
   currentInterimSpeaker: null as 'self' | 'other' | null,
-  selfSpeakerId: null as number | null,
+  pendingTurnTranslations: {} as PendingTranslationMap,
+  forcedSpeaker: null as 'self' | 'other' | null,
   isListening: false,
+  mainWsStatus: 'idle' as StreamingConnectionStatus,
+  assistWsStatus: 'idle' as StreamingConnectionStatus,
+  voiceprintEnabled: false,
+  voiceprintEnrollmentReady: false,
+  lastVoiceprintSimilarity: null,
+  lastVoiceprintDecision: null as VoiceprintDecisionLabel | null,
+  lastVoiceprintConfidence: null as VoiceprintDecisionConfidence | null,
+  lastVoiceprintReason: null as VoiceprintDecisionReason | null,
+  lastVoiceprintThresholdHigh: null,
+  lastVoiceprintThresholdLow: null,
+  lastVoiceprintInputDurationMs: null,
+  lastVoiceprintMelFrameCount: null,
+  lastVoiceprintEmbeddingLatencyMs: null,
+  lastSpeakerDecisionSource: null as SpeakerDecisionSource,
 };
 
 export const useConversationStore = create<ConversationState>((set) => ({
   ...initialState,
 
   addTurn: (turn) =>
-    set((state) => ({ turns: [...state.turns, turn] })),
+    set((state) => {
+      const pendingTranslation = state.pendingTurnTranslations[turn.turnId];
+      const nextTurn = pendingTranslation
+        ? {
+            ...turn,
+            ...(pendingTranslation.translation !== undefined
+              ? { translation: pendingTranslation.translation }
+              : {}),
+            ...(pendingTranslation.translationStatus !== undefined
+              ? { translationStatus: pendingTranslation.translationStatus }
+              : {}),
+            ...(pendingTranslation.translationDirection !== undefined
+              ? { translationDirection: pendingTranslation.translationDirection }
+              : {}),
+          }
+        : turn;
+
+      if (!pendingTranslation) {
+        return { turns: [...state.turns, nextTurn] };
+      }
+
+      const nextPending = { ...state.pendingTurnTranslations };
+      delete nextPending[turn.turnId];
+      return {
+        turns: [...state.turns, nextTurn],
+        pendingTurnTranslations: nextPending,
+      };
+    }),
+
+  updateTurn: (turnId, updates) =>
+    set((state) => ({
+      turns: state.turns.map((t) => (t.id === turnId ? { ...t, ...updates } : t)),
+    })),
+
+  removeTurn: (turnId) =>
+    set((state) => ({
+      turns: state.turns.filter((t) => t.id !== turnId),
+    })),
+
+  setTurnReview: (turnId, review) =>
+    set((state) => ({
+      turns: state.turns.map((turn) =>
+        turn.turnId === turnId
+          ? {
+              ...turn,
+              review,
+              reviewScore: review.overallScore,
+            }
+          : turn,
+      ),
+    })),
+
+  setTurnTranslation: (turnId, update) =>
+    set((state) => {
+      const hasCommittedTurn = state.turns.some((turn) => turn.turnId === turnId);
+      const mergedPending = {
+        ...(state.pendingTurnTranslations[turnId] ?? {}),
+        ...update,
+      };
+
+      return {
+        turns: state.turns.map((turn) =>
+          turn.turnId === turnId
+            ? {
+                ...turn,
+                ...(update.translation !== undefined
+                  ? { translation: update.translation }
+                  : {}),
+                ...(update.translationStatus !== undefined
+                  ? { translationStatus: update.translationStatus }
+                  : {}),
+                ...(update.translationDirection !== undefined
+                  ? { translationDirection: update.translationDirection }
+                  : {}),
+              }
+            : turn,
+        ),
+        pendingTurnTranslations: hasCommittedTurn
+          ? state.pendingTurnTranslations
+          : {
+              ...state.pendingTurnTranslations,
+              [turnId]: mergedPending,
+            },
+      };
+    }),
+
+  updateStablePreview: (text, speaker) =>
+    set({ currentStableText: text, currentStableSpeaker: speaker }),
+
+  clearStablePreview: () =>
+    set({ currentStableText: '', currentStableSpeaker: null }),
 
   updateInterim: (text, speaker) =>
     set({ currentInterimText: text, currentInterimSpeaker: speaker }),
@@ -46,11 +232,23 @@ export const useConversationStore = create<ConversationState>((set) => ({
   clearInterim: () =>
     set({ currentInterimText: '', currentInterimSpeaker: null }),
 
-  setSelfSpeakerId: (id) =>
-    set({ selfSpeakerId: id }),
+  setForcedSpeaker: (speaker) =>
+    set({ forcedSpeaker: speaker }),
 
   setListening: (listening) =>
     set({ isListening: listening }),
+
+  setMainWsStatus: (status) =>
+    set({ mainWsStatus: status }),
+
+  setAssistWsStatus: (status) =>
+    set({ assistWsStatus: status }),
+
+  setVoiceprintState: (voiceprintState) =>
+    set((state) => ({ ...state, ...voiceprintState })),
+
+  setSpeakerDecisionSource: (source) =>
+    set({ lastSpeakerDecisionSource: source }),
 
   reset: () =>
     set(initialState),

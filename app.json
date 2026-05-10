@@ -3,38 +3,35 @@
     "name": "TalkPilot",
     "slug": "talkpilot",
     "version": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/dcd57691-fa34-47f5-812b-a4267526e963",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "talkpilot",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/images/splash-page.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.talkpilot.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "CFBundleAllowMixedLocalizations": true,
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "NSSpeechRecognitionUsageDescription": "TalkPilot uses speech recognition to transcribe conversations.",
-        "NSLocalNetworkUsageDescription": "允许应用访问局域网内的开发服务器",
+        "NSSupportsLiveActivities": true,
         "NSMicrophoneUsageDescription": "TalkPilot uses your microphone to provide real-time English conversation assistance.",
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true,
-          "NSAllowsArbitraryLoads": true,
-          "NSExceptionDomains": {
-            "100.75.160.117": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            },
-            "192.168.2.9": {
-              "NSIncludesSubdomains": true,
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            }
-          }
-        }
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -45,7 +42,9 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.talkpilot.app",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -54,6 +53,8 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
+      "expo-secure-store",
       [
         "expo-build-properties",
         {
@@ -62,13 +63,30 @@
           }
         }
       ],
-      "@kesha-antonov/react-native-background-downloader"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld"
+        }
+      ],
+      "./plugins/with-ios-voice-chat",
+      "@kesha-antonov/react-native-background-downloader",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "lihao",
+          "project": "react-native"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "dcd57691-fa34-47f5-812b-a4267526e963"
+      }
     }
   }
 }

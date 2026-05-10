@@ -73,19 +73,114 @@
 - `src/storage/`：只放本地缓存、SQLite、AsyncStorage 持久化适配
 - 工程化脚本统一优先放到 `scripts/`
 - 大体积原始数据与脚本生成产物优先放到 `data/`
+- 实时音频流的通用 WebSocket 传输层位于 `src/features/live/services/StreamingWebSocketClient.ts`，负责连接、状态同步、发送、暂停保活与断开；具体协议解析与业务副作用继续留在各 provider service 中
+- iOS 本地声纹桥接位于 `ios/TalkPilot/VoiceprintModule.swift`，当前已改为直接调用 Swift Package `NeMoSpeaker-iOS`；JS 层仍通过 `src/features/live/services/VoiceprintNative.ts` 暴露统一接口，模型文件继续从 app bundle 中的 `TitaNetSmall.mlmodelc` 加载
+
+### i18n 约定
+
+- 当前 UI 国际化基础设施位于 `src/shared/i18n/`
+- 语言偏好持久化位于 `src/shared/store/localeStore.ts`
+- 当前首批接入语言为 `en` 与 `zh-CN`
+- 当前产品语言模型已收敛为两层：
+  - `uiLocale`：当前承载母语文案，也就是产品上的 `nativeLanguage`
+  - `learningLanguage`：当前承载学习语言，也就是产品上的 `learningLanguage`
+- 当前设置入口位于 `app/settings.tsx` / `src/features/settings/screens/SettingsScreen.tsx`
+- 设置页当前已提供两个可见选项：
+  - `App language`
+  - `Learning language`
+- 其中：
+  - `uiLocale` 已真实驱动界面文案
+  - `learningLanguage` 已持久化并作为后续多语学习能力的基础偏好
+- 当前双语言职责：
+  - 主 websocket 监听 `learningLanguage`
+  - assist websocket 监听 `uiLocale`
+  - `suggest` = 母语文案 + 学习语言内容
+  - `review` = 母语文案 + 学习语言内容
+  - `assist` = 母语识别 -> 学习语言翻译 -> 学习语言 TTS
+- 历史会话与复盘能力必须基于 `sessions.native_language` / `sessions.learning_language` 的会话级语言快照，不要回退到用当前前端 store 或 `profiles.native_language` 猜测历史语言语义
+- 不要再把当前产品抽象成统一的 `helpLocale`
+- 新增用户可见文案时，必须先加到 `src/shared/i18n/locales/en.ts`，再补其他语言，不要直接在页面里写死字符串
+- 第一版资源文件当前按“每种语言一个文件”维护；如果后续页面和语言继续增长，再按业务域拆分
+- `app/_layout.tsx` 通过 `useI18nBootstrap()` 在启动时同步当前语言；如新增语言设置页，应继续复用这条链路
+- 详细维护说明收敛在 `.trae/documents/i18n维护说明.md`
+- 双语言实现说明收敛在 `.trae/documents/双语言模型说明.md`
+- Coach / Scene recommendation 方案收敛在 `.trae/documents/Coach与Scene Recommendation方案.md`
 
 ### LLM 约定
 
 - 实时会话相关的 LLM 能力由 Supabase Edge Functions `supabase/functions/review` 与 `supabase/functions/suggest` 提供
-- 两个函数共享 `supabase/functions/_shared/llm.ts` 的 provider 配置，默认 provider 为 `minimax`，默认模型为 `minimax-2.5`
-- 当前支持 `openai`、`deepseek`、`minimax` 三类 OpenAI-compatible provider，通过 `LLM_PROVIDER` 与 `LLM_MODEL` 环境变量切换
+- `review` / `suggest` 共享 `supabase/functions/_shared/llm.ts` 的 provider 配置
+- 当前默认 provider 为 `gemini`，默认模型为 `gemini-2.5-flash`
+- 当前支持 `openai`、`deepseek`、`minimax`、`gemini`、`groq`、`together` 六类 provider，通过 `LLM_PROVIDER` 与 `LLM_MODEL` 环境变量切换
+- `Together AI` 通过 OpenAI-compatible endpoint 接入，默认基地址为 `https://api.together.xyz/v1`，密钥使用 `TOGETHER_API_KEY`
 - `review` / `suggest` 的请求体兼容 camelCase 与 snake_case 字段，避免客户端与 Edge Function 命名不一致导致调用失败
+- `assist-reply` 当前支持三种翻译后端，通过 `TRANSLATION_PROVIDER` 切换：
+  - `llm`：沿用通用 LLM 翻译，作为当前默认值
+  - `google`：走 Google Translate v2，需提供 `GOOGLE_TRANSLATE_API_KEY`
+  - `azure`：走 Azure Translator Text API，需提供 `AZURE_TRANSLATOR_KEY`、`AZURE_TRANSLATOR_REGION`，可选 `AZURE_TRANSLATOR_ENDPOINT`
+- `assist-reply` 用于主消息流的 `other -> native` 翻译与 SOS 母语救场的 `native -> learning` 翻译
+- `supabase/functions/` 目录按 Deno Edge Functions 维护：工作区通过 `.vscode/settings.json` 的 `deno.enablePaths` 和 `supabase/functions/deno.json` 提供编辑器配置，根 `tsconfig.json` 需排除该目录，避免 Expo/RN 的 TS 工程把远程 `https://` import 与 `Deno` 全局误判为错误
+- 如需在当前工作区里清理 Supabase Edge Function 的单文件 TS 诊断，可复用 `supabase/functions/_shared/editor-shims.d.ts`，并在入口文件顶部加 `/// <reference path="../_shared/editor-shims.d.ts" />`；这仅用于编辑器类型提示，不影响 Deno 运行时行为
+
+### Auth 约定
+
+- 客户端认证统一使用 `Supabase Auth`
+- 当前认证策略是“游客态优先”：
+  - App 冷启动无 session 时自动走匿名登录
+  - 用户可在 `Profile` 页或独立 `app/login.tsx` 页面升级为正式账号
+- 首期正式登录只接：
+  - `Apple Sign-In`（iOS，`expo-apple-authentication`）
+  - `Google Sign-In`（iOS，`@react-native-google-signin/google-signin`）
+- `Profile` 页当前只用于 auth 信息回显与会话入口，不再承载通用设置占位内容
+- `app/login.tsx` 当前采用透明 modal + 底部弹层交互，作为聚合登录入口：
+  - 从 `Profile` 点击登录进入
+  - 弹层内聚合 Apple / Google 登录按钮
+  - 关闭或登录成功后回到 `Profile`
+- `Profile` 页的主操作约定：
+  - `guest` 态页内固定显示 `Log in` 主按钮
+  - 已登录态右上角固定显示 `Log out` 文字按钮
+  - `Log out` 必须带二次确认，确认后再清理本地登录态并回落游客态
+- `src/shared/api/supabase.ts` 是认证单一入口，负责：
+  - session 恢复
+  - 匿名登录兜底
+  - Apple / Google 登录
+  - 退出后回落游客态
+- `src/shared/store/authStore.ts` 用 `authMode` 区分：
+  - `anonymous`
+  - `authenticated`
+- 本期游客升级正式账号采用“新账号独立登录”策略，不做匿名账号与正式账号绑定或数据迁移
+- 正式账号退出后，应立即恢复匿名游客 session，避免把 App 锁死在未登录状态
+
+### 会员体验约定
+
+- 会员购买成功后，完成确认提示后应回到 `Profile` 页，不要把用户跳去首页
+- `Paywall` 中如果当前账号已经是已订阅态，应优先展示“已生效 / 可管理订阅”的自然状态，而不是继续强调购买 CTA
+- `subscriptionSyncState === syncing` 时，文案要明确表达“购买已确认、账号仍在同步中”，避免让用户误以为会员未生效
+- `Restore Purchases` 成功、失败、未找到可恢复订阅，都应提供明确反馈
+- 从 `Customer Center` 返回 `Paywall` 或 `Profile` 后，应主动刷新一次会员状态，减少“明明买了却感觉没生效”的困惑
+- 上架前 `Terms` / `Privacy` / 订阅披露 / App Review 说明材料统一收敛到 `data/legal/legal.json`，RN 页面读取该数据源，静态托管 HTML 通过 `npm run legal:build` 生成到 `dist/legal/`
+
+### 实时转写约定
+
+- 实时转写目前是“双 WS”结构：
+  - 英语主链路由 `DeepgramStreamingService` 承载
+  - 母语救场链路由 `AssistStreamingService` 承载
+  - 两者都复用 `StreamingWebSocketClient` 作为通用传输层
+- Live 会话当前不再提供显式 `pause/resume` 入口；进入会话后默认持续保持主麦克风录制，直到用户手动挂断
+- Live 工具栏左侧当前是会话级 `Copilot` 开关，默认开启；开启时自动触发 `suggest/review`，关闭后当前会话不再自动触发这两类 LLM 能力
+- `conversationStore` 中的连接状态已拆分为 `mainWsStatus` 与 `assistWsStatus`，不要再把两条链路混用同一个 `wsStatus`
+- 母语救场流程已经不再走本地录音文件上传转写；音频通过母语救场独立 WS 实时识别，`assist-reply` 只负责“文本翻译 + 可选 TTS”
+- 主链路中不再保留 `self -> learning` 的自动翻译；普通主消息流只保留对方说话后的 `other -> native` 翻译，母语转学习语言统一收敛到 SOS 救场链路
+- 母语救场的 debug 步骤当前按 `assist-ws`、`assist-transcript`、`assist-translate`、`assist-tts` 拆分；如果后续继续优化耗时，请优先沿这四段做观测
+- `AssistStreamingService` 的母语救场 WS 在“正常完成一次录音”后可以短暂保活复用
+- 但如果用户是“取消救场录音”，必须清空本地 capture 状态并主动断开 assist WS，不能直接保活复用；否则上一轮未结算的 transcript / 服务端缓冲可能污染下一次录音
 
 ### 原生壳约定
 
 - 当前工程保留了 Expo prebuild 生成的 `ios/` 目录，便于直接在 Xcode 中继续演进
 - iOS deployment target 保持为 `17.0`
-- 如需重新生成原生壳，优先使用 `npm run rebuild:ios`
+- `npm run rebuild:ios` 当前只做安全的 `pod install` / iOS 依赖同步，不再执行 `expo prebuild --clean`
+- 如需显式重新生成 iOS 原生壳，使用 `npm run prebuild:ios:clean`，它会清空并重建 `ios/` 目录，只应在确认需要重建原生壳时使用
 - 如果后续修改应用标识，需同时更新 `app.json` 与 `ios/` 工程配置
 
 ## 后续维护约定
@@ -93,3 +188,4 @@
 - 任何会长期影响后续会话的信息，都应该写进本文件
 - 新增页面结构、依赖升级、架构变更、验证方式变化，都应更新本文件
 - 后续 AI 在结束任务前，应自查“这次是否产生了值得长期保留的上下文”
+- **自我迭代要求**：当在排查 Bug 过程中发现了新的环境限制（如特定系统/框架的隐蔽表现）、或是在沟通中纠正了认知盲区（如因错误推断被用户指正），**必须自觉主动**地将经验总结并写入 `.trae/rules/experience.md` 文件中，避免未来的会话重复踩坑。

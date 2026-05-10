@@ -4,12 +4,14 @@ import { SafeAreaView, ScrollView, StyleProp, StyleSheet, ViewStyle } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getTabBarHeight } from '@/features/navigation/components/CustomTabBar';
 import { TabScreenHeader } from '@/features/navigation/components/TabScreenHeader';
+import { palette, spacing } from '@/shared/theme/tokens';
 
 type TabScrollScreenProps = {
   children: React.ReactNode;
   title?: string;
   subtitle?: string;
   actionIcon?: keyof typeof Feather.glyphMap;
+  actionLabel?: string;
   onActionPress?: () => void;
   actionAccessibilityLabel?: string;
   contentContainerStyle?: StyleProp<ViewStyle>;
@@ -20,19 +22,22 @@ export function TabScrollScreen({
   title,
   subtitle,
   actionIcon,
+  actionLabel,
   onActionPress,
   actionAccessibilityLabel,
   contentContainerStyle,
 }: TabScrollScreenProps) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = getTabBarHeight(insets.bottom);
+  const bottomContentInset = tabBarHeight + 76;
 
   return (
-    <SafeAreaView className="flex-1 bg-paper">
+    <SafeAreaView style={styles.safeArea}>
       <TabScreenHeader
         title={title}
         subtitle={subtitle}
         actionIcon={actionIcon}
+        actionLabel={actionLabel}
         onActionPress={onActionPress}
         actionAccessibilityLabel={actionAccessibilityLabel}
       />
@@ -42,7 +47,7 @@ export function TabScrollScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.contentContainer,
-          { paddingBottom: tabBarHeight + 32 },
+          { paddingBottom: bottomContentInset },
           contentContainerStyle,
         ]}>
         {children}
@@ -53,7 +58,12 @@ export function TabScrollScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    flexGrow: 1,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxl,
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: palette.bgBase,
   },
 });

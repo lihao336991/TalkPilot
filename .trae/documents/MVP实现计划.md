@@ -10,28 +10,28 @@
 
 ### 已有能力
 
-| 类别   | 已有内容                                                      |
-| ---- | --------------------------------------------------------- |
-| 路由框架 | expo-router, 4 个 tab（Live / History / Coach / Profile）占位壳 |
-| 导航组件 | CustomTabBar, TabScrollScreen, TabScreenHeader            |
-| 状态管理 | zustand 已安装，尚未创建业务 store                                  |
-| 后端连接 | @supabase/supabase-js 已初始化（`src/shared/api/supabase.ts`）  |
-| 本地存储 | AppCache 工具类、react-native-mmkv、expo-sqlite                |
-| 样式体系 | nativewind + tailwindcss，暗色卡片风格已建立                        |
-| 原生壳  | iOS prebuild 保留，已声明麦克风权限（`NSMicrophoneUsageDescription`）  |
-| 环境变量 | `.env` 中已有 Supabase URL/Key                               |
+| 类别 | 已有内容 |
+| ---- | ---- |
+| 路由框架 | expo-router + 4 个 Tab，Live/History 已接入实际功能 |
+| 导航组件 | `CustomTabBar`、`TabScrollScreen`、`TabScreenHeader` 已可用，语音房激活时可隐藏底部 Tab 实现沉浸态 |
+| 状态管理 | `conversationStore`、`suggestionStore`、`reviewStore`、`sessionStore`、`debugStore` 已落地 |
+| 后端连接 | `@supabase/supabase-js` 已初始化，并接入匿名登录与会话监听 |
+| 实时音频 | `react-native-live-audio-stream` + Deepgram WebSocket 已打通 |
+| 后端能力 | `deepgram-token`、`suggest`、`review`、`end-session` Edge Functions 已存在 |
+| 本地存储 | `AppCache` 已用于历史页缓存，减少 tab 切换时重复请求 |
+| 样式体系 | Live 页面、对话流、Review、Suggest、DebugOverlay 已有实际 UI |
+| iOS 原生能力 | Expo prebuild 已保留，且新增本地 plugin 准备注入 iOS `voiceChat` 原生模块 |
+| 环境变量 | `.env` / Supabase secrets 已支持多 LLM provider 切换 |
 
-### 需要新增
+### 需要新增 / 待继续优化
 
-| 类别                      | 说明                                                              |
-| ----------------------- | --------------------------------------------------------------- |
-| 音频采集                    | 使用 `react-native-live-audio-stream` 进行流式 PCM 音频采集，支持逐词实时转录 |
-| ASR 引擎                  | Deepgram WebSocket 直连（Pro）/ whisper.rn 端侧（Free）                 |
-| LLM 服务                  | 通过 Supabase Edge Function 调用 OpenAI GPT-4o-mini                 |
-| 实时对话 UI                 | 对话气泡流、建议卡片、Review 指示条                                           |
-| Zustand stores          | conversationStore、suggestionStore、reviewStore、sessionStore      |
-| Supabase Edge Functions | deepgram-token、suggest、review、end-session                       |
-| 数据库表                    | profiles、sessions、turns、suggestions、reviews、vocabulary          |
+| 类别 | 说明 |
+| ---- | ---- |
+| 说话人标定 | 当前仍是 MVP 级 self/other 映射，不是真正声纹识别，需补动态标定 |
+| iOS 音频优化 | 需要跑一次 `expo prebuild` / `run:ios` 验证 `voiceChat` 原生模块效果 |
+| 历史与复盘 | 历史列表已有缓存，但完整复盘报告与报告页仍可继续完善 |
+| Suggest 策略 | 当前为单条 quick reply，后续可继续验证触发时机、文案质量和消失策略 |
+| LLM 运营配置 | 需根据真实效果在 Gemini / Groq / 其他 provider 之间持续 A/B |
 
 ***
 
@@ -84,7 +84,7 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 | Store 文件               | 路径                         | 职责                                     |
 | ---------------------- | -------------------------- | -------------------------------------- |
 | `conversationStore.ts` | `src/features/live/store/` | 管理当前对话的 turns 列表、session 状态、当前 speaker |
-| `suggestionStore.ts`   | `src/features/live/store/` | 管理 AI 回复建议的流式数据和最终结果                   |
+| `suggestionStore.ts`   | `src/features/live/store/` | 管理 AI 回复建议的当前结果、触发 turn 和显隐时机 |
 | `reviewStore.ts`       | `src/features/live/store/` | 管理当前句的 Review 评分和问题列表                  |
 | `sessionStore.ts`      | `src/features/live/store/` | 管理会话的创建、结束、场景配置                        |
 
@@ -127,11 +127,10 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 根据用户订阅类型（暂时固定为 free）选择 ASR 引擎
 
-* Free 用户：端侧 Whisper（whisper.rn）—— 但考虑到 `whisper.rn` 需要额外 native module 和模型下载，MVP 可先统一使用 Deepgram 做验证
+* 规划层面曾考虑端侧 Whisper / Groq Whisper
+* **当前实现统一使用 Deepgram Streaming**
 
-* Pro 用户：Groq Whisper API 或 Deepgram Streaming
-
-> **MVP 简化决策**：初始版本统一使用 Deepgram WebSocket Streaming API，因为它同时提供 diarization（说话人分离）能力，一个连接解决 ASR + Speaker 两个问题。端侧 Whisper 作为后续成本优化再接入。
+> **当前决策**：现阶段统一使用 Deepgram WebSocket Streaming API，因为它同时承担实时转录、切句和 diarization。端侧 Whisper / Groq Whisper 暂保留在后续降本分支，不作为当前主线实现。
 
 #### 1.3 Deepgram Token 获取
 
@@ -159,19 +158,17 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 参数：`model=nova-2, language=en, smart_format=true, interim_results=true, utterance_end_ms=1500, vad_events=true, diarize=true`
 
-* 处理 `Results` 事件：提取 transcript、speaker 标签
+* 处理 `Results` 事件：提取 transcript、speaker 标签，并在同一 utterance 内累计多个 final 片段
 
-* 处理 `UtteranceEnd` 事件：触发建议生成或 Review
+* 处理 `UtteranceEnd` 事件：先提交 turn，再触发建议生成或 Review
 
 * 管理连接生命周期
 
 #### 1.5 说话人标定
 
-* 首次对话时引导用户说一句话（如 "Hello, this is me"）
-
-* 将对应的 Deepgram speaker ID 记为 self
-
-* 存储到 `conversationStore` 和用户 profile 中
+* 当前仅有 MVP 级引导与 self/other 映射
+* 需要补“动态标定”才能显著提升准确率
+* 现阶段不应将其描述为真正的声纹识别
 
 #### 1.6 对话界面重构
 
@@ -191,7 +188,7 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 上方：滚动对话流（TranscriptBubble 组件）
 
-* 下方：AI 建议区域（SuggestionCard 组件，Phase 2 实现）
+* 下方：AI quick reply 区域（更偏气泡感，而非卡片）
 
 * 底部工具栏：暂停/继续、结束对话
 
@@ -209,7 +206,7 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 ### Phase 2：AI 实时回复建议（第 3 周）
 
-> 目标：对方说完后 2 秒内展示 2 条不同风格的回复建议。
+> 目标：对方说完后尽快展示 1 条轻量 quick reply，不阻塞主对话流。
 
 #### 2.1 建议生成 Edge Function
 
@@ -219,9 +216,9 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 构建 Prompt（含场景信息）
 
-* 调用 GPT-4o-mini Streaming API
+* 调用统一 LLM runtime（可切换 Gemini / Groq / OpenAI / DeepSeek / MiniMax）
 
-* 流式返回 SSE 给客户端
+* 返回普通 JSON，同时在 response header 暴露 provider / model / key prefix
 
 #### 2.2 客户端建议服务
 
@@ -229,25 +226,19 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 在 `onUtteranceEnd(speaker='other')` 时触发
 
-* 向 Edge Function 发起 HTTP POST（SSE 模式）
+* 向 Edge Function 发起普通 HTTP POST
 
-* 流式读取并增量更新 `suggestionStore`
+* 仅在结果返回后更新 `suggestionStore`
 
-* 解析完整 JSON 后展示卡片
+* 新的 suggest 请求开始或本人一句话结束时，立即清掉已有 suggest
 
 #### 2.3 建议卡片 UI
 
 **新建组件**：`src/features/live/components/SuggestionCard.tsx`
 
-* 从底部滑入动画（react-native-reanimated）
-
-* 半透明背景，不遮挡对话流
-
-* 显示 2 条建议（Formal / Casual 风格标签）
-
-* 支持点击展开/收起
-
-* 用户开始说话时自动收起淡出
+* 气泡感更强，而不是重卡片感
+* 无 loading 占位，结果到达才显示
+* 旧建议在新 suggest 请求、或本人一句话结束时立刻消失
 
 **新建组件**：`src/features/live/components/SuggestionPanel.tsx`
 
@@ -271,11 +262,11 @@ EXPO_PUBLIC_DEEPGRAM_WS_URL=wss://api.deepgram.com/v1/listen
 
 * 从 DB 读取最近 6 轮上下文
 
-* 调用 GPT-4o-mini（非流式，需完整 JSON）
+* 调用统一 LLM runtime（当前为非流式 JSON）
 
 * 返回 `{ overall_score, issues, better_expression, praise }`
 
-* 异步存储 review 结果
+* 返回 response header，记录 provider / model / key prefix
 
 #### 3.2 客户端 Review 服务
 
@@ -489,10 +480,10 @@ supabase/                              # 项目根目录新增
 | 4  | MVP 认证方案      | Supabase 匿名登录                                   | 快速验证核心功能，后续再补登录 UI                                  |
 | 5  | 状态管理          | Zustand（已安装）                                    | 项目已选型，轻量，适合实时数据流                                    |
 | 6  | 后端架构          | Supabase Edge Functions（Serverless）             | 零运维，按技术方案设计                                         |
-| 7  | LLM 模型        | GPT-4o-mini                                     | 按技术方案，性价比最高                                         |
-| 8  | 建议生成通信        | HTTP POST + SSE 流式返回                            | 比 WebSocket 简单，Edge Function 原生支持                   |
+| 7  | LLM 模型 / Provider | 统一 OpenAI-compatible runtime，可切 Gemini / Groq / OpenAI 等 | 便于 A/B 与快速切模型，不把业务逻辑绑死在单一厂商 |
+| 8  | 建议生成通信        | HTTP POST 普通 JSON 返回                            | 单句建议场景下流式体感收益有限，逻辑更简单稳健 |
 | 9  | Review 通信     | HTTP POST 非流式                                   | Review 需要完整 JSON 结构                                 |
-| 10 | 对话数据存储        | 实时 insert turns 到 Supabase                      | 保证数据不丢失，复盘时有完整记录                                    |
+| 10 | 对话数据存储        | `UtteranceEnd` 后先写 `turns`，再触发 suggest/review | 降低并发竞态和 `recordTurn` 网络失败概率 |
 
 ***
 
@@ -556,4 +547,3 @@ Phase 5（打磨上线）
 | Edge Function 冷启动延迟    | Supabase Edge Function 基于 Deno Deploy，冷启动 < 200ms，可接受                |
 | 实时场景下的网络抖动             | 客户端做 WebSocket 重连逻辑 + 本地缓存未发送的 turn                                  |
 | App Store 审核录音权限       | Info.plist 已声明用途说明，需补充隐私政策页面                                         |
-

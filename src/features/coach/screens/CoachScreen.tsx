@@ -1,100 +1,60 @@
+// TODO 二期：Coach 页面 — 实现 prompt 模板、口语训练、复盘 rubric 和表达素材包。
+// 当前页面已隐藏，待二期 RecommendationService + CoachModuleCatalog 接入后恢复。
+// 参考文档：.trae/documents/Coach与Scene Recommendation方案.md
+
 import React from 'react';
 import { Feather } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { TabScrollScreen } from '@/features/navigation/components/TabScrollScreen';
-
-const drills = [
-  {
-    icon: 'message-square',
-    title: 'Reply polish',
-    description: 'Shorten a response while keeping it friendly and confident.',
-  },
-  {
-    icon: 'repeat',
-    title: 'Rephrase intent',
-    description: 'Switch between casual, business, and interview tones in one tap.',
-  },
-  {
-    icon: 'alert-circle',
-    title: 'Repair moments',
-    description: 'Handle “Sorry, could you repeat that?” and clarification follow-ups.',
-  },
-];
+import { palette, radii, shadows, spacing, typography } from '@/shared/theme/tokens';
 
 export default function CoachScreen() {
-  return (
-    <TabScrollScreen title="Coach" subtitle="Practice flows and reply strategy" actionIcon="message-circle">
-      <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Build reusable coaching surfaces before wiring in real-time AI logic.</Text>
-        <Text style={styles.heroDescription}>
-          This tab is ready for prompt templates, speaking drills, review rubrics, and expression packs.
-        </Text>
-      </View>
+  const { t } = useTranslation();
 
-      {drills.map((item) => (
-        <View key={item.title} style={styles.drillCard}>
-          <View style={styles.iconWrap}>
-            <Feather name={item.icon as keyof typeof Feather.glyphMap} size={18} color="#1A1A1A" />
-          </View>
-          <View style={styles.copyWrap}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardDescription}>{item.description}</Text>
-          </View>
+  return (
+    <TabScrollScreen
+      title={t('coach.title')}
+      subtitle={t('coach.subtitle')}
+      actionIcon="message-circle"
+    >
+      <View style={styles.placeholder}>
+        <View style={styles.iconWrap}>
+          <Feather name="tool" size={28} color={palette.textTertiary} />
         </View>
-      ))}
+        <Text style={styles.placeholderTitle}>{t('coach.placeholderTitle')}</Text>
+        <Text style={styles.placeholderBody}>{t('coach.placeholderBody')}</Text>
+      </View>
     </TabScrollScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: 26,
-    padding: 22,
-    backgroundColor: '#E9E3D9',
-    marginBottom: 24,
-  },
-  heroTitle: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 10,
-  },
-  heroDescription: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: 'rgba(26,26,26,0.7)',
-  },
-  drillCard: {
-    flexDirection: 'row',
-    gap: 14,
-    borderRadius: 22,
-    padding: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(21,22,25,0.08)',
-    marginBottom: 12,
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F5F2ED',
+  placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: spacing.xxxl,
+    gap: spacing.md,
   },
-  copyWrap: {
-    flex: 1,
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.pill,
+    backgroundColor: palette.bgGhostButton,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
-  cardTitle: {
-    fontSize: 16,
+  placeholderTitle: {
+    ...typography.bodyLg,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 6,
+    color: palette.textPrimary,
   },
-  cardDescription: {
-    fontSize: 14,
+  placeholderBody: {
+    ...typography.bodySm,
     lineHeight: 21,
-    color: 'rgba(26,26,26,0.68)',
+    color: palette.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
   },
 });
