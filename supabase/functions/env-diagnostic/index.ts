@@ -61,6 +61,8 @@ serve(async (req: Request) => {
   const supabaseUrl = getSupabaseUrl() ?? "";
   const supabaseAnonKey = getSupabaseAnonKey() ?? "";
   const serviceRoleKey = getSupabaseServiceRoleKey() ?? "";
+  const talkPilotSupabaseUrl = Deno.env.get("TALKPILOT_SUPABASE_URL") ?? "";
+  const reservedSupabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const authorization = req.headers.get("Authorization") ?? "";
   const bearer = authorization.replace(/^Bearer\s+/i, "").trim();
 
@@ -85,6 +87,12 @@ serve(async (req: Request) => {
       functionEnv: {
         appEnv: Deno.env.get("APP_ENV") ?? null,
         expoPublicAppEnv: Deno.env.get("EXPO_PUBLIC_APP_ENV") ?? null,
+        talkPilotSupabaseUrlRef: refFromUrl(talkPilotSupabaseUrl),
+        reservedSupabaseUrlRef: refFromUrl(reservedSupabaseUrl),
+        hasTalkPilotAnonKey: Boolean(Deno.env.get("TALKPILOT_SUPABASE_ANON_KEY")),
+        hasTalkPilotServiceRoleKey: Boolean(
+          Deno.env.get("TALKPILOT_SUPABASE_SERVICE_ROLE_KEY"),
+        ),
         supabaseUrlHost: supabaseUrl ? new URL(supabaseUrl).host : null,
         supabaseUrlRef: refFromUrl(supabaseUrl),
         supabaseAnonKey: safeJwtSummary(supabaseAnonKey),
