@@ -128,14 +128,18 @@ echo "This updates Supabase Edge Functions secrets only."
 echo "Secret values will not be printed."
 echo ""
 
-npx supabase secrets set --env-file "$ENV_FILE" --project-ref "$SUPABASE_PROJECT_REF"
-
+FILTERED_ENV_FILE="$(mktemp)"
 EDGE_SUPABASE_ENV_FILE="$(mktemp)"
-trap 'rm -f "$EDGE_SUPABASE_ENV_FILE"' EXIT
+trap 'rm -f "$FILTERED_ENV_FILE" "$EDGE_SUPABASE_ENV_FILE"' EXIT
+
+grep -vE '^SUPABASE_' "$ENV_FILE" > "$FILTERED_ENV_FILE"
+
+npx supabase secrets set --env-file "$FILTERED_ENV_FILE" --project-ref "$SUPABASE_PROJECT_REF"
+
 {
-    printf 'SUPABASE_URL=%s\n' "$EXPO_PUBLIC_SUPABASE_URL"
-    printf 'SUPABASE_ANON_KEY=%s\n' "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
-    printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
+    printf 'TALKPILOT_SUPABASE_URL=%s\n' "$EXPO_PUBLIC_SUPABASE_URL"
+    printf 'TALKPILOT_SUPABASE_ANON_KEY=%s\n' "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+    printf 'TALKPILOT_SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
 } > "$EDGE_SUPABASE_ENV_FILE"
 
 npx supabase secrets set --env-file "$EDGE_SUPABASE_ENV_FILE" --project-ref "$SUPABASE_PROJECT_REF"

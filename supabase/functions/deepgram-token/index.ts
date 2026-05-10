@@ -2,6 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSupabaseAnonKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
   createAuthRequiredResponse,
   createFeatureAccessDeniedResponse,
@@ -10,8 +11,8 @@ import {
 } from "../_shared/access.ts";
 
 serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
   const deepgramApiKey = Deno.env.get("DEEPGRAM_API_KEY")!;
 
   const authorization = req.headers.get("Authorization") ?? "";

@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { JSON_HEADERS } from "../_shared/access.ts";
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
   buildLlmResponseHeaders,
   runLlmChatCompletion,
@@ -281,9 +282,9 @@ function buildFallbackRecap(
 }
 
 serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
 
   const authorization = req.headers.get("Authorization") ?? "";
 

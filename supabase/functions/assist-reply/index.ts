@@ -1,6 +1,7 @@
 /// <reference path="../_shared/editor-shims.d.ts" />
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSupabaseAnonKey, getSupabaseUrl } from "../_shared/env.ts";
 import { translateWithAzure } from "../_shared/azureTranslate.ts";
 
 type TranslationDirection = "to_learning" | "to_native";
@@ -25,8 +26,8 @@ function readLanguageTag(...candidates: unknown[]): string | null {
 }
 
 serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   const authorization = req.headers.get("Authorization") ?? "";
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {

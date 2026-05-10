@@ -6,6 +6,7 @@ import {
     createAuthRequiredResponse,
     JSON_HEADERS,
 } from "../_shared/access.ts";
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
     buildLlmResponseHeaders,
     extractJsonObject,
@@ -84,9 +85,9 @@ function extractXmlTag(content: string, tag: string): string | null {
 }
 
 serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
 
   const authorization = req.headers.get("Authorization") ?? "";
 

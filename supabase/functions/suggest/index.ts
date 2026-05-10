@@ -2,6 +2,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSupabaseAnonKey, getSupabaseUrl } from "../_shared/env.ts";
 import {
     createAuthRequiredResponse,
     JSON_HEADERS,
@@ -61,8 +62,8 @@ function limitSuggestionWords(text: string, maxWords = 50): string {
 }
 
 serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   const authorization = req.headers.get("Authorization") ?? "";
 
