@@ -1,5 +1,12 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import {
+  publicAppEnv,
+  publicPosthogApiKey,
+  publicPosthogDevEnabled,
+  publicPosthogDisabled,
+  publicPosthogHost,
+} from "@/shared/config/publicEnv";
 
 let posthog: any | null = null;
 let initialized = false;
@@ -8,17 +15,17 @@ let lastScreenName: string | null = null;
 type AnalyticsProps = Record<string, unknown>;
 
 function shouldEnableAnalytics(): boolean {
-  const apiKey = process.env.EXPO_PUBLIC_POSTHOG_API_KEY?.trim();
+  const apiKey = publicPosthogApiKey;
   if (!apiKey) {
     return false;
   }
 
   // Default: do not send dev traffic unless explicitly enabled.
-  if (__DEV__ && process.env.EXPO_PUBLIC_POSTHOG_DEV_ENABLED !== "true") {
+  if (__DEV__ && publicPosthogDevEnabled !== "true") {
     return false;
   }
 
-  if (process.env.EXPO_PUBLIC_POSTHOG_DISABLED === "true") {
+  if (publicPosthogDisabled === "true") {
     return false;
   }
 
@@ -26,8 +33,8 @@ function shouldEnableAnalytics(): boolean {
 }
 
 function getPostHogConfig() {
-  const apiKey = process.env.EXPO_PUBLIC_POSTHOG_API_KEY?.trim() ?? "";
-  const host = process.env.EXPO_PUBLIC_POSTHOG_HOST?.trim() || "https://app.posthog.com";
+  const apiKey = publicPosthogApiKey;
+  const host = publicPosthogHost;
   return { apiKey, host };
 }
 
@@ -50,8 +57,7 @@ function getAppContext(): AnalyticsProps {
   const runtimeVersion = expoConfig?.runtimeVersion ?? null;
 
   return {
-    app_env:
-      process.env.EXPO_PUBLIC_APP_ENV ?? (__DEV__ ? "development" : "production"),
+    app_env: publicAppEnv,
     platform: Platform.OS,
     app_version: appVersion,
     runtime_version: runtimeVersion,

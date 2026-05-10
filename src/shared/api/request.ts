@@ -1,4 +1,7 @@
-import { getRequiredEnv } from '@/shared/config/env';
+import {
+  publicSupabaseAnonKey,
+  publicSupabaseUrl,
+} from '@/shared/config/publicEnv';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -213,17 +216,14 @@ export async function invokeEdgeFunction<T>({
   method = 'POST',
   logSuccess = false,
 }: EdgeFunctionOptions): Promise<RequestResult<T>> {
-  const supabaseUrl = getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = getRequiredEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-
   return requestJson<T>({
     label: `fn:${functionName}`,
-    url: `${supabaseUrl}/functions/v1/${functionName}`,
+    url: `${publicSupabaseUrl}/functions/v1/${functionName}`,
     method,
     logSuccess,
     headers: {
       'Content-Type': 'application/json',
-      apikey: supabaseAnonKey,
+      apikey: publicSupabaseAnonKey,
       ...(accessToken
         ? {
             Authorization: `Bearer ${accessToken}`,

@@ -1,7 +1,10 @@
 import { getAppleSignInCredentials } from '@/shared/auth/providers/appleAuth';
 import { invokeEdgeFunction } from '@/shared/api/request';
 import { logBillingEvent } from '@/shared/billing/logger';
-import { getRequiredEnv } from '@/shared/config/env';
+import {
+    publicSupabaseAnonKey,
+    publicSupabaseUrl,
+} from '@/shared/config/publicEnv';
 import {
     clearGoogleSignInSession,
     configureGoogleSignIn,
@@ -31,72 +34,16 @@ function getSupabaseProjectRef(url: string) {
   }
 }
 
-function decodeBase64(input: string) {
-  const chars =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-  let output = '';
-  let buffer = 0;
-  let bits = 0;
-
-  for (let i = 0; i < input.length; i += 1) {
-    const value = chars.indexOf(input[i]);
-    if (value < 0 || value === 64) {
-      continue;
-    }
-
-    buffer = (buffer << 6) | value;
-    bits += 6;
-
-    if (bits >= 8) {
-      bits -= 8;
-      output += String.fromCharCode((buffer >> bits) & 0xff);
-    }
-  }
-
-  return output;
-}
-
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  const payload = token.split('.')[1];
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    return JSON.parse(decodeBase64(normalized)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function getSessionIssuerRef(session: Session | null) {
-  const payload = session?.access_token
-    ? decodeJwtPayload(session.access_token)
-    : null;
-  return typeof payload?.iss === 'string'
-    ? getSupabaseProjectRef(payload.iss)
-    : null;
-}
-
 const expectedSupabaseProjectRef = getSupabaseProjectRef(
-  getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
+  publicSupabaseUrl,
 );
 const supabaseAuthStorageKey = expectedSupabaseProjectRef
   ? `talkpilot-${expectedSupabaseProjectRef}-auth-token`
   : 'talkpilot-auth-token';
 
-export function getSupabaseClientDiagnostics() {
-  return {
-    expectedProjectRef: expectedSupabaseProjectRef,
-    authStorageKey: supabaseAuthStorageKey,
-    configuredUrl: getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
-  };
-}
-
 export const supabase = createClient(
-  getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
-  getRequiredEnv('EXPO_PUBLIC_SUPABASE_ANON_KEY'),
+  publicSupabaseUrl,
+  publicSupabaseAnonKey,
   {
     auth: {
       autoRefreshToken: true,
@@ -286,20 +233,6 @@ async function recoverValidSession(): Promise<Session | null> {
   recoverSessionPromise = (async () => {
     const { data } = await supabase.auth.getSession();
     let session = data.session;
-
-    const sessionIssuerRef = getSessionIssuerRef(session);
-    if (
-      session &&
-      expectedSupabaseProjectRef &&
-      sessionIssuerRef !== expectedSupabaseProjectRef
-    ) {
-      console.warn('[Auth] Discarding Supabase session from unexpected project:', {
-        expected: expectedSupabaseProjectRef,
-        actual: sessionIssuerRef,
-      });
-      await supabase.auth.signOut({ scope: 'local' });
-      session = null;
-    }
 
     const expiresAtMs = (session?.expires_at ?? 0) * 1000;
     const hasEnoughTtl =
@@ -508,18 +441,6 @@ export async function signOut() {
 
   const guestSession = await signInAsGuestIfNeeded();
   await applySession(guestSession);
-}
-
-export async function resetLocalSupabaseSession() {
-  recoverSessionPromise = null;
-  guestSessionPromise = null;
-  guestFallbackSuppressed = false;
-  await supabase.auth.signOut({ scope: 'local' });
-  useAuthStore.getState().signOut();
-  resetLiveAccessState();
-  const guestSession = await signInGuest();
-  await applySession(guestSession);
-  return guestSession;
 }
 
 export const initAuth = async () => {

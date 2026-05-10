@@ -1,9 +1,11 @@
 import * as Sentry from "@sentry/react-native";
+import {
+  publicSentryDsn,
+  publicSentryEnvironment,
+} from "@/shared/config/publicEnv";
 
-const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
-const sentryEnvironment =
-  process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT?.trim() ||
-  (__DEV__ ? "development" : "production");
+const sentryDsn = publicSentryDsn;
+const sentryEnvironment = publicSentryEnvironment;
 
 export const sentryNavigationIntegration = Sentry.reactNavigationIntegration({
   enableTimeToInitialDisplay: true,

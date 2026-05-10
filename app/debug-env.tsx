@@ -1,15 +1,21 @@
-import { invokeEdgeFunction } from "@/shared/api/request";
 import {
-  getSupabaseClientDiagnostics,
-  resetLocalSupabaseSession,
-  supabase,
-} from "@/shared/api/supabase";
+  publicAppEnv,
+  publicGoogleIosClientId,
+  publicGoogleWebClientId,
+  publicPosthogApiKey,
+  publicPosthogDisabled,
+  publicPosthogHost,
+  publicRevenueCatIosKey,
+  publicSentryDsn,
+  publicSentryEnvironment,
+  publicSupabaseAnonKey,
+  publicSupabaseUrl,
+} from "@/shared/config/publicEnv";
 import { getOrCreateInstallId } from "@/shared/device/installId";
-import { useAuthStore } from "@/shared/store/authStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
+import { useAuthStore } from "@/shared/store/authStore";
 import { palette, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
-import { createClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Updates from "expo-updates";
@@ -18,6 +24,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -30,104 +37,12 @@ type DebugRow = {
   tone?: "normal" | "warning" | "ok";
 };
 
-type ProbeState = {
-  status: "idle" | "running" | "done" | "error";
-  rows: DebugRow[];
-};
-
-function readEnv(name: string) {
-  switch (name) {
-    case "EXPO_PUBLIC_APP_ENV":
-      return process.env.EXPO_PUBLIC_APP_ENV?.trim() || "";
-    case "EXPO_PUBLIC_SUPABASE_URL":
-      return process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() || "";
-    case "EXPO_PUBLIC_SUPABASE_ANON_KEY":
-      return process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() || "";
-    case "EXPO_PUBLIC_SENTRY_ENVIRONMENT":
-      return process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT?.trim() || "";
-    case "EXPO_PUBLIC_SENTRY_DSN":
-      return process.env.EXPO_PUBLIC_SENTRY_DSN?.trim() || "";
-    case "EXPO_PUBLIC_POSTHOG_HOST":
-      return process.env.EXPO_PUBLIC_POSTHOG_HOST?.trim() || "";
-    case "EXPO_PUBLIC_POSTHOG_API_KEY":
-      return process.env.EXPO_PUBLIC_POSTHOG_API_KEY?.trim() || "";
-    case "EXPO_PUBLIC_POSTHOG_DISABLED":
-      return process.env.EXPO_PUBLIC_POSTHOG_DISABLED?.trim() || "";
-    case "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS":
-      return process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS?.trim() || "";
-    case "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID":
-      return process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim() || "";
-    case "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID":
-      return process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim() || "";
-    default:
-      return "";
-  }
-}
-
 function getSupabaseProjectRef(url: string) {
   try {
-    const host = new URL(url).host;
-    return host.split(".")[0] || "unknown";
+    return new URL(url).host.split(".")[0] || "unknown";
   } catch {
     return "invalid-url";
   }
-}
-
-function decodeBase64(input: string) {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-  let output = "";
-  let buffer = 0;
-  let bits = 0;
-
-  for (let i = 0; i < input.length; i += 1) {
-    const value = chars.indexOf(input[i]);
-    if (value < 0 || value === 64) {
-      continue;
-    }
-
-    buffer = (buffer << 6) | value;
-    bits += 6;
-
-    if (bits >= 8) {
-      bits -= 8;
-      output += String.fromCharCode((buffer >> bits) & 0xff);
-    }
-  }
-
-  return output;
-}
-
-function decodeJwtPayload(token: string) {
-  const payload = token.split(".")[1];
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = decodeBase64(normalized);
-    return JSON.parse(decoded) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function refFromJwt(token: string) {
-  const payload = decodeJwtPayload(token);
-  return getSupabaseProjectRef(typeof payload?.iss === "string" ? payload.iss : "");
-}
-
-function summarizeJwt(token: string) {
-  const payload = decodeJwtPayload(token);
-  if (!payload) {
-    return "missing/invalid";
-  }
-
-  const ref = refFromJwt(token);
-  const role = typeof payload.role === "string" ? payload.role : "unknown";
-  const aud = typeof payload.aud === "string" ? payload.aud : "unknown";
-  return `${ref} / role=${role} / aud=${aud}`;
 }
 
 function getHost(url: string) {
@@ -160,22 +75,6 @@ function formatDate(value: Date | string | null | undefined) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
 
-function stringifyProbeValue(value: unknown) {
-  if (value == null) {
-    return "null";
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 function Row({ label, value, tone = "normal" }: DebugRow) {
   return (
     <View style={styles.row}>
@@ -194,13 +93,7 @@ function Row({ label, value, tone = "normal" }: DebugRow) {
   );
 }
 
-function Section({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: DebugRow[];
-}) {
+function Section({ title, rows }: { title: string; rows: DebugRow[] }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -211,14 +104,26 @@ function Section({
   );
 }
 
+function formatDiagnostics(sections: { title: string; rows: DebugRow[] }[]) {
+  const lines = [
+    "TalkPilot Debug Diagnostics",
+    `Captured at: ${new Date().toISOString()}`,
+  ];
+
+  for (const section of sections) {
+    lines.push("", `## ${section.title}`);
+    for (const row of section.rows) {
+      lines.push(`${row.label}: ${row.value}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export default function DebugEnvScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [installId, setInstallId] = useState<string>("loading");
-  const [probeState, setProbeState] = useState<ProbeState>({
-    status: "idle",
-    rows: [],
-  });
+  const [installId, setInstallId] = useState("loading");
   const authMode = useAuthStore((s) => s.authMode);
   const userId = useAuthStore((s) => s.userId);
   const subscriptionTier = useAuthStore((s) => s.subscriptionTier);
@@ -227,6 +132,7 @@ export default function DebugEnvScreen() {
 
   useEffect(() => {
     let mounted = true;
+
     getOrCreateInstallId()
       .then((value) => {
         if (mounted) {
@@ -245,13 +151,8 @@ export default function DebugEnvScreen() {
   }, []);
 
   const sections = useMemo<{ title: string; rows: DebugRow[] }[]>(() => {
-    const appEnv = readEnv("EXPO_PUBLIC_APP_ENV");
-    const supabaseUrl = readEnv("EXPO_PUBLIC_SUPABASE_URL");
-    const sentryEnv = readEnv("EXPO_PUBLIC_SENTRY_ENVIRONMENT");
-    const posthogHost = readEnv("EXPO_PUBLIC_POSTHOG_HOST");
     const expoConfig = Constants.expoConfig;
-    const projectRef = getSupabaseProjectRef(supabaseUrl);
-    const expectedProduction = appEnv === "production";
+    const projectRef = getSupabaseProjectRef(publicSupabaseUrl);
     const productionRef = "joweqhgtueqfeasweigh";
     const developmentRef = "ufaphufpewxpeizoewpn";
 
@@ -261,8 +162,8 @@ export default function DebugEnvScreen() {
         rows: [
           {
             label: "EXPO_PUBLIC_APP_ENV",
-            value: appEnv || "missing",
-            tone: expectedProduction ? "ok" : "warning",
+            value: publicAppEnv || "missing",
+            tone: publicAppEnv === "production" ? "ok" : "warning",
           },
           { label: "__DEV__", value: String(__DEV__) },
           { label: "platform", value: Platform.OS },
@@ -290,27 +191,10 @@ export default function DebugEnvScreen() {
                   ? "warning"
                   : "normal",
           },
-          { label: "host", value: getHost(supabaseUrl) },
-          {
-            label: "expected prod ref",
-            value: productionRef,
-          },
-          {
-            label: "dev ref",
-            value: developmentRef,
-          },
-          {
-            label: "anon key",
-            value: fingerprint(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")),
-          },
-          {
-            label: "anon key issuer",
-            value: summarizeJwt(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")),
-            tone:
-              refFromJwt(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")) === productionRef
-                ? "ok"
-                : "warning",
-          },
+          { label: "host", value: getHost(publicSupabaseUrl) },
+          { label: "expected prod ref", value: productionRef },
+          { label: "dev ref", value: developmentRef },
+          { label: "anon key", value: fingerprint(publicSupabaseAnonKey) },
         ],
       },
       {
@@ -324,10 +208,7 @@ export default function DebugEnvScreen() {
             label: "isEmbeddedLaunch",
             value: String(Updates.isEmbeddedLaunch),
           },
-          {
-            label: "createdAt",
-            value: formatDate(Updates.createdAt),
-          },
+          { label: "createdAt", value: formatDate(Updates.createdAt) },
           {
             label: "isEmergencyLaunch",
             value: String(Updates.isEmergencyLaunch),
@@ -342,31 +223,25 @@ export default function DebugEnvScreen() {
       {
         title: "Public Services",
         rows: [
-          { label: "sentry env", value: sentryEnv || "missing" },
-          {
-            label: "sentry dsn",
-            value: fingerprint(readEnv("EXPO_PUBLIC_SENTRY_DSN")),
-          },
-          { label: "posthog host", value: getHost(posthogHost) },
-          {
-            label: "posthog key",
-            value: fingerprint(readEnv("EXPO_PUBLIC_POSTHOG_API_KEY")),
-          },
+          { label: "sentry env", value: publicSentryEnvironment || "missing" },
+          { label: "sentry dsn", value: fingerprint(publicSentryDsn) },
+          { label: "posthog host", value: getHost(publicPosthogHost) },
+          { label: "posthog key", value: fingerprint(publicPosthogApiKey) },
           {
             label: "posthog disabled",
-            value: readEnv("EXPO_PUBLIC_POSTHOG_DISABLED") || "missing",
+            value: publicPosthogDisabled || "missing",
           },
           {
             label: "revenuecat ios key",
-            value: fingerprint(readEnv("EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS")),
+            value: fingerprint(publicRevenueCatIosKey),
           },
           {
             label: "google ios client",
-            value: fingerprint(readEnv("EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID")),
+            value: fingerprint(publicGoogleIosClientId),
           },
           {
             label: "google web client",
-            value: fingerprint(readEnv("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID")),
+            value: fingerprint(publicGoogleWebClientId),
           },
         ],
       },
@@ -383,250 +258,50 @@ export default function DebugEnvScreen() {
           },
         ],
       },
-      {
-        title: "Active Probes",
-        rows:
-          probeState.status === "idle"
-            ? [{ label: "status", value: "not run" }]
-            : [
-                { label: "status", value: probeState.status },
-                ...probeState.rows,
-              ],
-      },
     ];
   }, [
     authMode,
     dailyMinutesLimit,
     dailyMinutesUsed,
     installId,
-    probeState.rows,
-    probeState.status,
     subscriptionTier,
     userId,
   ]);
 
-  async function runProbes() {
-    setProbeState({ status: "running", rows: [] });
-
-    try {
-      const currentInstallId =
-        installId && installId !== "loading" ? installId : await getOrCreateInstallId();
-      const supabaseUrl = readEnv("EXPO_PUBLIC_SUPABASE_URL");
-      const anonKey = readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
-      const singletonDiagnostics = getSupabaseClientDiagnostics();
-      const freshClient = createClient(supabaseUrl, anonKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false,
-        },
-      });
-      const freshAnonResult = await freshClient.auth.signInAnonymously();
-      const sessionResult = await supabase.auth.getSession();
-      const accessToken = sessionResult.data.session?.access_token ?? "";
-      const userResult = await supabase.auth.getUser();
-      const edgeResult = await invokeEdgeFunction<Record<string, unknown>>({
-        functionName: "env-diagnostic",
-        accessToken,
-        body: { installId: currentInstallId },
-        logSuccess: true,
-      });
-
-      const edgeData = edgeResult.data;
-      const diagnosticVersion =
-        edgeData && typeof edgeData === "object" && "diagnosticVersion" in edgeData
-          ? edgeData.diagnosticVersion
-          : null;
-      const derived =
-        edgeData && typeof edgeData === "object" && "derived" in edgeData
-          ? (edgeData.derived as Record<string, unknown>)
-          : {};
-      const auth =
-        edgeData && typeof edgeData === "object" && "auth" in edgeData
-          ? (edgeData.auth as Record<string, unknown>)
-          : {};
-
-      setProbeState({
-        status: "done",
-        rows: [
-          {
-            label: "client env ref",
-            value: getSupabaseProjectRef(supabaseUrl),
-          },
-          {
-            label: "singleton expected ref",
-            value: singletonDiagnostics.expectedProjectRef ?? "null",
-          },
-          {
-            label: "singleton storage key",
-            value: singletonDiagnostics.authStorageKey,
-          },
-          {
-            label: "fresh anonymous issuer",
-            value: summarizeJwt(freshAnonResult.data.session?.access_token ?? ""),
-            tone:
-              refFromJwt(freshAnonResult.data.session?.access_token ?? "") ===
-              "joweqhgtueqfeasweigh"
-                ? "ok"
-                : "warning",
-          },
-          {
-            label: "fresh anonymous error",
-            value: freshAnonResult.error?.message ?? "null",
-            tone: freshAnonResult.error ? "warning" : "normal",
-          },
-          {
-            label: "client anon issuer",
-            value: summarizeJwt(anonKey),
-          },
-          {
-            label: "local session user",
-            value: sessionResult.data.session?.user.id ?? "null",
-          },
-          {
-            label: "local access issuer",
-            value: summarizeJwt(accessToken),
-          },
-          {
-            label: "client getUser",
-            value: userResult.data.user?.id ?? userResult.error?.message ?? "null",
-            tone: userResult.error ? "warning" : "ok",
-          },
-          {
-            label: "edge diagnostic version",
-            value: stringifyProbeValue(diagnosticVersion),
-            tone:
-              diagnosticVersion === "2026-05-10-talkpilot-env-v2"
-                ? "ok"
-                : "warning",
-          },
-          {
-            label: "edge function DB ref",
-            value: stringifyProbeValue(derived.functionDbRef),
-            tone: derived.functionDbRef === "joweqhgtueqfeasweigh" ? "ok" : "warning",
-          },
-          {
-            label: "edge anon key ref",
-            value: stringifyProbeValue(derived.anonKeyRef),
-            tone: derived.anonKeyRef === "joweqhgtueqfeasweigh" ? "ok" : "warning",
-          },
-          {
-            label: "edge service role ref",
-            value: stringifyProbeValue(derived.serviceRoleKeyRef),
-            tone:
-              derived.serviceRoleKeyRef === "joweqhgtueqfeasweigh"
-                ? "ok"
-                : "warning",
-          },
-          {
-            label: "edge request token ref",
-            value: stringifyProbeValue(derived.requestTokenRef),
-          },
-          {
-            label: "edge auth user",
-            value: stringifyProbeValue(auth.userId ?? auth.error),
-            tone: auth.error ? "warning" : "ok",
-          },
-        ],
-      });
-    } catch (error) {
-      setProbeState({
-        status: "error",
-        rows: [
-          {
-            label: "error",
-            value: error instanceof Error ? error.message : String(error),
-            tone: "warning",
-          },
-        ],
-      });
-    }
-  }
-
-  async function resetLocalSession() {
-    setProbeState({
-      status: "running",
-      rows: [{ label: "action", value: "resetting local Supabase session" }],
+  async function copyDiagnostics() {
+    await Share.share({
+      message: formatDiagnostics(sections),
     });
-
-    try {
-      const session = await resetLocalSupabaseSession();
-      setProbeState({
-        status: "done",
-        rows: [
-          { label: "action", value: "local session reset" },
-          { label: "new user", value: session?.user.id ?? "null" },
-          {
-            label: "new access issuer",
-            value: summarizeJwt(session?.access_token ?? ""),
-            tone:
-              refFromJwt(session?.access_token ?? "") === "joweqhgtueqfeasweigh"
-                ? "ok"
-                : "warning",
-          },
-        ],
-      });
-    } catch (error) {
-      setProbeState({
-        status: "error",
-        rows: [
-          {
-            label: "reset error",
-            value: error instanceof Error ? error.message : String(error),
-            tone: "warning",
-          },
-        ],
-      });
-    }
   }
 
   return (
-    <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
         <Pressable
+          accessibilityRole="button"
+          hitSlop={10}
           onPress={() => router.back()}
           style={styles.iconButton}
-          accessibilityLabel="Close debug screen"
         >
-          <Feather name="x" size={20} color={palette.textPrimary} />
+          <Feather name="x" size={22} color={palette.textPrimary} />
         </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.eyebrow}>Hidden diagnostics</Text>
-          <Text style={styles.title}>Environment Debug</Text>
-        </View>
+        <Text style={styles.title}>Debug</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={copyDiagnostics}
+          style={styles.copyButton}
+        >
+          <Feather name="copy" size={16} color={palette.textPrimary} />
+          <Text style={styles.copyButtonText}>Copy</Text>
+        </Pressable>
       </View>
 
       <ScrollView
-        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: insets.bottom + spacing.xxl },
+          { paddingBottom: insets.bottom + spacing.xl },
         ]}
       >
-        <Pressable
-          onPress={() => void runProbes()}
-          disabled={probeState.status === "running"}
-          style={[
-            styles.probeButton,
-            probeState.status === "running" && styles.probeButtonDisabled,
-          ]}
-        >
-          <Feather name="activity" size={16} color={palette.textOnAccent} />
-          <Text style={styles.probeButtonText}>
-            {probeState.status === "running" ? "Running probes..." : "Run probes"}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => void resetLocalSession()}
-          disabled={probeState.status === "running"}
-          style={[
-            styles.resetButton,
-            probeState.status === "running" && styles.probeButtonDisabled,
-          ]}
-        >
-          <Feather name="refresh-cw" size={16} color={palette.danger} />
-          <Text style={styles.resetButtonText}>Reset local Supabase session</Text>
-        </Pressable>
         {sections.map((section) => (
           <Section key={section.title} {...section} />
         ))}
@@ -636,110 +311,73 @@ export default function DebugEnvScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
+  screen: {
     flex: 1,
     backgroundColor: palette.bgBase,
   },
   header: {
+    minHeight: 56,
+    paddingHorizontal: spacing.lg,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.accentBorder,
+    justifyContent: "space-between",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.neutralBorder,
   },
   iconButton: {
     width: 40,
     height: 40,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
-    backgroundColor: palette.bgCardSolid,
-  },
-  headerText: {
-    flex: 1,
-  },
-  eyebrow: {
-    ...typography.caption,
-    color: palette.textTertiary,
-    textTransform: "uppercase",
   },
   title: {
     ...typography.displaySm,
     color: palette.textPrimary,
   },
-  scroll: {
-    flex: 1,
+  copyButton: {
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: palette.neutralBorder,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  copyButtonText: {
+    ...typography.labelMd,
+    color: palette.textPrimary,
   },
   content: {
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  probeButton: {
-    minHeight: 44,
-    borderRadius: 8,
-    backgroundColor: palette.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  probeButtonDisabled: {
-    opacity: 0.7,
-  },
-  probeButtonText: {
-    ...typography.labelLg,
-    color: palette.textOnAccent,
-  },
-  resetButton: {
-    minHeight: 44,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: palette.dangerBorder,
-    backgroundColor: palette.dangerLight,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  resetButtonText: {
-    ...typography.labelLg,
-    color: palette.danger,
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
   section: {
-    borderWidth: 1,
-    borderColor: palette.accentBorder,
-    borderRadius: 8,
-    backgroundColor: palette.bgCardSolid,
-    overflow: "hidden",
+    gap: spacing.sm,
   },
   sectionTitle: {
     ...typography.labelLg,
     color: palette.textPrimary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: palette.bgInput,
   },
   row: {
-    gap: 4,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: palette.accentBorder,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: palette.neutralBorder,
+    gap: spacing.xs,
   },
   rowLabel: {
     ...typography.caption,
-    color: palette.textTertiary,
+    color: palette.textSecondary,
+    textTransform: "uppercase",
   },
   rowValue: {
-    ...typography.bodyMd,
+    ...typography.bodySm,
     color: palette.textPrimary,
   },
   rowValueWarning: {
     color: palette.danger,
   },
   rowValueOk: {
-    color: palette.textAccent,
+    color: palette.accentDark,
   },
 });

@@ -1,13 +1,20 @@
+import {
+  publicGoogleIosClientId,
+  publicGoogleWebClientId,
+  publicSupabaseAnonKey,
+  publicSupabaseUrl,
+} from '@/shared/config/publicEnv';
+
 function getExpoPublicEnv(name: string): string | undefined {
   switch (name) {
     case 'EXPO_PUBLIC_SUPABASE_URL':
-      return process.env.EXPO_PUBLIC_SUPABASE_URL;
+      return publicSupabaseUrl;
     case 'EXPO_PUBLIC_SUPABASE_ANON_KEY':
-      return process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+      return publicSupabaseAnonKey;
     case 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID':
-      return process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+      return publicGoogleIosClientId;
     case 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID':
-      return process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+      return publicGoogleWebClientId;
     default:
       return process.env[name];
   }

@@ -12,6 +12,10 @@ import {
 } from '@/shared/api/supabase';
 import { analytics } from '@/shared/analytics/analytics';
 import { logBillingEvent } from '@/shared/billing/logger';
+import {
+  publicRevenueCatAndroidKey,
+  publicRevenueCatIosKey,
+} from '@/shared/config/publicEnv';
 import { syncSubscriptionTierToUsageLimit } from '@/shared/repositories/billingRepository';
 import {
     getBillingStateSnapshot,
@@ -52,11 +56,11 @@ function isSupportedPlatform() {
 
 function getRevenueCatApiKey() {
   if (Platform.OS === 'ios') {
-    return process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS ?? '';
+    return publicRevenueCatIosKey;
   }
 
   if (Platform.OS === 'android') {
-    return process.env.EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID ?? '';
+    return publicRevenueCatAndroidKey;
   }
 
   return '';
