@@ -995,24 +995,10 @@ export function useLiveSessionController() {
 
   const handleStartSession = useCallback(async () => {
     if (isDailyLimitReached) {
-      analytics.capture("live_start_blocked", { reason: "daily_limit" });
-      showAlert({
-        title: "今日免费额度已用完",
-        message: "升级到 Pro 后，每天可使用 120 分钟实时对话。",
-        buttons: [
-          { text: "稍后再说", variant: "cancel" },
-          {
-            text: "查看方案",
-            variant: "primary",
-            onPress: () => {
-              analytics.capture("live_start_blocked_opened_paywall", {
-                reason: "daily_limit",
-              });
-              router.push("/paywall" as Href);
-            },
-          },
-        ],
+      analytics.capture("live_start_blocked_opened_paywall", {
+        reason: "daily_limit",
       });
+      router.push("/paywall" as Href);
       return;
     }
 

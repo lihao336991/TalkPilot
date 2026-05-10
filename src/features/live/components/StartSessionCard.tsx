@@ -187,61 +187,40 @@ export function StartSessionCard({
       return;
     }
 
-    if (!isLimitReached) {
-      contentOpacity.value = withTiming(1, { duration: 220 });
-      contentScale.value = withTiming(1, { duration: 220 });
-      contentTranslateY.value = withTiming(0, { duration: 220 });
-      scrimOpacity.value = withTiming(0, { duration: 220 });
-      stageOpacity.value = withTiming(0, { duration: 220 });
-      orbScale.value = withRepeat(
-        withTiming(1.07, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true,
-      );
-      ringScale.value = withRepeat(
-        withTiming(1.6, { duration: 2000, easing: Easing.out(Easing.ease) }),
-        -1,
-        false,
-      );
-      ringOpacity.value = withRepeat(
-        withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }),
-        -1,
-        false,
-      );
-      ring2Scale.value = withRepeat(
-        withTiming(2.1, { duration: 2800, easing: Easing.out(Easing.ease) }),
-        -1,
-        false,
-      );
-      ring2Opacity.value = withRepeat(
-        withTiming(0, { duration: 2800, easing: Easing.out(Easing.ease) }),
-        -1,
-        false,
-      );
-      stageGlowScale.value = withTiming(1, { duration: 180 });
-      stageGlowOpacity.value = withTiming(0.36, { duration: 180 });
-      statusDotScale.value = 1;
-      statusDotOpacity.value = 0.8;
-      particleProgress.value = 0;
-      sweepProgress.value = 0;
-      orbitProgress.value = 0;
-      return;
-    }
-
-    contentOpacity.value = withTiming(1, { duration: 180 });
-    contentScale.value = withTiming(1, { duration: 180 });
-    contentTranslateY.value = withTiming(0, { duration: 180 });
-    scrimOpacity.value = withTiming(0, { duration: 180 });
-    stageOpacity.value = withTiming(0, { duration: 180 });
-    orbScale.value = withTiming(1, { duration: 180 });
-    ringScale.value = withTiming(1, { duration: 180 });
-    ringOpacity.value = withTiming(0, { duration: 180 });
-    ring2Scale.value = withTiming(1, { duration: 180 });
-    ring2Opacity.value = withTiming(0, { duration: 180 });
+    contentOpacity.value = withTiming(1, { duration: 220 });
+    contentScale.value = withTiming(1, { duration: 220 });
+    contentTranslateY.value = withTiming(0, { duration: 220 });
+    scrimOpacity.value = withTiming(0, { duration: 220 });
+    stageOpacity.value = withTiming(0, { duration: 220 });
+    orbScale.value = withRepeat(
+      withTiming(1.07, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    ringScale.value = withRepeat(
+      withTiming(1.6, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    ringOpacity.value = withRepeat(
+      withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    ring2Scale.value = withRepeat(
+      withTiming(2.1, { duration: 2800, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
+    ring2Opacity.value = withRepeat(
+      withTiming(0, { duration: 2800, easing: Easing.out(Easing.ease) }),
+      -1,
+      false,
+    );
     stageGlowScale.value = withTiming(1, { duration: 180 });
-    stageGlowOpacity.value = withTiming(0.3, { duration: 180 });
-    statusDotScale.value = withTiming(1, { duration: 180 });
-    statusDotOpacity.value = withTiming(0.8, { duration: 180 });
+    stageGlowOpacity.value = withTiming(0.36, { duration: 180 });
+    statusDotScale.value = 1;
+    statusDotOpacity.value = 0.8;
     particleProgress.value = 0;
     sweepProgress.value = 0;
     orbitProgress.value = 0;
@@ -358,12 +337,12 @@ export function StartSessionCard({
         )}
 
         <View style={styles.micArea}>
-          {!isLimitReached && (
+          {!isStarting && (
             <Animated.View
               style={[styles.pulseRingBase, styles.pulseRingOuter, ring2Style]}
             />
           )}
-          {!isLimitReached && (
+          {!isStarting && (
             <Animated.View
               style={[styles.pulseRingBase, styles.pulseRingInner, ringStyle]}
             />
@@ -377,31 +356,27 @@ export function StartSessionCard({
               onStart();
             }}
             accessibilityLabel={t("live.startSession.accessibilityLabel")}
-            disabled={isLimitReached || isStarting}
+            disabled={isStarting}
           >
-            <Animated.View style={[!isLimitReached && pulseStyle]}>
-              <View style={[styles.micButton, isLimitReached && styles.micButtonDisabled]}>
+            <Animated.View style={pulseStyle}>
+              <View style={styles.micButton}>
                 <LinearGradient
-                  colors={
-                    isLimitReached
-                      ? [palette.disabledBg, palette.disabledBgEnd]
-                      : [palette.accent, palette.accentGradientEnd]
-                  }
+                  colors={[palette.accent, palette.accentGradientEnd]}
                   style={styles.micGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
                   <Feather
-                    name={isLimitReached ? "lock" : "mic"}
+                    name="mic"
                     size={36}
-                    color={isLimitReached ? palette.disabledText : palette.accentDeep}
+                    color={palette.accentDeep}
                   />
                 </LinearGradient>
               </View>
             </Animated.View>
           </Pressable>
 
-          {!isLimitReached && !isStarting ? (
+          {!isStarting ? (
             <>
               <View style={[styles.floatingTag, styles.floatingTagLeft]}>
                 <View style={styles.floatingTagDot} />
@@ -894,11 +869,6 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     overflow: "hidden",
     ...shadows.mic,
-  },
-  micButtonDisabled: {
-    shadowColor: "transparent",
-    shadowOpacity: 0,
-    elevation: 0,
   },
   micGradient: {
     flex: 1,

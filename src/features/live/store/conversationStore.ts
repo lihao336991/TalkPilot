@@ -67,6 +67,7 @@ type ConversationState = {
   lastVoiceprintThresholdLow: number | null;
   lastVoiceprintInputDurationMs: number | null;
   lastVoiceprintMelFrameCount: number | null;
+  lastVoiceprintEmbeddingLatencyMs: number | null;
   lastSpeakerDecisionSource: SpeakerDecisionSource;
 
   addTurn: (turn: Turn) => void;
@@ -96,6 +97,7 @@ type ConversationState = {
         | 'lastVoiceprintThresholdLow'
         | 'lastVoiceprintInputDurationMs'
         | 'lastVoiceprintMelFrameCount'
+        | 'lastVoiceprintEmbeddingLatencyMs'
       >
     >,
   ) => void;
@@ -124,6 +126,7 @@ const initialState = {
   lastVoiceprintThresholdLow: null,
   lastVoiceprintInputDurationMs: null,
   lastVoiceprintMelFrameCount: null,
+  lastVoiceprintEmbeddingLatencyMs: null,
   lastSpeakerDecisionSource: null as SpeakerDecisionSource,
 };
 

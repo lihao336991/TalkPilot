@@ -2,6 +2,7 @@ import { sessionManager } from '@/features/live/services/SessionManager';
 import { StreamingWebSocketClient } from '@/features/live/services/StreamingWebSocketClient';
 import {
   VOICEPRINT_STRONG_SELF_THRESHOLD,
+  type VoiceprintRangeAnalysis,
   voiceprintService,
 } from '@/features/live/services/VoiceprintService';
 import { useConversationStore } from '@/features/live/store/conversationStore';
@@ -60,6 +61,9 @@ type SpeakerResolution = {
   source: 'deepgram' | 'voiceprint' | 'hybrid' | 'forced';
   voiceprintSimilarity: number | null;
   voiceprintDecision: 'self' | 'other' | 'unknown' | null;
+  voiceprintRangeStartMs: number | null;
+  voiceprintRangeEndMs: number | null;
+  turnEmbedding: number[] | null;
 };
 
 type BufferedTurn = {
@@ -79,6 +83,9 @@ type BufferedTurn = {
   voiceprintOtherVotes: number;
   voiceprintUnknownVotes: number;
   speakerDecisionSource: SpeakerResolution['source'];
+  voiceprintRangeStartMs: number | null;
+  voiceprintRangeEndMs: number | null;
+  turnEmbedding: number[] | null;
 };
 
 type RawSpeakerHint = {
@@ -86,7 +93,14 @@ type RawSpeakerHint = {
   otherVotes: number;
 };
 
+type SpeakerTrack = {
+  prototype: number[] | null;
+  reliableTurnCount: number;
+};
+
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
+const TRACK_SIMILARITY_MARGIN = 0.06;
+const TRACK_UPDATE_ALPHA = 0.22;
 
 function mergeTranscriptSegments(existing: string, incoming: string): string {
   const base = existing.trim();
@@ -133,6 +147,10 @@ export class DeepgramStreamingService {
   private audioCursorSeconds = 0;
   private liveTranscriptBoundarySeconds = 0;
   private rawSpeakerHints = new Map<number, RawSpeakerHint>();
+  private speakerTracks: Record<Speaker, SpeakerTrack> = {
+    self: { prototype: null, reliableTurnCount: 0 },
+    other: { prototype: null, reliableTurnCount: 0 },
+  };
 
   private async commitBufferedTurn(
     speaker: Speaker,
@@ -235,6 +253,9 @@ export class DeepgramStreamingService {
       voiceprintOtherVotes: resolution.voiceprintDecision === 'other' ? 1 : 0,
       voiceprintUnknownVotes: resolution.voiceprintDecision === 'unknown' ? 1 : 0,
       speakerDecisionSource: resolution.source,
+      voiceprintRangeStartMs: resolution.voiceprintRangeStartMs,
+      voiceprintRangeEndMs: resolution.voiceprintRangeEndMs,
+      turnEmbedding: resolution.turnEmbedding,
     };
   }
 
@@ -276,6 +297,19 @@ export class DeepgramStreamingService {
           ? turn.voiceprintPeakSimilarity
           : Math.max(turn.voiceprintPeakSimilarity, resolution.voiceprintSimilarity);
     turn.voiceprintDecision = resolution.voiceprintDecision;
+    turn.turnEmbedding = resolution.turnEmbedding ?? turn.turnEmbedding;
+    turn.voiceprintRangeStartMs =
+      turn.voiceprintRangeStartMs == null
+        ? resolution.voiceprintRangeStartMs
+        : resolution.voiceprintRangeStartMs == null
+          ? turn.voiceprintRangeStartMs
+          : Math.min(turn.voiceprintRangeStartMs, resolution.voiceprintRangeStartMs);
+    turn.voiceprintRangeEndMs =
+      turn.voiceprintRangeEndMs == null
+        ? resolution.voiceprintRangeEndMs
+        : resolution.voiceprintRangeEndMs == null
+          ? turn.voiceprintRangeEndMs
+          : Math.max(turn.voiceprintRangeEndMs, resolution.voiceprintRangeEndMs);
     if (resolution.voiceprintDecision === 'self') {
       turn.voiceprintSelfVotes += 1;
     } else if (resolution.voiceprintDecision === 'other') {
@@ -512,7 +546,7 @@ export class DeepgramStreamingService {
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
     this.liveTranscriptBoundarySeconds = 0;
-    this.rawSpeakerHints.clear();
+    this.resetSpeakerFusionState();
 
     const url =
       'wss://api.deepgram.com/v1/listen?' +
@@ -609,7 +643,10 @@ export class DeepgramStreamingService {
                 continue;
               }
 
-              const resolution = this.determineSpeaker(runWords);
+              const resolution = await this.refineSpeakerResolution(
+                runWords,
+                this.determineSpeaker(runWords),
+              );
               console.log(
                 '[Deepgram] Final transcript (' +
                   resolution.speaker +
@@ -721,6 +758,9 @@ export class DeepgramStreamingService {
                 source: 'deepgram',
                 voiceprintSimilarity: null,
                 voiceprintDecision: null,
+                voiceprintRangeStartMs: null,
+                voiceprintRangeEndMs: null,
+                turnEmbedding: null,
               },
               interimText,
               this.currentDeepgramLanguage,
@@ -829,7 +869,7 @@ export class DeepgramStreamingService {
     this.acceptLiveTranscripts = false;
     this.audioCursorSeconds = 0;
     this.liveTranscriptBoundarySeconds = 0;
-    this.rawSpeakerHints.clear();
+    this.resetSpeakerFusionState();
   }
 
   private getMajoritySpeaker(words: DeepgramWord[]): number {
@@ -901,6 +941,95 @@ export class DeepgramStreamingService {
     return hint.selfVotes > hint.otherVotes ? 'self' : 'other';
   }
 
+  private resetSpeakerFusionState(): void {
+    this.rawSpeakerHints.clear();
+    this.speakerTracks = {
+      self: { prototype: null, reliableTurnCount: 0 },
+      other: { prototype: null, reliableTurnCount: 0 },
+    };
+  }
+
+  private cosineSimilarity(lhs: number[] | null, rhs: number[] | null): number | null {
+    if (!lhs || !rhs || lhs.length === 0 || rhs.length === 0) {
+      return null;
+    }
+
+    const length = Math.min(lhs.length, rhs.length);
+    let dot = 0;
+    let lhsNorm = 0;
+    let rhsNorm = 0;
+    for (let i = 0; i < length; i += 1) {
+      const left = lhs[i] ?? 0;
+      const right = rhs[i] ?? 0;
+      dot += left * right;
+      lhsNorm += left * left;
+      rhsNorm += right * right;
+    }
+
+    if (lhsNorm <= 1e-6 || rhsNorm <= 1e-6) {
+      return null;
+    }
+
+    return dot / (Math.sqrt(lhsNorm) * Math.sqrt(rhsNorm));
+  }
+
+  private normalizeVector(values: number[]): number[] {
+    const norm = Math.sqrt(values.reduce((sum, value) => sum + (value * value), 0));
+    if (norm <= 1e-6) {
+      return values;
+    }
+    return values.map((value) => value / norm);
+  }
+
+  private updateSpeakerTrack(speaker: Speaker, embedding: number[] | null): void {
+    if (!embedding || embedding.length === 0) {
+      return;
+    }
+
+    const track = this.speakerTracks[speaker];
+    if (!track.prototype) {
+      track.prototype = this.normalizeVector(embedding);
+      track.reliableTurnCount = 1;
+      return;
+    }
+
+    const blended = track.prototype.map((value, index) => {
+      const incoming = embedding[index] ?? value;
+      return ((1 - TRACK_UPDATE_ALPHA) * value) + (TRACK_UPDATE_ALPHA * incoming);
+    });
+    track.prototype = this.normalizeVector(blended);
+    track.reliableTurnCount += 1;
+  }
+
+  private getTrackDecision(embedding: number[] | null): Speaker | null {
+    if (!embedding) {
+      return null;
+    }
+
+    const selfSimilarity = this.cosineSimilarity(
+      embedding,
+      this.speakerTracks.self.prototype,
+    );
+    const otherSimilarity = this.cosineSimilarity(
+      embedding,
+      this.speakerTracks.other.prototype,
+    );
+
+    if (selfSimilarity == null || otherSimilarity == null) {
+      return null;
+    }
+
+    if (selfSimilarity >= otherSimilarity + TRACK_SIMILARITY_MARGIN) {
+      return 'self';
+    }
+
+    if (otherSimilarity >= selfSimilarity + TRACK_SIMILARITY_MARGIN) {
+      return 'other';
+    }
+
+    return null;
+  }
+
   private getLocalVoiceprintRangeMs(
     words: DeepgramWord[],
   ): { startMs: number; endMs: number } | null {
@@ -935,6 +1064,112 @@ export class DeepgramStreamingService {
     };
   }
 
+  private async analyzeVoiceprintRange(
+    range: { startMs: number; endMs: number } | null,
+  ): Promise<VoiceprintRangeAnalysis | null> {
+    if (!range) {
+      return null;
+    }
+
+    try {
+      return await voiceprintService.analyzeAudioRange(range.startMs, range.endMs);
+    } catch (error) {
+      console.warn('[Deepgram] Voiceprint range analysis failed:', error, {
+        startMs: range.startMs,
+        endMs: range.endMs,
+      });
+      return null;
+    }
+  }
+
+  private async refineSpeakerResolution(
+    words: DeepgramWord[],
+    resolution: SpeakerResolution,
+  ): Promise<SpeakerResolution> {
+    if (resolution.source === 'forced') {
+      return resolution;
+    }
+
+    const range =
+      resolution.voiceprintRangeStartMs != null &&
+      resolution.voiceprintRangeEndMs != null
+        ? {
+            startMs: resolution.voiceprintRangeStartMs,
+            endMs: resolution.voiceprintRangeEndMs,
+          }
+        : this.getLocalVoiceprintRangeMs(words);
+    const analysis = await this.analyzeVoiceprintRange(range);
+    if (!analysis?.embedding) {
+      return resolution;
+    }
+
+    const thresholds = voiceprintService.getSimilarityThresholds();
+    const rawId = resolution.rawId;
+    const mappedSpeaker = this.resolveMappedSpeaker(rawId);
+    const trackDecision = this.getTrackDecision(analysis.embedding);
+    const strongSelf =
+      analysis.similarity != null && analysis.similarity >= thresholds.high;
+    const lowSelf =
+      analysis.similarity != null && analysis.similarity <= thresholds.low;
+
+    let nextSpeaker = resolution.speaker;
+    let nextSource = resolution.source;
+
+    if (strongSelf) {
+      nextSpeaker = 'self';
+      nextSource = 'voiceprint';
+    } else if (trackDecision) {
+      nextSpeaker = trackDecision;
+      nextSource = 'hybrid';
+    } else if (mappedSpeaker) {
+      nextSpeaker = mappedSpeaker;
+      nextSource = 'hybrid';
+    } else if (lowSelf) {
+      // Low similarity to the enrolled user is only a weak "other" signal.
+      // In a two-person session it is still useful for bootstrapping the other
+      // track, but later track prototypes and raw-speaker votes can override it.
+      nextSpeaker = 'other';
+      nextSource = 'voiceprint';
+    }
+
+    const shouldUpdateTrack =
+      strongSelf ||
+      Boolean(trackDecision) ||
+      Boolean(mappedSpeaker) ||
+      (lowSelf && nextSpeaker === 'other');
+    if (shouldUpdateTrack) {
+      this.updateSpeakerTrack(nextSpeaker, analysis.embedding);
+      this.rememberRawSpeakerHint(rawId, nextSpeaker);
+    }
+
+    const refined: SpeakerResolution = {
+      ...resolution,
+      speaker: nextSpeaker,
+      source: nextSource,
+      voiceprintSimilarity: analysis.similarity,
+      voiceprintDecision: analysis.label,
+      voiceprintRangeStartMs: analysis.audioStartMs,
+      voiceprintRangeEndMs: analysis.audioEndMs,
+      turnEmbedding: analysis.embedding,
+    };
+
+    useConversationStore.getState().setSpeakerDecisionSource(refined.source);
+
+    console.log('[Deepgram] Speaker fusion', {
+      rawId,
+      speaker: refined.speaker,
+      source: refined.source,
+      vp: analysis.similarity != null
+        ? Number(analysis.similarity.toFixed(3))
+        : null,
+      vpDecision: analysis.label,
+      trackDecision,
+      mappedSpeaker,
+    });
+
+    return refined;
+  }
+
   private determineSpeaker(words: DeepgramWord[]): SpeakerResolution {
     const store = useConversationStore.getState();
     const { forcedSpeaker } = store;
@@ -958,6 +1193,9 @@ export class DeepgramStreamingService {
         source: 'forced',
         voiceprintSimilarity,
         voiceprintDecision,
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
       };
     }
 
@@ -970,6 +1208,9 @@ export class DeepgramStreamingService {
         source: 'voiceprint',
         voiceprintSimilarity,
         voiceprintDecision,
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
       };
     }
 
@@ -982,6 +1223,9 @@ export class DeepgramStreamingService {
         source: 'voiceprint',
         voiceprintSimilarity,
         voiceprintDecision,
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
       };
     }
 
@@ -994,6 +1238,9 @@ export class DeepgramStreamingService {
         source: 'hybrid',
         voiceprintSimilarity,
         voiceprintDecision,
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
       };
     }
 
@@ -1005,6 +1252,9 @@ export class DeepgramStreamingService {
       source: 'deepgram',
       voiceprintSimilarity,
       voiceprintDecision,
+      voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+      voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+      turnEmbedding: null,
     };
   }
 }

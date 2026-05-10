@@ -553,7 +553,7 @@ export const zhCN: TranslationSchema = {
     membershipBody: {
       syncing: "购买已确认，Pro 已可使用，我们正在完成账号同步。",
       active: "Pro 已生效，你可以在下方随时管理订阅或恢复购买。",
-      free: "免费版每天包含 10 分钟实时对话、100 次表达复盘和 100 次回复建议。",
+      free: "免费版每天包含 10 分钟实时对话，表达复盘和回复建议不限制次数。",
       guest: "购买前请先登录，这样你的订阅才能在设备间保持同步。",
     },
     limits: {
@@ -562,9 +562,9 @@ export const zhCN: TranslationSchema = {
       suggest: "回复建议",
       liveFree: "10 分钟/天",
       livePro: "120 分钟/天",
-      reviewFree: "100 次/天",
+      reviewFree: "无限制",
       reviewPro: "无限制",
-      suggestFree: "100 次/天",
+      suggestFree: "无限制",
       suggestPro: "无限制",
     },
     detail: {
@@ -634,8 +634,8 @@ export const zhCN: TranslationSchema = {
       },
       benefits: {
         live: "每日 120 分钟实时口语练习",
-        review: "表达复盘不再受免费版每日 100 次限制",
-        suggest: "回复建议不再受免费版每日 100 次限制",
+        review: "所有方案均可无限使用表达复盘",
+        suggest: "所有方案均可无限使用回复建议",
         sync: "支持恢复购买与账号同步",
       },
       inlineActionTerms: "条款",

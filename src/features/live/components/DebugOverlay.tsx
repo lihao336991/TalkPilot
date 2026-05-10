@@ -309,6 +309,9 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
   const lastVoiceprintMelFrameCount = useConversationStore(
     (s) => s.lastVoiceprintMelFrameCount,
   );
+  const lastVoiceprintEmbeddingLatencyMs = useConversationStore(
+    (s) => s.lastVoiceprintEmbeddingLatencyMs,
+  );
   const lastSpeakerDecisionSource = useConversationStore(
     (s) => s.lastSpeakerDecisionSource,
   );
@@ -733,6 +736,14 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
               <Text style={styles.metricValue}>
                 {lastVoiceprintInputDurationMs != null
                   ? `${Math.round(lastVoiceprintInputDurationMs / 1000)}s / ${lastVoiceprintMelFrameCount ?? "--"}f`
+                  : "--"}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Embedding 耗时</Text>
+              <Text style={styles.metricValue}>
+                {lastVoiceprintEmbeddingLatencyMs != null
+                  ? `${lastVoiceprintEmbeddingLatencyMs} ms`
                   : "--"}
               </Text>
             </View>

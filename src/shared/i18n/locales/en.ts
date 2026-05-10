@@ -441,7 +441,7 @@ export const en = {
         "Read how microphone, speech, transcript, and analytics data are processed.",
       termsTitle: "Terms of Service",
       termsDescription:
-        "Review the product terms, AI feature limits, subscriptions, and acceptable use.",
+        "Review the product terms, subscriptions, and acceptable use.",
     },
     debug: {
       description:
@@ -578,7 +578,7 @@ export const en = {
       syncing:
         "Purchase confirmed. Pro access is already active while we finish syncing.",
       active: "Pro is active. Manage billing or restore purchases anytime below.",
-      free: "Free includes 10 live min, 100 reviews, and 100 suggestions per day.",
+      free: "Free includes 10 live min/day. AI review and reply suggestions are unlimited.",
       guest:
         "Log in before purchasing so your subscription stays synced across devices.",
     },
@@ -588,9 +588,9 @@ export const en = {
       suggest: "Suggest",
       liveFree: "10 min/day",
       livePro: "120 min/day",
-      reviewFree: "100/day",
+      reviewFree: "Unlimited",
       reviewPro: "Unlimited",
-      suggestFree: "100/day",
+      suggestFree: "Unlimited",
       suggestPro: "Unlimited",
     },
     detail: {
@@ -666,8 +666,8 @@ export const en = {
       },
       benefits: {
         live: "120 live speaking minutes every day instead of 10",
-        review: "Unlimited AI review instead of the free 100/day cap",
-        suggest: "Unlimited AI reply suggestions instead of the free 100/day cap",
+        review: "Unlimited AI review for every plan",
+        suggest: "Unlimited AI reply suggestions for every plan",
         sync: "Purchase restore and account sync",
       },
       inlineActionTerms: "Terms",

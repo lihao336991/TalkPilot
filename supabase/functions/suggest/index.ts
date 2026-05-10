@@ -4,9 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
     createAuthRequiredResponse,
-    createFeatureAccessDeniedResponse,
     JSON_HEADERS,
-    mapFeatureAccessRow,
 } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
@@ -82,11 +80,6 @@ serve(async (req: Request) => {
   }
 
   const body = await req.json();
-  const installIdRaw = body.install_id ?? body.installId;
-  const installId =
-    typeof installIdRaw === "string" && String(installIdRaw).trim().length > 0
-      ? String(installIdRaw).trim()
-      : "";
   const sessionId = body.session_id ?? body.sessionId;
   const lastUtterance = body.last_utterance ?? body.lastUtterance;
   const scene = body.scene;
@@ -97,48 +90,11 @@ serve(async (req: Request) => {
 
   if (
     typeof sessionId !== "string" ||
-    typeof lastUtterance !== "string" ||
-    !installId
+    typeof lastUtterance !== "string"
   ) {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
       headers: JSON_HEADERS,
-    });
-  }
-
-  const { data: accessRows, error: accessError } = await supabase.rpc(
-    "consume_feature_access",
-    {
-      p_user_id: user.id,
-      p_feature_key: "suggestion",
-      p_install_id: installId,
-    },
-  );
-
-  if (accessError) {
-    console.error("[Suggest] Access Error:", {
-      userId: user.id,
-      sessionId,
-      code: accessError.code,
-      message: accessError.message,
-      details: accessError.details,
-      hint: accessError.hint,
-    });
-    return new Response(JSON.stringify({ error: "Suggestion access check failed" }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
-  }
-
-  const access = mapFeatureAccessRow("suggestion", accessRows?.[0]);
-
-  if (!access.allowed) {
-    return createFeatureAccessDeniedResponse({
-      access,
-      error: "Suggestion quota exhausted",
-      extra: {
-        upgrade_required: true,
-      },
     });
   }
 
@@ -202,7 +158,7 @@ Last utterance from the other person: "${lastUtterance}"`;
     const cleanText = limitSuggestionWords(sanitizeSuggestionText(rawContent));
     const suggestions = cleanText ? [{ style: "simple", text: cleanText }] : [];
 
-    return new Response(JSON.stringify({ suggestions, access }), {
+    return new Response(JSON.stringify({ suggestions }), {
       status: 200,
       headers: responseHeaders,
     });

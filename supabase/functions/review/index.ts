@@ -4,9 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
     createAuthRequiredResponse,
-    createFeatureAccessDeniedResponse,
     JSON_HEADERS,
-    mapFeatureAccessRow,
 } from "../_shared/access.ts";
 import {
     buildLlmResponseHeaders,
@@ -106,11 +104,6 @@ serve(async (req: Request) => {
   }
 
   const body = await req.json();
-  const installIdRaw = body.install_id ?? body.installId;
-  const installId =
-    typeof installIdRaw === "string" && String(installIdRaw).trim().length > 0
-      ? String(installIdRaw).trim()
-      : "";
   const sessionId = body.session_id ?? body.sessionId;
   const userUtterance = body.user_utterance ?? body.userUtterance;
   const scene = body.scene;
@@ -125,8 +118,7 @@ serve(async (req: Request) => {
 
   if (
     typeof sessionId !== "string" ||
-    typeof userUtterance !== "string" ||
-    !installId
+    typeof userUtterance !== "string"
   ) {
     return new Response(JSON.stringify({ error: "Invalid request payload" }), {
       status: 400,
@@ -146,42 +138,6 @@ serve(async (req: Request) => {
         headers: JSON_HEADERS,
       },
     );
-  }
-
-  const { data: accessRows, error: accessError } = await supabase.rpc(
-    "consume_feature_access",
-    {
-      p_user_id: user.id,
-      p_feature_key: "review",
-      p_install_id: installId,
-    },
-  );
-
-  if (accessError) {
-    console.error("[Review] Access Error:", {
-      userId: user.id,
-      sessionId,
-      code: accessError.code,
-      message: accessError.message,
-      details: accessError.details,
-      hint: accessError.hint,
-    });
-    return new Response(JSON.stringify({ error: "Review access check failed" }), {
-      status: 500,
-      headers: JSON_HEADERS,
-    });
-  }
-
-  const access = mapFeatureAccessRow("review", accessRows?.[0]);
-
-  if (!access.allowed) {
-    return createFeatureAccessDeniedResponse({
-      access,
-      error: "Review quota exhausted",
-      extra: {
-        upgrade_required: true,
-      },
-    });
   }
 
   const { data: turns } = await supabase
@@ -210,7 +166,6 @@ serve(async (req: Request) => {
       },
       issues: {
         type: "array",
-        maxItems: 2,
         items: {
           type: "object",
           additionalProperties: false,
@@ -384,7 +339,7 @@ Remember: infer around likely ASR noise; focus on expression logic and word choi
       })
       .then();
 
-    return new Response(JSON.stringify({ overall_score, issues, better_expression, praise, access }), {
+    return new Response(JSON.stringify({ overall_score, issues, better_expression, praise }), {
       status: 200,
       headers: responseHeaders,
     });
