@@ -132,7 +132,7 @@ export default function HistoryScreen() {
   }, [historyCacheUserId, loadSessions]);
 
   async function handleRefresh() {
-    if (refreshing) {
+    if (refreshing || isSyncing) {
       return;
     }
     setRefreshing(true);
@@ -219,7 +219,7 @@ export default function HistoryScreen() {
         </LinearGradient>
 
         {/* ── Lightweight sync indicator ── */}
-        {(isSyncing || refreshing) && (
+        {isSyncing && !refreshing && (
           <View style={styles.inlineLoading}>
             <ActivityIndicator size="small" color={palette.textAccent} />
             <Text style={styles.inlineLoadingText}>
@@ -384,10 +384,10 @@ export default function HistoryScreen() {
         onEndReachedThreshold={0.35}
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="transparent"
-            colors={["transparent"]}
+            tintColor={palette.textAccent}
+            colors={[palette.textAccent]}
           />
         }
         showsVerticalScrollIndicator={false}

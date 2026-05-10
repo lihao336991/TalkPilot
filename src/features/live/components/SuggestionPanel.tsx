@@ -19,40 +19,41 @@ export default function SuggestionPanel({
   const { suggestions, triggerTurnId } = useSuggestionStore();
   const suggestion = suggestions[0];
 
-  if (!suggestion) {
-    return null;
-  }
-
   return (
-    <View key={triggerTurnId ?? suggestion.text} style={styles.container}>
-      <Animated.View
-        pointerEvents="none"
-        entering={auraEnter}
-        exiting={auraExit}
-        style={styles.glow}
-      />
-      <Animated.View
-        entering={panelShellEnter}
-        exiting={panelShellExit}
-        style={styles.cardShell}
-      >
-        <Animated.View
-          entering={panelContentEnter}
-          exiting={panelContentExit}
-        >
-          <SuggestionCard
-            suggestion={suggestion}
-            onSend={() => onSendSuggestion(suggestion.text)}
-            isSending={isSendingSuggestion}
+    <View style={styles.container}>
+      {suggestion && (
+        <View key={triggerTurnId ?? suggestion.text}>
+          <Animated.View
+            pointerEvents="none"
+            entering={auraEnter}
+            exiting={auraExit}
+            style={styles.glow}
           />
-        </Animated.View>
-      </Animated.View>
+          <Animated.View
+            entering={panelShellEnter}
+            exiting={panelShellExit}
+            style={styles.cardShell}
+          >
+            <Animated.View
+              entering={panelContentEnter}
+              exiting={panelContentExit}
+            >
+              <SuggestionCard
+                suggestion={suggestion}
+                onSend={() => onSendSuggestion(suggestion.text)}
+                isSending={isSendingSuggestion}
+              />
+            </Animated.View>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    minHeight: 114,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,

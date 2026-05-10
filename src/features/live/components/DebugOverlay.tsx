@@ -45,6 +45,13 @@ function formatSimilarity(value: number | null | undefined) {
   return value.toFixed(3);
 }
 
+function formatSimilarityPair(
+  topK: number | null | undefined,
+  peak: number | null | undefined,
+) {
+  return `${formatSimilarity(topK)} / ${formatSimilarity(peak)}`;
+}
+
 function formatThresholdDistance(
   similarity: number | null,
   threshold: number | null,
@@ -218,7 +225,7 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
         <Text style={styles.metricValue}>{formatDurationMs(totalLatency)}</Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>声纹相似度</Text>
+        <Text style={styles.metricLabel}>Enrollment 相似度</Text>
         <Text style={styles.metricValue}>
           {trace.voiceprintSimilarity != null
             ? trace.voiceprintSimilarity.toFixed(3)
@@ -226,19 +233,51 @@ function TraceCard({ trace }: { trace: DebugTurnTrace }) {
         </Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>声纹判定</Text>
+        <Text style={styles.metricLabel}>Enrollment 标签</Text>
         <Text style={styles.metricValue}>
           {trace.voiceprintDecision ?? "--"}
         </Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>来源</Text>
+        <Text style={styles.metricLabel}>Resolver 原因</Text>
+        <Text style={styles.metricValue}>
+          {trace.speakerDecisionReason ?? "--"}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>Self topK / peak</Text>
+        <Text style={styles.metricValue}>
+          {formatSimilarityPair(
+            trace.voiceprintSelfTopKSimilarity,
+            trace.voiceprintSelfPeakSimilarity,
+          )}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>Other topK / peak</Text>
+        <Text style={styles.metricValue}>
+          {formatSimilarityPair(
+            trace.voiceprintOtherTopKSimilarity,
+            trace.voiceprintOtherPeakSimilarity,
+          )}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>记忆数量 self / other</Text>
+        <Text style={styles.metricValue}>
+          {`${trace.voiceprintSelfMemoryCount ?? 0} / ${
+            trace.voiceprintOtherMemoryCount ?? 0
+          }`}
+        </Text>
+      </View>
+      <View style={styles.metricRow}>
+        <Text style={styles.metricLabel}>身份来源</Text>
         <Text style={styles.metricValue}>
           {trace.speakerDecisionSource ?? "--"}
         </Text>
       </View>
       <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>Deepgram speakerId</Text>
+        <Text style={styles.metricLabel}>Deepgram run id</Text>
         <Text style={styles.metricValue}>
           {trace.deepgramSpeakerId != null
             ? String(trace.deepgramSpeakerId)
@@ -685,7 +724,7 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>最近相似度</Text>
+              <Text style={styles.metricLabel}>最近 Enrollment 相似度</Text>
               <Text style={styles.metricValue}>
                 {formatSimilarity(lastVoiceprintSimilarity)}
               </Text>
@@ -718,7 +757,7 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>最近判定</Text>
+              <Text style={styles.metricLabel}>最近 Enrollment 标签</Text>
               <Text style={styles.metricValue}>
                 {lastVoiceprintDecision ?? "--"}
               </Text>
@@ -748,11 +787,49 @@ function DebugOverlayContent({ onRestartMainMicrophone }: DebugOverlayProps) {
               </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>说话人来源</Text>
+              <Text style={styles.metricLabel}>身份来源</Text>
               <Text style={styles.metricValue}>
                 {lastSpeakerDecisionSource ?? "--"}
               </Text>
             </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>最近 Resolver 原因</Text>
+              <Text style={styles.metricValue}>
+                {latestTrace?.speakerDecisionReason ?? "--"}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>最近 Self topK / peak</Text>
+              <Text style={styles.metricValue}>
+                {formatSimilarityPair(
+                  latestTrace?.voiceprintSelfTopKSimilarity,
+                  latestTrace?.voiceprintSelfPeakSimilarity,
+                )}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>最近 Other topK / peak</Text>
+              <Text style={styles.metricValue}>
+                {formatSimilarityPair(
+                  latestTrace?.voiceprintOtherTopKSimilarity,
+                  latestTrace?.voiceprintOtherPeakSimilarity,
+                )}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>记忆数量 self / other</Text>
+              <Text style={styles.metricValue}>
+                {latestTrace
+                  ? `${latestTrace.voiceprintSelfMemoryCount ?? 0} / ${
+                      latestTrace.voiceprintOtherMemoryCount ?? 0
+                    }`
+                  : "--"}
+              </Text>
+            </View>
+            <Text style={styles.helperText}>
+              Deepgram speakerId 现在只用于切分 run；身份以 enrollment 与本地
+              self/other 记忆相似度为准。
+            </Text>
           </View>
         </View>
 

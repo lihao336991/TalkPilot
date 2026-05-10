@@ -1,7 +1,6 @@
 import { sessionManager } from '@/features/live/services/SessionManager';
 import { StreamingWebSocketClient } from '@/features/live/services/StreamingWebSocketClient';
 import {
-  VOICEPRINT_STRONG_SELF_THRESHOLD,
   type VoiceprintRangeAnalysis,
   voiceprintService,
 } from '@/features/live/services/VoiceprintService';
@@ -61,6 +60,13 @@ type SpeakerResolution = {
   source: 'deepgram' | 'voiceprint' | 'hybrid' | 'forced';
   voiceprintSimilarity: number | null;
   voiceprintDecision: 'self' | 'other' | 'unknown' | null;
+  voiceprintSelfTopKSimilarity: number | null;
+  voiceprintSelfPeakSimilarity: number | null;
+  voiceprintOtherTopKSimilarity: number | null;
+  voiceprintOtherPeakSimilarity: number | null;
+  voiceprintSelfMemoryCount: number;
+  voiceprintOtherMemoryCount: number;
+  speakerDecisionReason: string | null;
   voiceprintRangeStartMs: number | null;
   voiceprintRangeEndMs: number | null;
   turnEmbedding: number[] | null;
@@ -79,6 +85,13 @@ type BufferedTurn = {
   voiceprintSimilarity: number | null;
   voiceprintPeakSimilarity: number | null;
   voiceprintDecision: 'self' | 'other' | 'unknown' | null;
+  voiceprintSelfTopKSimilarity: number | null;
+  voiceprintSelfPeakSimilarity: number | null;
+  voiceprintOtherTopKSimilarity: number | null;
+  voiceprintOtherPeakSimilarity: number | null;
+  voiceprintSelfMemoryCount: number;
+  voiceprintOtherMemoryCount: number;
+  speakerDecisionReason: string | null;
   voiceprintSelfVotes: number;
   voiceprintOtherVotes: number;
   voiceprintUnknownVotes: number;
@@ -88,19 +101,38 @@ type BufferedTurn = {
   turnEmbedding: number[] | null;
 };
 
-type RawSpeakerHint = {
-  selfVotes: number;
-  otherVotes: number;
+type SpeakerMemorySource =
+  | 'strong_enrollment'
+  | 'weak_seed'
+  | 'self_match'
+  | 'other_match'
+  | 'low_enrollment';
+
+type SpeakerEmbeddingSample = {
+  embedding: number[];
+  enrollmentSimilarity: number | null;
+  createdAt: number;
+  confidence: number;
+  source: SpeakerMemorySource;
 };
 
-type SpeakerTrack = {
-  prototype: number[] | null;
-  reliableTurnCount: number;
+type SpeakerMemoryStats = {
+  topKAvg: number | null;
+  peak: number | null;
+  count: number;
 };
 
 const DEFAULT_RECONNECT_MAX_ATTEMPTS = 3;
-const TRACK_SIMILARITY_MARGIN = 0.06;
-const TRACK_UPDATE_ALPHA = 0.22;
+const SPEAKER_MEMORY_LIMIT = 10;
+const SPEAKER_MEMORY_TOP_K = 3;
+const SELF_MEMORY_MATCH_THRESHOLD = 0.55;
+const SELF_MEMORY_PEAK_THRESHOLD = 0.62;
+const SELF_MEMORY_SUPPORT_THRESHOLD = 0.50;
+const OTHER_MEMORY_MATCH_THRESHOLD = 0.55;
+const MEMORY_SIMILARITY_MARGIN = 0.06;
+const WEAK_SELF_SEED_MIN_SIMILARITY = 0.36;
+const SELF_MIGRATION_MARGIN = 0.04;
+const SELF_MIGRATION_DISSIMILARITY_THRESHOLD = 0.50;
 
 function mergeTranscriptSegments(existing: string, incoming: string): string {
   const base = existing.trim();
@@ -146,10 +178,9 @@ export class DeepgramStreamingService {
   private acceptLiveTranscripts = false;
   private audioCursorSeconds = 0;
   private liveTranscriptBoundarySeconds = 0;
-  private rawSpeakerHints = new Map<number, RawSpeakerHint>();
-  private speakerTracks: Record<Speaker, SpeakerTrack> = {
-    self: { prototype: null, reliableTurnCount: 0 },
-    other: { prototype: null, reliableTurnCount: 0 },
+  private speakerMemory: Record<Speaker, SpeakerEmbeddingSample[]> = {
+    self: [],
+    other: [],
   };
 
   private async commitBufferedTurn(
@@ -249,6 +280,13 @@ export class DeepgramStreamingService {
       voiceprintSimilarity: resolution.voiceprintSimilarity,
       voiceprintPeakSimilarity: resolution.voiceprintSimilarity,
       voiceprintDecision: resolution.voiceprintDecision,
+      voiceprintSelfTopKSimilarity: resolution.voiceprintSelfTopKSimilarity,
+      voiceprintSelfPeakSimilarity: resolution.voiceprintSelfPeakSimilarity,
+      voiceprintOtherTopKSimilarity: resolution.voiceprintOtherTopKSimilarity,
+      voiceprintOtherPeakSimilarity: resolution.voiceprintOtherPeakSimilarity,
+      voiceprintSelfMemoryCount: resolution.voiceprintSelfMemoryCount,
+      voiceprintOtherMemoryCount: resolution.voiceprintOtherMemoryCount,
+      speakerDecisionReason: resolution.speakerDecisionReason,
       voiceprintSelfVotes: resolution.voiceprintDecision === 'self' ? 1 : 0,
       voiceprintOtherVotes: resolution.voiceprintDecision === 'other' ? 1 : 0,
       voiceprintUnknownVotes: resolution.voiceprintDecision === 'unknown' ? 1 : 0,
@@ -269,6 +307,13 @@ export class DeepgramStreamingService {
       asrFinalAt,
       voiceprintSimilarity: turn.voiceprintSimilarity,
       voiceprintDecision: turn.voiceprintDecision,
+      voiceprintSelfTopKSimilarity: turn.voiceprintSelfTopKSimilarity,
+      voiceprintSelfPeakSimilarity: turn.voiceprintSelfPeakSimilarity,
+      voiceprintOtherTopKSimilarity: turn.voiceprintOtherTopKSimilarity,
+      voiceprintOtherPeakSimilarity: turn.voiceprintOtherPeakSimilarity,
+      voiceprintSelfMemoryCount: turn.voiceprintSelfMemoryCount,
+      voiceprintOtherMemoryCount: turn.voiceprintOtherMemoryCount,
+      speakerDecisionReason: turn.speakerDecisionReason,
       speakerDecisionSource: turn.speakerDecisionSource,
     });
   }
@@ -297,6 +342,13 @@ export class DeepgramStreamingService {
           ? turn.voiceprintPeakSimilarity
           : Math.max(turn.voiceprintPeakSimilarity, resolution.voiceprintSimilarity);
     turn.voiceprintDecision = resolution.voiceprintDecision;
+    turn.voiceprintSelfTopKSimilarity = resolution.voiceprintSelfTopKSimilarity;
+    turn.voiceprintSelfPeakSimilarity = resolution.voiceprintSelfPeakSimilarity;
+    turn.voiceprintOtherTopKSimilarity = resolution.voiceprintOtherTopKSimilarity;
+    turn.voiceprintOtherPeakSimilarity = resolution.voiceprintOtherPeakSimilarity;
+    turn.voiceprintSelfMemoryCount = resolution.voiceprintSelfMemoryCount;
+    turn.voiceprintOtherMemoryCount = resolution.voiceprintOtherMemoryCount;
+    turn.speakerDecisionReason = resolution.speakerDecisionReason;
     turn.turnEmbedding = resolution.turnEmbedding ?? turn.turnEmbedding;
     turn.voiceprintRangeStartMs =
       turn.voiceprintRangeStartMs == null
@@ -322,75 +374,16 @@ export class DeepgramStreamingService {
   }
 
   private applyVoiceprintTurnLevelOverride(turn: BufferedTurn): BufferedTurn {
-    if (turn.speakerDecisionSource === 'forced') {
-      return turn;
-    }
-
-    if (turn.speaker !== 'other') {
-      return turn;
-    }
-
-    const strongSelfHit =
-      turn.voiceprintPeakSimilarity != null &&
-      turn.voiceprintPeakSimilarity >= VOICEPRINT_STRONG_SELF_THRESHOLD;
-    const selfMajority =
-      turn.voiceprintSelfVotes >= 2 &&
-      turn.voiceprintSelfVotes > turn.voiceprintOtherVotes;
-
-    // Be more aggressive at the whole-bubble level. If a turn has a strong
-    // self-like hit, or its accumulated voiceprint votes lean to self, allow
-    // the whole bubble to flip back to "self" even when Deepgram said "other".
-    if (
-      (selfMajority || (strongSelfHit && turn.voiceprintSelfVotes >= turn.voiceprintOtherVotes)) &&
-      turn.voiceprintOtherVotes === 0
-    ) {
-      turn.speaker = 'self';
-      turn.voiceprintDecision = 'self';
-      turn.voiceprintSimilarity = turn.voiceprintPeakSimilarity ?? turn.voiceprintSimilarity;
-      turn.speakerDecisionSource = 'voiceprint';
-    }
-
     return turn;
   }
 
   private resolvePreviewSpeakerFromResolution(
     resolution: SpeakerResolution,
   ): Speaker {
-    if (resolution.source === 'forced') {
-      return resolution.speaker;
-    }
-
-    // For live preview bubbles, bias toward local voiceprint as soon as the
-    // current audio already looks like the user. This avoids a left-side draft
-    // bubble flashing back to the right only at final commit time.
-    if (resolution.voiceprintDecision === 'self') {
-      return 'self';
-    }
-
     return resolution.speaker;
   }
 
   private resolvePreviewSpeakerForBufferedTurn(turn: BufferedTurn): Speaker {
-    if (turn.speakerDecisionSource === 'forced') {
-      return turn.speaker;
-    }
-
-    if (turn.speaker === 'self') {
-      return 'self';
-    }
-
-    const hasSelfLean =
-      turn.voiceprintSelfVotes > turn.voiceprintOtherVotes &&
-      turn.voiceprintSelfVotes > 0;
-    const hasStrongSelfHit =
-      turn.voiceprintPeakSimilarity != null &&
-      turn.voiceprintPeakSimilarity >= VOICEPRINT_STRONG_SELF_THRESHOLD &&
-      turn.voiceprintOtherVotes === 0;
-
-    if (hasSelfLean || hasStrongSelfHit) {
-      return 'self';
-    }
-
     return turn.speaker;
   }
 
@@ -643,10 +636,7 @@ export class DeepgramStreamingService {
                 continue;
               }
 
-              const resolution = await this.refineSpeakerResolution(
-                runWords,
-                this.determineSpeaker(runWords),
-              );
+              const resolution = await this.resolveFinalSpeaker(runWords);
               console.log(
                 '[Deepgram] Final transcript (' +
                   resolution.speaker +
@@ -670,10 +660,7 @@ export class DeepgramStreamingService {
                 this.bufferedTurns[this.bufferedTurns.length - 1] ?? null;
               const shouldMerge =
                 lastBufferedTurn != null &&
-                lastBufferedTurn.speaker === resolution.speaker &&
-                (resolution.rawId === -1 ||
-                  lastBufferedTurn.rawId === -1 ||
-                  lastBufferedTurn.rawId === resolution.rawId);
+                lastBufferedTurn.speaker === resolution.speaker;
 
               if (shouldMerge && lastBufferedTurn) {
                 latestBufferedTurn = this.mergeBufferedTurn(
@@ -725,7 +712,7 @@ export class DeepgramStreamingService {
               void this.commitBufferedTurns(committedTurns, false);
             }
           } else if (!isFinal) {
-            const interimResolution = this.determineSpeaker(liveTranscript.words);
+            const interimResolution = this.determineInterimSpeaker(liveTranscript.words);
             store.updateInterim(
               trimmedTranscript,
               this.resolvePreviewSpeakerFromResolution(interimResolution),
@@ -758,6 +745,13 @@ export class DeepgramStreamingService {
                 source: 'deepgram',
                 voiceprintSimilarity: null,
                 voiceprintDecision: null,
+                voiceprintSelfTopKSimilarity: null,
+                voiceprintSelfPeakSimilarity: null,
+                voiceprintOtherTopKSimilarity: null,
+                voiceprintOtherPeakSimilarity: null,
+                voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+                voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+                speakerDecisionReason: 'promoted_interim',
                 voiceprintRangeStartMs: null,
                 voiceprintRangeEndMs: null,
                 turnEmbedding: null,
@@ -907,45 +901,10 @@ export class DeepgramStreamingService {
     return majority === -1 ? -1 : majority;
   }
 
-  private rememberRawSpeakerHint(rawId: number, speaker: Speaker): void {
-    if (rawId === -1) {
-      return;
-    }
-
-    const current = this.rawSpeakerHints.get(rawId) ?? {
-      selfVotes: 0,
-      otherVotes: 0,
-    };
-    if (speaker === 'self') {
-      current.selfVotes += 1;
-    } else {
-      current.otherVotes += 1;
-    }
-    this.rawSpeakerHints.set(rawId, current);
-  }
-
-  private resolveMappedSpeaker(rawId: number): Speaker | null {
-    if (rawId === -1) {
-      return null;
-    }
-
-    const hint = this.rawSpeakerHints.get(rawId);
-    if (!hint) {
-      return null;
-    }
-
-    if (hint.selfVotes === hint.otherVotes) {
-      return null;
-    }
-
-    return hint.selfVotes > hint.otherVotes ? 'self' : 'other';
-  }
-
   private resetSpeakerFusionState(): void {
-    this.rawSpeakerHints.clear();
-    this.speakerTracks = {
-      self: { prototype: null, reliableTurnCount: 0 },
-      other: { prototype: null, reliableTurnCount: 0 },
+    this.speakerMemory = {
+      self: [],
+      other: [],
     };
   }
 
@@ -981,53 +940,96 @@ export class DeepgramStreamingService {
     return values.map((value) => value / norm);
   }
 
-  private updateSpeakerTrack(speaker: Speaker, embedding: number[] | null): void {
-    if (!embedding || embedding.length === 0) {
-      return;
+  private createSpeakerMemorySample(
+    analysis: VoiceprintRangeAnalysis,
+    source: SpeakerMemorySource,
+    confidence: number,
+  ): SpeakerEmbeddingSample | null {
+    if (!analysis.embedding || analysis.embedding.length === 0) {
+      return null;
     }
 
-    const track = this.speakerTracks[speaker];
-    if (!track.prototype) {
-      track.prototype = this.normalizeVector(embedding);
-      track.reliableTurnCount = 1;
-      return;
-    }
-
-    const blended = track.prototype.map((value, index) => {
-      const incoming = embedding[index] ?? value;
-      return ((1 - TRACK_UPDATE_ALPHA) * value) + (TRACK_UPDATE_ALPHA * incoming);
-    });
-    track.prototype = this.normalizeVector(blended);
-    track.reliableTurnCount += 1;
+    return {
+      embedding: this.normalizeVector(analysis.embedding),
+      enrollmentSimilarity: analysis.similarity,
+      createdAt: Date.now(),
+      confidence,
+      source,
+    };
   }
 
-  private getTrackDecision(embedding: number[] | null): Speaker | null {
-    if (!embedding) {
+  private rememberSpeakerSample(
+    speaker: Speaker,
+    sample: SpeakerEmbeddingSample | null,
+  ): void {
+    if (!sample) {
+      return;
+    }
+
+    const nextSamples = [...this.speakerMemory[speaker], sample]
+      .sort((a, b) => {
+        if (b.confidence !== a.confidence) {
+          return b.confidence - a.confidence;
+        }
+        return b.createdAt - a.createdAt;
+      })
+      .slice(0, SPEAKER_MEMORY_LIMIT);
+    this.speakerMemory[speaker] = nextSamples;
+  }
+
+  private scoreAgainstSpeakerMemory(
+    embedding: number[] | null,
+    samples: SpeakerEmbeddingSample[],
+  ): SpeakerMemoryStats {
+    if (!embedding || samples.length === 0) {
+      return { topKAvg: null, peak: null, count: samples.length };
+    }
+
+    const normalized = this.normalizeVector(embedding);
+    const similarities = samples
+      .map((sample) => this.cosineSimilarity(normalized, sample.embedding))
+      .filter((value): value is number => value != null)
+      .sort((a, b) => b - a);
+
+    if (similarities.length === 0) {
+      return { topKAvg: null, peak: null, count: samples.length };
+    }
+
+    const topK = similarities.slice(0, SPEAKER_MEMORY_TOP_K);
+    return {
+      topKAvg: topK.reduce((sum, value) => sum + value, 0) / topK.length,
+      peak: similarities[0],
+      count: samples.length,
+    };
+  }
+
+  private isWeakSelfMemory(): boolean {
+    return (
+      this.speakerMemory.self.length > 0 &&
+      this.speakerMemory.self.every((sample) => sample.source === 'weak_seed')
+    );
+  }
+
+  private getBestSelfEnrollmentSimilarity(): number | null {
+    const values = this.speakerMemory.self
+      .map((sample) => sample.enrollmentSimilarity)
+      .filter((value): value is number => value != null);
+    if (values.length === 0) {
       return null;
     }
+    return Math.max(...values);
+  }
 
-    const selfSimilarity = this.cosineSimilarity(
-      embedding,
-      this.speakerTracks.self.prototype,
-    );
-    const otherSimilarity = this.cosineSimilarity(
-      embedding,
-      this.speakerTracks.other.prototype,
-    );
-
-    if (selfSimilarity == null || otherSimilarity == null) {
-      return null;
+  private migrateWeakSelfMemoryToOther(): void {
+    const weakSelfSamples = this.speakerMemory.self.map((sample) => ({
+      ...sample,
+      confidence: Math.min(sample.confidence, 0.45),
+      source: 'other_match' as const,
+    }));
+    this.speakerMemory.self = [];
+    for (const sample of weakSelfSamples) {
+      this.rememberSpeakerSample('other', sample);
     }
-
-    if (selfSimilarity >= otherSimilarity + TRACK_SIMILARITY_MARGIN) {
-      return 'self';
-    }
-
-    if (otherSimilarity >= selfSimilarity + TRACK_SIMILARITY_MARGIN) {
-      return 'other';
-    }
-
-    return null;
   }
 
   private getLocalVoiceprintRangeMs(
@@ -1082,95 +1084,202 @@ export class DeepgramStreamingService {
     }
   }
 
-  private async refineSpeakerResolution(
-    words: DeepgramWord[],
-    resolution: SpeakerResolution,
-  ): Promise<SpeakerResolution> {
-    if (resolution.source === 'forced') {
-      return resolution;
+  private async resolveFinalSpeaker(words: DeepgramWord[]): Promise<SpeakerResolution> {
+    const store = useConversationStore.getState();
+    const { forcedSpeaker } = store;
+    const voiceprintRange = this.getLocalVoiceprintRangeMs(words);
+    const rawId = this.getDeepgramRawSpeakerId(words);
+
+    if (forcedSpeaker) {
+      store.setSpeakerDecisionSource('forced');
+      return {
+        speaker: forcedSpeaker,
+        rawId,
+        source: 'forced',
+        voiceprintSimilarity: null,
+        voiceprintDecision: null,
+        voiceprintSelfTopKSimilarity: null,
+        voiceprintSelfPeakSimilarity: null,
+        voiceprintOtherTopKSimilarity: null,
+        voiceprintOtherPeakSimilarity: null,
+        voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+        voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+        speakerDecisionReason: 'forced',
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
+      };
     }
 
-    const range =
-      resolution.voiceprintRangeStartMs != null &&
-      resolution.voiceprintRangeEndMs != null
-        ? {
-            startMs: resolution.voiceprintRangeStartMs,
-            endMs: resolution.voiceprintRangeEndMs,
-          }
-        : this.getLocalVoiceprintRangeMs(words);
-    const analysis = await this.analyzeVoiceprintRange(range);
+    const analysis = await this.analyzeVoiceprintRange(voiceprintRange);
     if (!analysis?.embedding) {
-      return resolution;
+      const fallbackSpeaker = this.getBufferedFallbackSpeaker();
+      store.setSpeakerDecisionSource('deepgram');
+      return {
+        speaker: fallbackSpeaker,
+        rawId,
+        source: 'deepgram',
+        voiceprintSimilarity: analysis?.similarity ?? null,
+        voiceprintDecision: analysis?.label ?? null,
+        voiceprintSelfTopKSimilarity: null,
+        voiceprintSelfPeakSimilarity: null,
+        voiceprintOtherTopKSimilarity: null,
+        voiceprintOtherPeakSimilarity: null,
+        voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+        voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+        speakerDecisionReason: 'no_run_embedding',
+        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
+        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
+        turnEmbedding: null,
+      };
     }
 
     const thresholds = voiceprintService.getSimilarityThresholds();
-    const rawId = resolution.rawId;
-    const mappedSpeaker = this.resolveMappedSpeaker(rawId);
-    const trackDecision = this.getTrackDecision(analysis.embedding);
+    const selfStats = this.scoreAgainstSpeakerMemory(
+      analysis.embedding,
+      this.speakerMemory.self,
+    );
+    const otherStats = this.scoreAgainstSpeakerMemory(
+      analysis.embedding,
+      this.speakerMemory.other,
+    );
+    const enrollmentSimilarity = analysis.similarity;
     const strongSelf =
-      analysis.similarity != null && analysis.similarity >= thresholds.high;
-    const lowSelf =
-      analysis.similarity != null && analysis.similarity <= thresholds.low;
+      enrollmentSimilarity != null && enrollmentSimilarity >= thresholds.high;
+    const lowEnrollment =
+      enrollmentSimilarity != null && enrollmentSimilarity <= thresholds.low;
+    const currentSelfIsWeak = this.isWeakSelfMemory();
+    const bestSelfEnrollment = this.getBestSelfEnrollmentSimilarity();
+    const shouldMigrateWeakSelf =
+      currentSelfIsWeak &&
+      enrollmentSimilarity != null &&
+      (strongSelf ||
+        (bestSelfEnrollment != null &&
+          enrollmentSimilarity >= bestSelfEnrollment + SELF_MIGRATION_MARGIN)) &&
+      (selfStats.topKAvg == null ||
+        selfStats.topKAvg <= SELF_MIGRATION_DISSIMILARITY_THRESHOLD);
 
-    let nextSpeaker = resolution.speaker;
-    let nextSource = resolution.source;
+    let nextSpeaker: Speaker = 'other';
+    let memorySource: SpeakerMemorySource | null = null;
+    let shouldRemember = false;
+    let reason = 'default_other';
 
-    if (strongSelf) {
+    if (strongSelf || shouldMigrateWeakSelf) {
+      if (shouldMigrateWeakSelf) {
+        this.migrateWeakSelfMemoryToOther();
+        reason = 'self_migration';
+      } else {
+        reason = 'strong_enrollment';
+      }
       nextSpeaker = 'self';
-      nextSource = 'voiceprint';
-    } else if (trackDecision) {
-      nextSpeaker = trackDecision;
-      nextSource = 'hybrid';
-    } else if (mappedSpeaker) {
-      nextSpeaker = mappedSpeaker;
-      nextSource = 'hybrid';
-    } else if (lowSelf) {
-      // Low similarity to the enrolled user is only a weak "other" signal.
-      // In a two-person session it is still useful for bootstrapping the other
-      // track, but later track prototypes and raw-speaker votes can override it.
-      nextSpeaker = 'other';
-      nextSource = 'voiceprint';
+      memorySource = strongSelf ? 'strong_enrollment' : 'weak_seed';
+      shouldRemember = true;
+    } else {
+      const selfMemoryHigh =
+        selfStats.topKAvg != null &&
+        (selfStats.topKAvg >= SELF_MEMORY_MATCH_THRESHOLD ||
+          ((selfStats.peak ?? 0) >= SELF_MEMORY_PEAK_THRESHOLD &&
+            selfStats.topKAvg >= SELF_MEMORY_SUPPORT_THRESHOLD));
+      const selfBeatsOther =
+        otherStats.topKAvg == null ||
+        selfStats.topKAvg == null ||
+        selfStats.topKAvg >= otherStats.topKAvg + MEMORY_SIMILARITY_MARGIN;
+
+      if (selfMemoryHigh && selfBeatsOther) {
+        nextSpeaker = 'self';
+        memorySource = 'self_match';
+        shouldRemember = true;
+        reason = 'self_memory_match';
+      } else if (
+        this.speakerMemory.self.length === 0 &&
+        enrollmentSimilarity != null &&
+        enrollmentSimilarity >= WEAK_SELF_SEED_MIN_SIMILARITY
+      ) {
+        nextSpeaker = 'self';
+        memorySource = 'weak_seed';
+        shouldRemember = true;
+        reason = 'weak_self_seed';
+      } else {
+        const otherMemoryHigh =
+          otherStats.topKAvg != null &&
+          otherStats.topKAvg >= OTHER_MEMORY_MATCH_THRESHOLD &&
+          (selfStats.topKAvg == null ||
+            otherStats.topKAvg >= selfStats.topKAvg + MEMORY_SIMILARITY_MARGIN);
+
+        nextSpeaker = 'other';
+        if (otherMemoryHigh) {
+          memorySource = 'other_match';
+          shouldRemember = true;
+          reason = 'other_memory_match';
+        } else if (lowEnrollment) {
+          memorySource = 'low_enrollment';
+          shouldRemember = true;
+          reason = 'low_enrollment_other';
+        } else {
+          reason = 'ambiguous_other';
+        }
+      }
     }
 
-    const shouldUpdateTrack =
-      strongSelf ||
-      Boolean(trackDecision) ||
-      Boolean(mappedSpeaker) ||
-      (lowSelf && nextSpeaker === 'other');
-    if (shouldUpdateTrack) {
-      this.updateSpeakerTrack(nextSpeaker, analysis.embedding);
-      this.rememberRawSpeakerHint(rawId, nextSpeaker);
+    if (shouldRemember && memorySource) {
+      this.rememberSpeakerSample(
+        nextSpeaker,
+        this.createSpeakerMemorySample(
+          analysis,
+          memorySource,
+          memorySource === 'strong_enrollment'
+            ? 0.95
+            : memorySource === 'weak_seed'
+              ? 0.75
+              : nextSpeaker === 'self'
+                ? 0.85
+                : 0.65,
+        ),
+      );
     }
 
-    const refined: SpeakerResolution = {
-      ...resolution,
+    const resolution: SpeakerResolution = {
       speaker: nextSpeaker,
-      source: nextSource,
-      voiceprintSimilarity: analysis.similarity,
+      rawId,
+      source: 'voiceprint',
+      voiceprintSimilarity: enrollmentSimilarity,
       voiceprintDecision: analysis.label,
+      voiceprintSelfTopKSimilarity: selfStats.topKAvg,
+      voiceprintSelfPeakSimilarity: selfStats.peak,
+      voiceprintOtherTopKSimilarity: otherStats.topKAvg,
+      voiceprintOtherPeakSimilarity: otherStats.peak,
+      voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+      voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+      speakerDecisionReason: reason,
       voiceprintRangeStartMs: analysis.audioStartMs,
       voiceprintRangeEndMs: analysis.audioEndMs,
       turnEmbedding: analysis.embedding,
     };
 
-    useConversationStore.getState().setSpeakerDecisionSource(refined.source);
+    store.setSpeakerDecisionSource(resolution.source);
 
-    console.log('[Deepgram] Speaker fusion', {
+    console.log('[Deepgram] Speaker voiceprint resolution', {
       rawId,
-      speaker: refined.speaker,
-      source: refined.source,
-      vp: analysis.similarity != null
-        ? Number(analysis.similarity.toFixed(3))
+      speaker: resolution.speaker,
+      vp: enrollmentSimilarity != null
+        ? Number(enrollmentSimilarity.toFixed(3))
         : null,
       vpDecision: analysis.label,
-      trackDecision,
-      mappedSpeaker,
+      selfTopK: selfStats.topKAvg != null
+        ? Number(selfStats.topKAvg.toFixed(3))
+        : null,
+      otherTopK: otherStats.topKAvg != null
+        ? Number(otherStats.topKAvg.toFixed(3))
+        : null,
+      selfMemory: selfStats.count,
+      otherMemory: otherStats.count,
+      reason,
     });
 
-    return refined;
+    return resolution;
   }
 
-  private determineSpeaker(words: DeepgramWord[]): SpeakerResolution {
+  private determineInterimSpeaker(words: DeepgramWord[]): SpeakerResolution {
     const store = useConversationStore.getState();
     const { forcedSpeaker } = store;
     const voiceprintRange = this.getLocalVoiceprintRangeMs(words);
@@ -1181,77 +1290,51 @@ export class DeepgramStreamingService {
         )
       : voiceprintService.getCurrentDecision();
     const rawId = this.getDeepgramRawSpeakerId(words);
-    const voiceprintSimilarity = voiceprint.similarity;
-    const voiceprintDecision = voiceprint.label;
 
     if (forcedSpeaker) {
-      this.rememberRawSpeakerHint(rawId, forcedSpeaker);
       store.setSpeakerDecisionSource('forced');
       return {
         speaker: forcedSpeaker,
         rawId,
         source: 'forced',
-        voiceprintSimilarity,
-        voiceprintDecision,
+        voiceprintSimilarity: voiceprint.similarity,
+        voiceprintDecision: voiceprint.label,
+        voiceprintSelfTopKSimilarity: null,
+        voiceprintSelfPeakSimilarity: null,
+        voiceprintOtherTopKSimilarity: null,
+        voiceprintOtherPeakSimilarity: null,
+        voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+        voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+        speakerDecisionReason: 'forced',
         voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
         voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
         turnEmbedding: null,
       };
     }
 
-    if (voiceprintDecision === 'self') {
-      this.rememberRawSpeakerHint(rawId, 'self');
-      store.setSpeakerDecisionSource('voiceprint');
-      return {
-        speaker: 'self',
-        rawId,
-        source: 'voiceprint',
-        voiceprintSimilarity,
-        voiceprintDecision,
-        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
-        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
-        turnEmbedding: null,
-      };
-    }
+    const speaker =
+      voiceprint.label === 'self'
+        ? 'self'
+        : voiceprint.label === 'other'
+          ? 'other'
+          : this.getBufferedFallbackSpeaker();
+    const source = voiceprint.label === 'unknown' ? 'deepgram' : 'voiceprint';
+    store.setSpeakerDecisionSource(source);
 
-    if (voiceprintDecision === 'other') {
-      this.rememberRawSpeakerHint(rawId, 'other');
-      store.setSpeakerDecisionSource('voiceprint');
-      return {
-        speaker: 'other',
-        rawId,
-        source: 'voiceprint',
-        voiceprintSimilarity,
-        voiceprintDecision,
-        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
-        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
-        turnEmbedding: null,
-      };
-    }
-
-    const mappedSpeaker = this.resolveMappedSpeaker(rawId);
-    if (mappedSpeaker) {
-      store.setSpeakerDecisionSource('hybrid');
-      return {
-        speaker: mappedSpeaker,
-        rawId,
-        source: 'hybrid',
-        voiceprintSimilarity,
-        voiceprintDecision,
-        voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
-        voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
-        turnEmbedding: null,
-      };
-    }
-
-    const fallbackSpeaker = this.getBufferedFallbackSpeaker();
-    store.setSpeakerDecisionSource('deepgram');
     return {
-      speaker: fallbackSpeaker,
+      speaker,
       rawId,
-      source: 'deepgram',
-      voiceprintSimilarity,
-      voiceprintDecision,
+      source,
+      voiceprintSimilarity: voiceprint.similarity,
+      voiceprintDecision: voiceprint.label,
+      voiceprintSelfTopKSimilarity: null,
+      voiceprintSelfPeakSimilarity: null,
+      voiceprintOtherTopKSimilarity: null,
+      voiceprintOtherPeakSimilarity: null,
+      voiceprintSelfMemoryCount: this.speakerMemory.self.length,
+      voiceprintOtherMemoryCount: this.speakerMemory.other.length,
+      speakerDecisionReason:
+        voiceprint.label === 'unknown' ? 'interim_fallback' : 'interim_voiceprint',
       voiceprintRangeStartMs: voiceprintRange?.startMs ?? null,
       voiceprintRangeEndMs: voiceprintRange?.endMs ?? null,
       turnEmbedding: null,

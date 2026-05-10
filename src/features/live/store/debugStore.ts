@@ -39,6 +39,13 @@ export type DebugTurnTrace = {
   translationDetail?: string;
   voiceprintSimilarity?: number | null;
   voiceprintDecision?: VoiceprintDecisionLabel | null;
+  voiceprintSelfTopKSimilarity?: number | null;
+  voiceprintSelfPeakSimilarity?: number | null;
+  voiceprintOtherTopKSimilarity?: number | null;
+  voiceprintOtherPeakSimilarity?: number | null;
+  voiceprintSelfMemoryCount?: number;
+  voiceprintOtherMemoryCount?: number;
+  speakerDecisionReason?: string | null;
   speakerDecisionSource?: SpeakerDecisionSource;
   createdAt: number;
 };
@@ -58,6 +65,13 @@ type DebugState = {
     asrFinalAt: number;
     voiceprintSimilarity?: number | null;
     voiceprintDecision?: VoiceprintDecisionLabel | null;
+    voiceprintSelfTopKSimilarity?: number | null;
+    voiceprintSelfPeakSimilarity?: number | null;
+    voiceprintOtherTopKSimilarity?: number | null;
+    voiceprintOtherPeakSimilarity?: number | null;
+    voiceprintSelfMemoryCount?: number;
+    voiceprintOtherMemoryCount?: number;
+    speakerDecisionReason?: string | null;
     speakerDecisionSource?: SpeakerDecisionSource;
   }) => void;
   markUtteranceEnd: (turnId: string) => void;
@@ -104,6 +118,22 @@ function upsertTrace(
   }
 
   return next;
+}
+
+function preserveVoiceprintResolverFields(existing?: DebugTurnTrace) {
+  return {
+    voiceprintSelfTopKSimilarity:
+      existing?.voiceprintSelfTopKSimilarity ?? null,
+    voiceprintSelfPeakSimilarity:
+      existing?.voiceprintSelfPeakSimilarity ?? null,
+    voiceprintOtherTopKSimilarity:
+      existing?.voiceprintOtherTopKSimilarity ?? null,
+    voiceprintOtherPeakSimilarity:
+      existing?.voiceprintOtherPeakSimilarity ?? null,
+    voiceprintSelfMemoryCount: existing?.voiceprintSelfMemoryCount ?? 0,
+    voiceprintOtherMemoryCount: existing?.voiceprintOtherMemoryCount ?? 0,
+    speakerDecisionReason: existing?.speakerDecisionReason ?? null,
+  };
 }
 
 export const useDebugStore = create<DebugState>((set) => ({
@@ -153,6 +183,13 @@ export const useDebugStore = create<DebugState>((set) => ({
     asrFinalAt,
     voiceprintSimilarity,
     voiceprintDecision,
+    voiceprintSelfTopKSimilarity,
+    voiceprintSelfPeakSimilarity,
+    voiceprintOtherTopKSimilarity,
+    voiceprintOtherPeakSimilarity,
+    voiceprintSelfMemoryCount,
+    voiceprintOtherMemoryCount,
+    speakerDecisionReason,
     speakerDecisionSource,
   }) =>
     set((state) => ({
@@ -178,6 +215,28 @@ export const useDebugStore = create<DebugState>((set) => ({
           voiceprintSimilarity ?? existing?.voiceprintSimilarity ?? null,
         voiceprintDecision:
           voiceprintDecision ?? existing?.voiceprintDecision ?? null,
+        voiceprintSelfTopKSimilarity:
+          voiceprintSelfTopKSimilarity ??
+          existing?.voiceprintSelfTopKSimilarity ??
+          null,
+        voiceprintSelfPeakSimilarity:
+          voiceprintSelfPeakSimilarity ??
+          existing?.voiceprintSelfPeakSimilarity ??
+          null,
+        voiceprintOtherTopKSimilarity:
+          voiceprintOtherTopKSimilarity ??
+          existing?.voiceprintOtherTopKSimilarity ??
+          null,
+        voiceprintOtherPeakSimilarity:
+          voiceprintOtherPeakSimilarity ??
+          existing?.voiceprintOtherPeakSimilarity ??
+          null,
+        voiceprintSelfMemoryCount:
+          voiceprintSelfMemoryCount ?? existing?.voiceprintSelfMemoryCount ?? 0,
+        voiceprintOtherMemoryCount:
+          voiceprintOtherMemoryCount ?? existing?.voiceprintOtherMemoryCount ?? 0,
+        speakerDecisionReason:
+          speakerDecisionReason ?? existing?.speakerDecisionReason ?? null,
         speakerDecisionSource:
           speakerDecisionSource ?? existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? asrFinalAt,
@@ -205,6 +264,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -231,6 +291,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -257,6 +318,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -283,6 +345,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: existing?.translationDetail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -309,6 +372,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: undefined,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -335,6 +399,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: detail,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
@@ -361,6 +426,7 @@ export const useDebugStore = create<DebugState>((set) => ({
         translationDetail: errorMessage,
         voiceprintSimilarity: existing?.voiceprintSimilarity ?? null,
         voiceprintDecision: existing?.voiceprintDecision ?? null,
+        ...preserveVoiceprintResolverFields(existing),
         speakerDecisionSource: existing?.speakerDecisionSource ?? null,
         createdAt: existing?.createdAt ?? Date.now(),
       })),
