@@ -20,7 +20,7 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.talkpilot.app",
       "usesAppleSignIn": true,
       "infoPlist": {
