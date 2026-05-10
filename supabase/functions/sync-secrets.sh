@@ -96,6 +96,21 @@ if [[ -z "${SUPABASE_PROJECT_REF:-}" ]]; then
     exit 1
 fi
 
+if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" ]]; then
+    echo "❌ EXPO_PUBLIC_SUPABASE_URL is missing in $ENV_FILE"
+    exit 1
+fi
+
+if [[ -z "${EXPO_PUBLIC_SUPABASE_ANON_KEY:-}" ]]; then
+    echo "❌ EXPO_PUBLIC_SUPABASE_ANON_KEY is missing in $ENV_FILE"
+    exit 1
+fi
+
+if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+    echo "❌ SUPABASE_SERVICE_ROLE_KEY is missing in $ENV_FILE"
+    exit 1
+fi
+
 validate_translation_provider_config
 
 if [[ "$ENV_NAME" == "production" ]]; then
@@ -114,6 +129,16 @@ echo "Secret values will not be printed."
 echo ""
 
 npx supabase secrets set --env-file "$ENV_FILE" --project-ref "$SUPABASE_PROJECT_REF"
+
+EDGE_SUPABASE_ENV_FILE="$(mktemp)"
+trap 'rm -f "$EDGE_SUPABASE_ENV_FILE"' EXIT
+{
+    printf 'SUPABASE_URL=%s\n' "$EXPO_PUBLIC_SUPABASE_URL"
+    printf 'SUPABASE_ANON_KEY=%s\n' "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+    printf 'SUPABASE_SERVICE_ROLE_KEY=%s\n' "$SUPABASE_SERVICE_ROLE_KEY"
+} > "$EDGE_SUPABASE_ENV_FILE"
+
+npx supabase secrets set --env-file "$EDGE_SUPABASE_ENV_FILE" --project-ref "$SUPABASE_PROJECT_REF"
 
 echo ""
 echo "✅ Secrets synced successfully."
