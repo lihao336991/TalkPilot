@@ -74,6 +74,7 @@ source "$ENV_FILE"
 set +a
 
 export APP_ENV="$ENV_NAME"
+export EXPO_PUBLIC_APP_ENV="$ENV_NAME"
 
 echo "Starting EAS update..."
 echo "Profile : $PROFILE"

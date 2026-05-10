@@ -50,7 +50,8 @@ function getAppContext(): AnalyticsProps {
   const runtimeVersion = expoConfig?.runtimeVersion ?? null;
 
   return {
-    app_env: process.env.APP_ENV ?? (__DEV__ ? "development" : "production"),
+    app_env:
+      process.env.EXPO_PUBLIC_APP_ENV ?? (__DEV__ ? "development" : "production"),
     platform: Platform.OS,
     app_version: appVersion,
     runtime_version: runtimeVersion,
@@ -159,4 +160,3 @@ export const analytics = {
     analytics.capture(event, { ...props, error_name: err.name, error_message: err.message });
   },
 };
-

@@ -29,6 +29,7 @@ source "$ENV_FILE"
 set +a
 
 export APP_ENV="$ENV_NAME"
+export EXPO_PUBLIC_APP_ENV="$ENV_NAME"
 
 echo "Using env: $ENV_NAME"
 echo "Env file: $ENV_FILE"

@@ -110,6 +110,8 @@ export default function ProfileScreen() {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
+  const debugTapCountRef = useRef(0);
+  const debugTapWindowStartedAtRef = useRef(0);
 
   const isAuthenticated = authMode === "authenticated";
   const isPaidUser = hasPaidAccess(subscriptionTier);
@@ -194,6 +196,22 @@ export default function ProfileScreen() {
     });
   }
 
+  function handleDebugTitleTap() {
+    const now = Date.now();
+    if (now - debugTapWindowStartedAtRef.current > 2500) {
+      debugTapWindowStartedAtRef.current = now;
+      debugTapCountRef.current = 0;
+    }
+
+    debugTapCountRef.current += 1;
+
+    if (debugTapCountRef.current >= 10) {
+      debugTapCountRef.current = 0;
+      debugTapWindowStartedAtRef.current = 0;
+      router.push("/debug-env" as Href);
+    }
+  }
+
   const displayTitle = isAuthenticated
     ? displayName || userEmail || t("profile.talkPilotMember")
     : t("profile.guestAccount");
@@ -229,7 +247,9 @@ export default function ProfileScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={styles.headerEyebrow}>{t("profile.headerEyebrow")}</Text>
-          <Text style={styles.headerTitle}>{t("profile.headerTitle")}</Text>
+          <Pressable onPress={handleDebugTitleTap}>
+            <Text style={styles.headerTitle}>{t("profile.headerTitle")}</Text>
+          </Pressable>
         </View>
         <Pressable
           onPress={handleHeaderAction}

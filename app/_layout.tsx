@@ -279,6 +279,15 @@ function RootLayoutNav() {
               gestureEnabled: true,
             }}
           />
+          <Stack.Screen
+            name="debug-env"
+            options={{
+              headerShown: false,
+              presentation: "card",
+              animation: "slide_from_right",
+              gestureEnabled: true,
+            }}
+          />
           {__DEV__ ? (
             <>
               <Stack.Screen
