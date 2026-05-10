@@ -1,10 +1,15 @@
 import { invokeEdgeFunction } from "@/shared/api/request";
-import { supabase } from "@/shared/api/supabase";
+import {
+  getSupabaseClientDiagnostics,
+  resetLocalSupabaseSession,
+  supabase,
+} from "@/shared/api/supabase";
 import { getOrCreateInstallId } from "@/shared/device/installId";
 import { useAuthStore } from "@/shared/store/authStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
 import { palette, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
+import { createClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import * as Updates from "expo-updates";
@@ -408,6 +413,15 @@ export default function DebugEnvScreen() {
         installId && installId !== "loading" ? installId : await getOrCreateInstallId();
       const supabaseUrl = readEnv("EXPO_PUBLIC_SUPABASE_URL");
       const anonKey = readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
+      const singletonDiagnostics = getSupabaseClientDiagnostics();
+      const freshClient = createClient(supabaseUrl, anonKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+          detectSessionInUrl: false,
+        },
+      });
+      const freshAnonResult = await freshClient.auth.signInAnonymously();
       const sessionResult = await supabase.auth.getSession();
       const accessToken = sessionResult.data.session?.access_token ?? "";
       const userResult = await supabase.auth.getUser();
@@ -419,6 +433,10 @@ export default function DebugEnvScreen() {
       });
 
       const edgeData = edgeResult.data;
+      const diagnosticVersion =
+        edgeData && typeof edgeData === "object" && "diagnosticVersion" in edgeData
+          ? edgeData.diagnosticVersion
+          : null;
       const derived =
         edgeData && typeof edgeData === "object" && "derived" in edgeData
           ? (edgeData.derived as Record<string, unknown>)
@@ -436,6 +454,28 @@ export default function DebugEnvScreen() {
             value: getSupabaseProjectRef(supabaseUrl),
           },
           {
+            label: "singleton expected ref",
+            value: singletonDiagnostics.expectedProjectRef ?? "null",
+          },
+          {
+            label: "singleton storage key",
+            value: singletonDiagnostics.authStorageKey,
+          },
+          {
+            label: "fresh anonymous issuer",
+            value: summarizeJwt(freshAnonResult.data.session?.access_token ?? ""),
+            tone:
+              refFromJwt(freshAnonResult.data.session?.access_token ?? "") ===
+              "joweqhgtueqfeasweigh"
+                ? "ok"
+                : "warning",
+          },
+          {
+            label: "fresh anonymous error",
+            value: freshAnonResult.error?.message ?? "null",
+            tone: freshAnonResult.error ? "warning" : "normal",
+          },
+          {
             label: "client anon issuer",
             value: summarizeJwt(anonKey),
           },
@@ -451,6 +491,14 @@ export default function DebugEnvScreen() {
             label: "client getUser",
             value: userResult.data.user?.id ?? userResult.error?.message ?? "null",
             tone: userResult.error ? "warning" : "ok",
+          },
+          {
+            label: "edge diagnostic version",
+            value: stringifyProbeValue(diagnosticVersion),
+            tone:
+              diagnosticVersion === "2026-05-10-talkpilot-env-v2"
+                ? "ok"
+                : "warning",
           },
           {
             label: "edge function DB ref",
@@ -495,6 +543,43 @@ export default function DebugEnvScreen() {
     }
   }
 
+  async function resetLocalSession() {
+    setProbeState({
+      status: "running",
+      rows: [{ label: "action", value: "resetting local Supabase session" }],
+    });
+
+    try {
+      const session = await resetLocalSupabaseSession();
+      setProbeState({
+        status: "done",
+        rows: [
+          { label: "action", value: "local session reset" },
+          { label: "new user", value: session?.user.id ?? "null" },
+          {
+            label: "new access issuer",
+            value: summarizeJwt(session?.access_token ?? ""),
+            tone:
+              refFromJwt(session?.access_token ?? "") === "joweqhgtueqfeasweigh"
+                ? "ok"
+                : "warning",
+          },
+        ],
+      });
+    } catch (error) {
+      setProbeState({
+        status: "error",
+        rows: [
+          {
+            label: "reset error",
+            value: error instanceof Error ? error.message : String(error),
+            tone: "warning",
+          },
+        ],
+      });
+    }
+  }
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -530,6 +615,17 @@ export default function DebugEnvScreen() {
           <Text style={styles.probeButtonText}>
             {probeState.status === "running" ? "Running probes..." : "Run probes"}
           </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void resetLocalSession()}
+          disabled={probeState.status === "running"}
+          style={[
+            styles.resetButton,
+            probeState.status === "running" && styles.probeButtonDisabled,
+          ]}
+        >
+          <Feather name="refresh-cw" size={16} color={palette.danger} />
+          <Text style={styles.resetButtonText}>Reset local Supabase session</Text>
         </Pressable>
         {sections.map((section) => (
           <Section key={section.title} {...section} />
@@ -595,6 +691,21 @@ const styles = StyleSheet.create({
   probeButtonText: {
     ...typography.labelLg,
     color: palette.textOnAccent,
+  },
+  resetButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.dangerBorder,
+    backgroundColor: palette.dangerLight,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  resetButtonText: {
+    ...typography.labelLg,
+    color: palette.danger,
   },
   section: {
     borderWidth: 1,

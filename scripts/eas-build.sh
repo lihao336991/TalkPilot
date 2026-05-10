@@ -62,6 +62,13 @@ if ! command -v npx >/dev/null 2>&1; then
   exit 1
 fi
 
+resolve_supabase_ref_from_url() {
+  local url="$1"
+  url="${url#https://}"
+  url="${url#http://}"
+  echo "${url%%.*}"
+}
+
 ENV_NAME="$(resolve_env_name "$PROFILE")"
 ENV_FILE="$REPO_ROOT/.env.${ENV_NAME}"
 
@@ -76,11 +83,22 @@ set +a
 
 export APP_ENV="$ENV_NAME"
 export EXPO_PUBLIC_APP_ENV="$ENV_NAME"
+export EXPO_NO_DOTENV=1
+
+SUPABASE_URL_REF="$(resolve_supabase_ref_from_url "${EXPO_PUBLIC_SUPABASE_URL:-}")"
+if [[ -z "${SUPABASE_PROJECT_REF:-}" || "$SUPABASE_URL_REF" != "$SUPABASE_PROJECT_REF" ]]; then
+  echo "Error: Supabase env mismatch."
+  echo "SUPABASE_PROJECT_REF=$SUPABASE_PROJECT_REF"
+  echo "EXPO_PUBLIC_SUPABASE_URL ref=$SUPABASE_URL_REF"
+  exit 1
+fi
 
 echo "Starting EAS cloud build..."
 echo "Profile : $PROFILE"
 echo "Platform: $PLATFORM"
 echo "Env     : $ENV_NAME"
 echo "Env file: $ENV_FILE"
+echo "Supabase: $SUPABASE_URL_REF"
+echo "Dotenv  : disabled for Expo CLI"
 
 npx eas build --profile "$PROFILE" --platform "$PLATFORM"

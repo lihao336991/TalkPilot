@@ -5,6 +5,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from "../_shared/env.ts";
 import { JSON_HEADERS } from "../_shared/access.ts";
 
+const DIAGNOSTIC_VERSION = "2026-05-10-talkpilot-env-v2";
+
 function decodeJwtPayload(token: string) {
   const payload = token.split(".")[1];
   if (!payload) {
@@ -80,6 +82,7 @@ serve(async (req: Request) => {
 
   return new Response(
     JSON.stringify({
+      diagnosticVersion: DIAGNOSTIC_VERSION,
       request: {
         urlHost: new URL(req.url).host,
         hasAuthorization: Boolean(authorization),

@@ -24,14 +24,32 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+resolve_supabase_ref_from_url() {
+  local url="$1"
+  url="${url#https://}"
+  url="${url#http://}"
+  echo "${url%%.*}"
+}
+
 set -a
 source "$ENV_FILE"
 set +a
 
 export APP_ENV="$ENV_NAME"
 export EXPO_PUBLIC_APP_ENV="$ENV_NAME"
+export EXPO_NO_DOTENV=1
+
+SUPABASE_URL_REF="$(resolve_supabase_ref_from_url "${EXPO_PUBLIC_SUPABASE_URL:-}")"
+if [[ -z "${SUPABASE_PROJECT_REF:-}" || "$SUPABASE_URL_REF" != "$SUPABASE_PROJECT_REF" ]]; then
+  echo "Error: Supabase env mismatch."
+  echo "SUPABASE_PROJECT_REF=$SUPABASE_PROJECT_REF"
+  echo "EXPO_PUBLIC_SUPABASE_URL ref=$SUPABASE_URL_REF"
+  exit 1
+fi
 
 echo "Using env: $ENV_NAME"
 echo "Env file: $ENV_FILE"
+echo "Supabase: $SUPABASE_URL_REF"
+echo "Dotenv  : disabled for Expo CLI"
 
 exec "$@"

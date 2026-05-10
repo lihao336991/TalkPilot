@@ -82,6 +82,17 @@ function getSessionIssuerRef(session: Session | null) {
 const expectedSupabaseProjectRef = getSupabaseProjectRef(
   getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
 );
+const supabaseAuthStorageKey = expectedSupabaseProjectRef
+  ? `talkpilot-${expectedSupabaseProjectRef}-auth-token`
+  : 'talkpilot-auth-token';
+
+export function getSupabaseClientDiagnostics() {
+  return {
+    expectedProjectRef: expectedSupabaseProjectRef,
+    authStorageKey: supabaseAuthStorageKey,
+    configuredUrl: getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
+  };
+}
 
 export const supabase = createClient(
   getRequiredEnv('EXPO_PUBLIC_SUPABASE_URL'),
@@ -92,6 +103,7 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: false,
       storage: supabaseStorage,
+      storageKey: supabaseAuthStorageKey,
     },
   },
 );
@@ -496,6 +508,18 @@ export async function signOut() {
 
   const guestSession = await signInAsGuestIfNeeded();
   await applySession(guestSession);
+}
+
+export async function resetLocalSupabaseSession() {
+  recoverSessionPromise = null;
+  guestSessionPromise = null;
+  guestFallbackSuppressed = false;
+  await supabase.auth.signOut({ scope: 'local' });
+  useAuthStore.getState().signOut();
+  resetLiveAccessState();
+  const guestSession = await signInGuest();
+  await applySession(guestSession);
+  return guestSession;
 }
 
 export const initAuth = async () => {
