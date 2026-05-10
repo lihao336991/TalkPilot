@@ -431,7 +431,7 @@ export default function ProfileScreen() {
                   <Feather
                     name={item.icon}
                     size={16}
-                    color={isPaidUser ? "#D2F45C" : "rgba(255,255,255,0.5)"}
+                    color={isPaidUser ? "#D2F45C" : palette.textTertiary}
                   />
                   <Text style={styles.limitLabel}>{item.label}</Text>
                   <Text

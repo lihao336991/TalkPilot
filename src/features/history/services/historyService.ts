@@ -1,4 +1,5 @@
 import { supabase } from "@/shared/api/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { invokeEdgeFunction } from "@/shared/api/request";
 import { buildLlmDebugHeaders } from "@/shared/llm/debugConfig";
 import { useAuthStore } from "@/shared/store/authStore";
@@ -77,8 +78,78 @@ type RecapResponse = {
 
 const SESSIONS_CACHE_TTL_MS = 30_000;
 const MAX_SESSIONS_PAGE_SIZE = 30;
-let sessionsCache: HistorySession[] = [];
-let sessionsCacheAt = 0;
+const SESSIONS_CACHE_STORAGE_PREFIX = "talkpilot-history-sessions";
+type SessionsCacheEntry = {
+  cachedAt: number;
+  sessions: HistorySession[];
+};
+
+const sessionsMemoryCache = new Map<string, SessionsCacheEntry>();
+
+function getSessionsCacheUserId(): string {
+  return useAuthStore.getState().userId ?? "anonymous";
+}
+
+function getSessionsCacheKey(userId = getSessionsCacheUserId()): string {
+  return `${SESSIONS_CACHE_STORAGE_PREFIX}:${userId}`;
+}
+
+function normalizeCachedSessions(value: unknown): SessionsCacheEntry | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as {
+    cachedAt?: unknown;
+    sessions?: unknown;
+  };
+  if (
+    typeof candidate.cachedAt !== "number" ||
+    !Array.isArray(candidate.sessions)
+  ) {
+    return null;
+  }
+
+  return {
+    cachedAt: candidate.cachedAt,
+    sessions: (candidate.sessions as HistorySession[]).map(normalizeSession),
+  };
+}
+
+async function readSessionsCache(): Promise<SessionsCacheEntry | null> {
+  const cacheKey = getSessionsCacheKey();
+  const memoryEntry = sessionsMemoryCache.get(cacheKey);
+  if (memoryEntry) {
+    return memoryEntry;
+  }
+
+  try {
+    const raw = await AsyncStorage.getItem(cacheKey);
+    const parsed = raw ? normalizeCachedSessions(JSON.parse(raw)) : null;
+    if (parsed) {
+      sessionsMemoryCache.set(cacheKey, parsed);
+    }
+    return parsed;
+  } catch (error) {
+    console.warn("[HistoryService] Failed to read sessions cache:", error);
+    return null;
+  }
+}
+
+async function writeSessionsCache(sessions: HistorySession[]): Promise<void> {
+  const cacheKey = getSessionsCacheKey();
+  const entry: SessionsCacheEntry = {
+    cachedAt: Date.now(),
+    sessions,
+  };
+  sessionsMemoryCache.set(cacheKey, entry);
+
+  try {
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(entry));
+  } catch (error) {
+    console.warn("[HistoryService] Failed to write sessions cache:", error);
+  }
+}
 
 function sanitizeText(value: unknown): string {
   if (typeof value !== "string") {
@@ -229,15 +300,17 @@ async function loadSessions(opts?: {
     MAX_SESSIONS_PAGE_SIZE,
   );
   const offset = Math.max(Math.floor(opts?.offset ?? 0), 0);
+  const cachedEntry =
+    offset === 0 && limit === MAX_SESSIONS_PAGE_SIZE
+      ? await readSessionsCache()
+      : null;
   const useCache =
-    offset === 0 &&
-    limit === MAX_SESSIONS_PAGE_SIZE &&
     !opts?.force &&
-    sessionsCache.length > 0 &&
-    Date.now() - sessionsCacheAt < SESSIONS_CACHE_TTL_MS;
+    cachedEntry != null &&
+    Date.now() - cachedEntry.cachedAt < SESSIONS_CACHE_TTL_MS;
 
   if (useCache) {
-    return { data: sessionsCache, error: null };
+    return { data: cachedEntry.sessions, error: null };
   }
 
   const { data, error } = await supabase.rpc("list_history_sessions", {
@@ -246,19 +319,40 @@ async function loadSessions(opts?: {
   });
 
   if (error) {
-    return { data: sessionsCache, error: error.message };
+    return { data: cachedEntry?.sessions ?? [], error: error.message };
   }
 
   const next = ((data ?? []) as HistorySession[]).map(normalizeSession);
   if (offset === 0 && limit === MAX_SESSIONS_PAGE_SIZE) {
-    sessionsCache = next;
-    sessionsCacheAt = Date.now();
+    await writeSessionsCache(next);
   }
   return { data: next, error: null };
 }
 
+async function loadCachedSessions(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<HistorySession[]> {
+  const limit = Math.min(
+    Math.max(Math.floor(opts?.limit ?? MAX_SESSIONS_PAGE_SIZE), 1),
+    MAX_SESSIONS_PAGE_SIZE,
+  );
+  const offset = Math.max(Math.floor(opts?.offset ?? 0), 0);
+  const cachedEntry = await readSessionsCache();
+
+  if (!cachedEntry) {
+    return [];
+  }
+
+  return cachedEntry.sessions.slice(offset, offset + limit);
+}
+
 function invalidateSessionsCache() {
-  sessionsCacheAt = 0;
+  const cacheKey = getSessionsCacheKey();
+  sessionsMemoryCache.delete(cacheKey);
+  void AsyncStorage.removeItem(cacheKey).catch((error) => {
+    console.warn("[HistoryService] Failed to remove sessions cache:", error);
+  });
 }
 
 async function loadSessionDetail(
@@ -342,6 +436,7 @@ async function generateRecap(
 
 export const historyService = {
   loadSessions,
+  loadCachedSessions,
   loadSessionDetail,
   generateRecap,
   invalidateSessionsCache,

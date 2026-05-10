@@ -16,13 +16,16 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuthStore } from "@/shared/store/authStore";
 
 const PAGE_SIZE = 30;
 
@@ -73,42 +76,72 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const { i18n, t } = useTranslation();
   const router = useRouter();
+  const historyCacheUserId = useAuthStore((state) => state.userId ?? "anonymous");
   const tabBarHeight = getTabBarHeight(insets.bottom);
   const [sessions, setSessions] = useState<HistorySession[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedSessions, setHasLoadedSessions] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
   const loadSessions = useCallback(async (opts?: { force?: boolean }) => {
-    setIsLoading(true);
+    setIsSyncing(true);
     setErrorMessage(null);
     const { data, error } = await historyService.loadSessions({
       ...opts,
       limit: PAGE_SIZE,
       offset: 0,
     });
-    if (error) {
+    if (error && data.length === 0) {
       setErrorMessage(error);
     }
     setSessions(data);
     setHasMore(data.length === PAGE_SIZE);
-    setIsLoading(false);
+    setHasLoadedSessions(true);
+    setIsSyncing(false);
   }, []);
 
   useEffect(() => {
-    void loadSessions();
-  }, [loadSessions]);
+    let isMounted = true;
+
+    async function hydrateAndSync() {
+      setErrorMessage(null);
+      const cached = await historyService.loadCachedSessions({
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
+      if (!isMounted) {
+        return;
+      }
+
+      if (cached.length > 0) {
+        setSessions(cached);
+        setHasMore(cached.length === PAGE_SIZE);
+        setHasLoadedSessions(true);
+      }
+
+      await loadSessions({ force: true });
+    }
+
+    void hydrateAndSync();
+    return () => {
+      isMounted = false;
+    };
+  }, [historyCacheUserId, loadSessions]);
 
   async function handleRefresh() {
+    if (refreshing) {
+      return;
+    }
     setRefreshing(true);
     await loadSessions({ force: true });
     setRefreshing(false);
   }
 
   const handleLoadMore = useCallback(async () => {
-    if (isLoading || isLoadingMore || refreshing || !hasMore || errorMessage) {
+    if (isSyncing || isLoadingMore || refreshing || !hasMore || errorMessage) {
       return;
     }
 
@@ -134,7 +167,7 @@ export default function HistoryScreen() {
   }, [
     errorMessage,
     hasMore,
-    isLoading,
+    isSyncing,
     isLoadingMore,
     refreshing,
     sessions.length,
@@ -185,23 +218,18 @@ export default function HistoryScreen() {
           <View style={styles.statsAccentLine} />
         </LinearGradient>
 
-        {/* ── Loading ── */}
-        {isLoading && (
-          <View style={styles.stateCard}>
-            <View style={styles.stateIconWrap}>
-              <Feather name="loader" size={22} color={palette.textTertiary} />
-            </View>
-            <Text style={styles.stateTitle}>
+        {/* ── Lightweight sync indicator ── */}
+        {(isSyncing || refreshing) && (
+          <View style={styles.inlineLoading}>
+            <ActivityIndicator size="small" color={palette.textAccent} />
+            <Text style={styles.inlineLoadingText}>
               {t("history.state.loadingTitle")}
-            </Text>
-            <Text style={styles.stateBody}>
-              {t("history.state.loadingBody")}
             </Text>
           </View>
         )}
 
         {/* ── Error ── */}
-        {!isLoading && errorMessage && sessions.length === 0 && (
+        {!isSyncing && errorMessage && sessions.length === 0 && (
           <View style={styles.stateCard}>
             <View
               style={[
@@ -227,7 +255,7 @@ export default function HistoryScreen() {
         )}
 
         {/* ── Empty ── */}
-        {!isLoading && !errorMessage && sessions.length === 0 && (
+        {hasLoadedSessions && !isSyncing && !errorMessage && sessions.length === 0 && (
           <View style={styles.stateCard}>
             <View style={styles.stateIconWrap}>
               <Feather name="mic-off" size={22} color={palette.textTertiary} />
@@ -337,13 +365,13 @@ export default function HistoryScreen() {
           <Feather
             name="refresh-cw"
             size={18}
-            color={refreshing ? palette.textAccent : palette.textSecondary}
+            color={isSyncing || refreshing ? palette.textAccent : palette.textSecondary}
           />
         </Pressable>
       </View>
 
       <FlatList
-        data={!isLoading && !errorMessage ? sessions : []}
+        data={sessions}
         keyExtractor={(session) => session.id}
         renderItem={renderSessionCard}
         ListHeaderComponent={renderListHeader}
@@ -354,6 +382,14 @@ export default function HistoryScreen() {
         ]}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.35}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={handleRefresh}
+            tintColor="transparent"
+            colors={["transparent"]}
+          />
+        }
         showsVerticalScrollIndicator={false}
       />
     </View>
@@ -413,6 +449,22 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   loadingMoreText: {
+    ...typography.labelMd,
+    color: palette.textSecondary,
+  },
+  inlineLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    backgroundColor: palette.bgGhostButton,
+    borderWidth: 1,
+    borderColor: palette.accentBorder,
+  },
+  inlineLoadingText: {
     ...typography.labelMd,
     color: palette.textSecondary,
   },
