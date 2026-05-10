@@ -1,3 +1,5 @@
+import { invokeEdgeFunction } from "@/shared/api/request";
+import { supabase } from "@/shared/api/supabase";
 import { getOrCreateInstallId } from "@/shared/device/installId";
 import { useAuthStore } from "@/shared/store/authStore";
 import { useSessionStore } from "@/features/live/store/sessionStore";
@@ -21,6 +23,11 @@ type DebugRow = {
   label: string;
   value: string;
   tone?: "normal" | "warning" | "ok";
+};
+
+type ProbeState = {
+  status: "idle" | "running" | "done" | "error";
+  rows: DebugRow[];
 };
 
 function readEnv(name: string) {
@@ -61,6 +68,63 @@ function getSupabaseProjectRef(url: string) {
   }
 }
 
+function decodeBase64(input: string) {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  let output = "";
+  let buffer = 0;
+  let bits = 0;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const value = chars.indexOf(input[i]);
+    if (value < 0 || value === 64) {
+      continue;
+    }
+
+    buffer = (buffer << 6) | value;
+    bits += 6;
+
+    if (bits >= 8) {
+      bits -= 8;
+      output += String.fromCharCode((buffer >> bits) & 0xff);
+    }
+  }
+
+  return output;
+}
+
+function decodeJwtPayload(token: string) {
+  const payload = token.split(".")[1];
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = decodeBase64(normalized);
+    return JSON.parse(decoded) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function refFromJwt(token: string) {
+  const payload = decodeJwtPayload(token);
+  return getSupabaseProjectRef(typeof payload?.iss === "string" ? payload.iss : "");
+}
+
+function summarizeJwt(token: string) {
+  const payload = decodeJwtPayload(token);
+  if (!payload) {
+    return "missing/invalid";
+  }
+
+  const ref = refFromJwt(token);
+  const role = typeof payload.role === "string" ? payload.role : "unknown";
+  const aud = typeof payload.aud === "string" ? payload.aud : "unknown";
+  return `${ref} / role=${role} / aud=${aud}`;
+}
+
 function getHost(url: string) {
   try {
     return new URL(url).host;
@@ -89,6 +153,22 @@ function formatDate(value: Date | string | null | undefined) {
 
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
+
+function stringifyProbeValue(value: unknown) {
+  if (value == null) {
+    return "null";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 function Row({ label, value, tone = "normal" }: DebugRow) {
@@ -130,6 +210,10 @@ export default function DebugEnvScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [installId, setInstallId] = useState<string>("loading");
+  const [probeState, setProbeState] = useState<ProbeState>({
+    status: "idle",
+    rows: [],
+  });
   const authMode = useAuthStore((s) => s.authMode);
   const userId = useAuthStore((s) => s.userId);
   const subscriptionTier = useAuthStore((s) => s.subscriptionTier);
@@ -214,6 +298,14 @@ export default function DebugEnvScreen() {
             label: "anon key",
             value: fingerprint(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")),
           },
+          {
+            label: "anon key issuer",
+            value: summarizeJwt(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")),
+            tone:
+              refFromJwt(readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY")) === productionRef
+                ? "ok"
+                : "warning",
+          },
         ],
       },
       {
@@ -286,15 +378,122 @@ export default function DebugEnvScreen() {
           },
         ],
       },
+      {
+        title: "Active Probes",
+        rows:
+          probeState.status === "idle"
+            ? [{ label: "status", value: "not run" }]
+            : [
+                { label: "status", value: probeState.status },
+                ...probeState.rows,
+              ],
+      },
     ];
   }, [
     authMode,
     dailyMinutesLimit,
     dailyMinutesUsed,
     installId,
+    probeState.rows,
+    probeState.status,
     subscriptionTier,
     userId,
   ]);
+
+  async function runProbes() {
+    setProbeState({ status: "running", rows: [] });
+
+    try {
+      const currentInstallId =
+        installId && installId !== "loading" ? installId : await getOrCreateInstallId();
+      const supabaseUrl = readEnv("EXPO_PUBLIC_SUPABASE_URL");
+      const anonKey = readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY");
+      const sessionResult = await supabase.auth.getSession();
+      const accessToken = sessionResult.data.session?.access_token ?? "";
+      const userResult = await supabase.auth.getUser();
+      const edgeResult = await invokeEdgeFunction<Record<string, unknown>>({
+        functionName: "env-diagnostic",
+        accessToken,
+        body: { installId: currentInstallId },
+        logSuccess: true,
+      });
+
+      const edgeData = edgeResult.data;
+      const derived =
+        edgeData && typeof edgeData === "object" && "derived" in edgeData
+          ? (edgeData.derived as Record<string, unknown>)
+          : {};
+      const auth =
+        edgeData && typeof edgeData === "object" && "auth" in edgeData
+          ? (edgeData.auth as Record<string, unknown>)
+          : {};
+
+      setProbeState({
+        status: "done",
+        rows: [
+          {
+            label: "client env ref",
+            value: getSupabaseProjectRef(supabaseUrl),
+          },
+          {
+            label: "client anon issuer",
+            value: summarizeJwt(anonKey),
+          },
+          {
+            label: "local session user",
+            value: sessionResult.data.session?.user.id ?? "null",
+          },
+          {
+            label: "local access issuer",
+            value: summarizeJwt(accessToken),
+          },
+          {
+            label: "client getUser",
+            value: userResult.data.user?.id ?? userResult.error?.message ?? "null",
+            tone: userResult.error ? "warning" : "ok",
+          },
+          {
+            label: "edge function DB ref",
+            value: stringifyProbeValue(derived.functionDbRef),
+            tone: derived.functionDbRef === "joweqhgtueqfeasweigh" ? "ok" : "warning",
+          },
+          {
+            label: "edge anon key ref",
+            value: stringifyProbeValue(derived.anonKeyRef),
+            tone: derived.anonKeyRef === "joweqhgtueqfeasweigh" ? "ok" : "warning",
+          },
+          {
+            label: "edge service role ref",
+            value: stringifyProbeValue(derived.serviceRoleKeyRef),
+            tone:
+              derived.serviceRoleKeyRef === "joweqhgtueqfeasweigh"
+                ? "ok"
+                : "warning",
+          },
+          {
+            label: "edge request token ref",
+            value: stringifyProbeValue(derived.requestTokenRef),
+          },
+          {
+            label: "edge auth user",
+            value: stringifyProbeValue(auth.userId ?? auth.error),
+            tone: auth.error ? "warning" : "ok",
+          },
+        ],
+      });
+    } catch (error) {
+      setProbeState({
+        status: "error",
+        rows: [
+          {
+            label: "error",
+            value: error instanceof Error ? error.message : String(error),
+            tone: "warning",
+          },
+        ],
+      });
+    }
+  }
 
   return (
     <View style={styles.root}>
@@ -319,6 +518,19 @@ export default function DebugEnvScreen() {
           { paddingBottom: insets.bottom + spacing.xxl },
         ]}
       >
+        <Pressable
+          onPress={() => void runProbes()}
+          disabled={probeState.status === "running"}
+          style={[
+            styles.probeButton,
+            probeState.status === "running" && styles.probeButtonDisabled,
+          ]}
+        >
+          <Feather name="activity" size={16} color={palette.textOnAccent} />
+          <Text style={styles.probeButtonText}>
+            {probeState.status === "running" ? "Running probes..." : "Run probes"}
+          </Text>
+        </Pressable>
         {sections.map((section) => (
           <Section key={section.title} {...section} />
         ))}
@@ -367,6 +579,22 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.xl,
     gap: spacing.md,
+  },
+  probeButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    backgroundColor: palette.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  probeButtonDisabled: {
+    opacity: 0.7,
+  },
+  probeButtonText: {
+    ...typography.labelLg,
+    color: palette.textOnAccent,
   },
   section: {
     borderWidth: 1,
