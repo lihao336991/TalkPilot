@@ -31,7 +31,8 @@
         "NSSpeechRecognitionUsageDescription": "TalkPilot uses speech recognition to transcribe conversations.",
         "NSSupportsLiveActivities": true,
         "NSMicrophoneUsageDescription": "TalkPilot uses your microphone to provide real-time English conversation assistance.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiredDeviceCapabilities": ["telephony"]
       }
     },
     "android": {
