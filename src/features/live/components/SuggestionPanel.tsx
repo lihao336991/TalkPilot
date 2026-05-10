@@ -32,13 +32,13 @@ export default function SuggestionPanel({
         style={styles.glow}
       />
       <Animated.View
-        entering={dropletShellEnter}
-        exiting={dropletShellExit}
+        entering={panelShellEnter}
+        exiting={panelShellExit}
         style={styles.cardShell}
       >
         <Animated.View
-          entering={dropletContentEnter}
-          exiting={dropletContentExit}
+          entering={panelContentEnter}
+          exiting={panelContentExit}
         >
           <SuggestionCard
             suggestion={suggestion}
@@ -54,146 +54,103 @@ export default function SuggestionPanel({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
   cardShell: {
-    borderRadius: 32,
+    borderRadius: 28,
   },
   glow: {
     position: 'absolute',
-    left: spacing.lg + 12,
-    right: spacing.lg + 12,
-    top: 20,
+    left: spacing.lg + 14,
+    right: spacing.lg + 14,
+    top: 22,
     bottom: spacing.md,
-    borderRadius: 32,
-    backgroundColor: 'rgba(178,220,44,0.34)',
+    borderRadius: 30,
+    backgroundColor: 'rgba(117,153,0,0.38)',
   },
 });
 
-const dropletShellEnter = new Keyframe({
+const panelShellEnter = new Keyframe({
   0: {
     opacity: 0,
     transform: [
-      { translateY: 58 },
-      { scaleX: 0.18 },
-      { scaleY: 0.12 },
+      { translateY: 24 },
+      { scale: 0.97 },
     ],
   },
-  14: {
-    opacity: 0.86,
+  48: {
+    opacity: 0.82,
     transform: [
-      { translateY: 34 },
-      { scaleX: 0.38 },
-      { scaleY: 0.96 },
+      { translateY: 7 },
+      { scale: 0.992 },
     ],
   },
-  42: {
+  78: {
     opacity: 1,
     transform: [
-      { translateY: -8 },
-      { scaleX: 1.14 },
-      { scaleY: 0.84 },
-    ],
-  },
-  64: {
-    opacity: 1,
-    transform: [
-      { translateY: 2 },
-      { scaleX: 0.94 },
-      { scaleY: 1.08 },
-    ],
-  },
-  82: {
-    opacity: 1,
-    transform: [
-      { translateY: -1 },
-      { scaleX: 1.03 },
-      { scaleY: 0.98 },
+      { translateY: -2 },
+      { scale: 1.004 },
     ],
   },
   100: {
     opacity: 1,
     transform: [
       { translateY: 0 },
-      { scaleX: 1 },
-      { scaleY: 1 },
+      { scale: 1 },
     ],
   },
-}).duration(620);
+}).duration(430);
 
-const dropletShellExit = new Keyframe({
+const panelShellExit = new Keyframe({
   0: {
     opacity: 1,
     transform: [
       { translateY: 0 },
-      { scaleX: 1 },
-      { scaleY: 1 },
+      { scale: 1 },
     ],
   },
-  28: {
-    opacity: 0.96,
+  100: {
+    opacity: 0,
     transform: [
-      { translateY: -6 },
-      { scaleX: 1.08 },
-      { scaleY: 0.9 },
+      { translateY: 16 },
+      { scale: 0.98 },
     ],
   },
-  52: {
-    opacity: 0.92,
+}).duration(220);
+
+const panelContentEnter = new Keyframe({
+  0: {
+    opacity: 0,
+    transform: [
+      { translateY: 10 },
+    ],
+  },
+  66: {
+    opacity: 0.72,
     transform: [
       { translateY: 3 },
-      { scaleX: 0.94 },
-      { scaleY: 1.04 },
-    ],
-  },
-  100: {
-    opacity: 0,
-    transform: [
-      { translateY: 34 },
-      { scaleX: 0.14 },
-      { scaleY: 0.2 },
-    ],
-  },
-}).duration(380);
-
-const dropletContentEnter = new Keyframe({
-  0: {
-    opacity: 0,
-    transform: [
-      { translateY: 18 },
-      { scale: 0.92 },
-    ],
-  },
-  58: {
-    opacity: 1,
-    transform: [
-      { translateY: -4 },
-      { scale: 1.03 },
     ],
   },
   100: {
     opacity: 1,
     transform: [
       { translateY: 0 },
-      { scale: 1 },
     ],
   },
-}).duration(340).delay(120);
+}).duration(300).delay(80);
 
-const dropletContentExit = new Keyframe({
+const panelContentExit = new Keyframe({
   0: {
     opacity: 1,
     transform: [
       { translateY: 0 },
-      { scale: 1 },
     ],
   },
   100: {
     opacity: 0,
     transform: [
-      { translateY: 12 },
-      { scale: 0.92 },
+      { translateY: 8 },
     ],
   },
 }).duration(150);
@@ -202,52 +159,39 @@ const auraEnter = new Keyframe({
   0: {
     opacity: 0,
     transform: [
-      { translateY: 54 },
-      { scaleX: 0.2 },
-      { scaleY: 0.16 },
+      { translateY: 18 },
+      { scale: 0.9 },
     ],
   },
-  36: {
-    opacity: 0.78,
+  58: {
+    opacity: 0.72,
     transform: [
-      { translateY: 8 },
-      { scaleX: 1.22 },
-      { scaleY: 0.82 },
-    ],
-  },
-  72: {
-    opacity: 0.4,
-    transform: [
-      { translateY: 1 },
-      { scaleX: 0.96 },
-      { scaleY: 1.04 },
+      { translateY: 4 },
+      { scale: 1.04 },
     ],
   },
   100: {
-    opacity: 0.34,
+    opacity: 0.5,
     transform: [
       { translateY: 0 },
-      { scaleX: 1 },
-      { scaleY: 1 },
+      { scale: 1 },
     ],
   },
-}).duration(660);
+}).duration(430);
 
 const auraExit = new Keyframe({
   0: {
-    opacity: 0.34,
+    opacity: 0.5,
     transform: [
       { translateY: 0 },
-      { scaleX: 1 },
-      { scaleY: 1 },
+      { scale: 1 },
     ],
   },
   100: {
     opacity: 0,
     transform: [
-      { translateY: 22 },
-      { scaleX: 0.28 },
-      { scaleY: 0.2 },
+      { translateY: 10 },
+      { scale: 0.94 },
     ],
   },
-}).duration(300);
+}).duration(220);

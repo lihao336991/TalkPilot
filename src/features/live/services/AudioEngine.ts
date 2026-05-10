@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import type { EmitterSubscription } from 'react-native';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { voiceChatAudioSession } from './VoiceChatAudioSession';
+import { useAudioDebugStore } from '@/features/live/store/audioDebugStore';
 
 const AUDIO_CONFIG: Options = {
   sampleRate: 16000,
@@ -40,6 +41,8 @@ export class AudioEngine {
   }
 
   private async configureRecordingAudioMode(): Promise<void> {
+    const iosAudioSessionMode = useAudioDebugStore.getState().iosAudioSessionMode;
+
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: true,
       playsInSilentModeIOS: true,
@@ -49,7 +52,7 @@ export class AudioEngine {
       shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false,
     });
-    await voiceChatAudioSession.enable();
+    await voiceChatAudioSession.setRecordingMode(iosAudioSessionMode);
   }
 
   private async restoreDefaultAudioMode(): Promise<void> {
@@ -96,6 +99,9 @@ export class AudioEngine {
     }
     this.subscription = LiveAudioStream.on('data', onAudioData);
     LiveAudioStream.start();
+    await voiceChatAudioSession.setRecordingMode(
+      useAudioDebugStore.getState().iosAudioSessionMode,
+    );
     console.log('[AudioEngine] Started recording');
   }
 

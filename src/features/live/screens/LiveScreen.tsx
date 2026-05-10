@@ -724,11 +724,11 @@ export default function LiveScreen() {
               style={styles.liveTopBottomFade}
             />
           </View>
-          <ConversationFlow />
           <SuggestionPanel
             onSendSuggestion={handleSendSuggestion}
             isSendingSuggestion={isSendingSuggestion}
           />
+          <ConversationFlow />
           {__DEV__ ? (
             <FloatingSimulateButton
               onRecordStart={handleSimulateOtherPressIn}

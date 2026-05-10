@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,11 @@ import { useAlert } from '@/shared/components';
 import { AudioEngine, audioEngine } from '@/features/live/services/AudioEngine';
 import { voiceEnrollmentService } from '@/features/live/services/VoiceEnrollmentService';
 import { voiceprintService, type VoiceprintDecision } from '@/features/live/services/VoiceprintService';
+import {
+  IOS_AUDIO_SESSION_MODES,
+  type IosAudioSessionMode,
+  useAudioDebugStore,
+} from '@/features/live/store/audioDebugStore';
 import {
   useConversationStore,
   type VoiceprintDecisionLabel,
@@ -50,6 +56,24 @@ type TestModeConfig = {
 
 const SNAPSHOT_INTERVAL_MS = 200;
 const HISTORY_LIMIT = 14;
+
+const IOS_AUDIO_MODE_COPY: Record<
+  IosAudioSessionMode,
+  { label: string; description: string }
+> = {
+  voiceChat: {
+    label: 'Voice chat',
+    description: 'Current default. Optimized for live conversation and routing, but may process voice tone.',
+  },
+  measurement: {
+    label: 'Measurement',
+    description: 'Less system processing. Useful for checking whether voiceprint improves with rawer input.',
+  },
+  default: {
+    label: 'Default',
+    description: 'Baseline iOS behavior between voice chat processing and measurement-style input.',
+  },
+};
 
 function formatSimilarity(value: number | null): string {
   if (value == null || Number.isNaN(value)) {
@@ -181,6 +205,12 @@ export default function VoiceprintDebugScreen() {
   );
   const lastVoiceprintMelFrameCount = useConversationStore(
     (state) => state.lastVoiceprintMelFrameCount,
+  );
+  const iosAudioSessionMode = useAudioDebugStore(
+    (state) => state.iosAudioSessionMode,
+  );
+  const setIosAudioSessionMode = useAudioDebugStore(
+    (state) => state.setIosAudioSessionMode,
   );
 
   const [expectedSpeaker, setExpectedSpeaker] = useState<ExpectedSpeaker>('self');
@@ -389,6 +419,7 @@ export default function VoiceprintDebugScreen() {
     }
     return t('dev.voiceprintDebug.baselineMissing');
   }, [enrollmentMeta, t]);
+  const selectedIosAudioModeCopy = IOS_AUDIO_MODE_COPY[iosAudioSessionMode];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -466,6 +497,51 @@ export default function VoiceprintDebugScreen() {
                 {formatDurationMs(enrollmentMeta?.profileDurationMs ?? null)}
               </Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>iOS recording mode</Text>
+          <Text style={styles.cardBody}>
+            This affects the next recording session. Use it to compare ASR and voiceprint behavior on the same device.
+          </Text>
+          <View style={styles.segmentedRow}>
+            {IOS_AUDIO_SESSION_MODES.map((mode) => {
+              const active = iosAudioSessionMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  accessibilityRole="button"
+                  disabled={isRecording || Platform.OS !== 'ios'}
+                  onPress={() => setIosAudioSessionMode(mode)}
+                  style={[
+                    styles.segmentButton,
+                    active && styles.segmentButtonActive,
+                    (isRecording || Platform.OS !== 'ios') && styles.segmentButtonDisabled,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentButtonText,
+                      active && styles.segmentButtonTextActive,
+                      (isRecording || Platform.OS !== 'ios') && styles.segmentButtonTextDisabled,
+                    ]}
+                  >
+                    {IOS_AUDIO_MODE_COPY[mode].label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.modeHintCard}>
+            <Text style={styles.modeHintTitle}>
+              {selectedIosAudioModeCopy.label}
+            </Text>
+            <Text style={styles.modeHintBody}>
+              {Platform.OS === 'ios'
+                ? selectedIosAudioModeCopy.description
+                : 'Only available on iOS. Android uses AudioRecord audioSource settings.'}
+            </Text>
           </View>
         </View>
 
@@ -795,6 +871,9 @@ const styles = StyleSheet.create({
     backgroundColor: palette.accent,
     borderColor: palette.accentDark,
   },
+  segmentButtonDisabled: {
+    opacity: 0.54,
+  },
   segmentButtonText: {
     ...typography.bodyMd,
     fontWeight: '600',
@@ -802,6 +881,9 @@ const styles = StyleSheet.create({
   },
   segmentButtonTextActive: {
     color: palette.textOnAccent,
+  },
+  segmentButtonTextDisabled: {
+    color: palette.textTertiary,
   },
   actions: {
     flexDirection: 'row',

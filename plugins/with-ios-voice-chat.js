@@ -11,18 +11,50 @@ final class VoiceChatModule: NSObject {
     return true
   }
 
+  private func resolveMode(_ rawMode: String?) -> AVAudioSession.Mode {
+    switch rawMode {
+    case "measurement":
+      return .measurement
+    case "default":
+      return .default
+    case "voiceChat":
+      return .voiceChat
+    default:
+      return .voiceChat
+    }
+  }
+
+  private func applyRecordingMode(_ rawMode: String?) throws {
+    let session = AVAudioSession.sharedInstance()
+    let mode = resolveMode(rawMode)
+    try session.setCategory(.playAndRecord, mode: mode, options: [.defaultToSpeaker, .allowBluetooth])
+    try session.setActive(true)
+  }
+
   @objc(enableVoiceChat:rejecter:)
   func enableVoiceChat(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
   ) {
     do {
-      let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
-      try session.setActive(true)
+      try applyRecordingMode("voiceChat")
       resolve(nil)
     } catch {
       reject("VOICECHAT_ENABLE_FAILED", error.localizedDescription, error)
+    }
+  }
+
+  @objc(setRecordingMode:resolver:rejecter:)
+  func setRecordingMode(
+    _ mode: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      try applyRecordingMode(mode)
+      resolve(nil)
+    } catch {
+      reject("VOICECHAT_MODE_FAILED", error.localizedDescription, error)
     }
   }
 
@@ -49,6 +81,10 @@ const BRIDGE_SOURCE = `#import <React/RCTBridgeModule.h>
 @interface RCT_EXTERN_MODULE(VoiceChatModule, NSObject)
 
 RCT_EXTERN_METHOD(enableVoiceChat:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(setRecordingMode:(NSString *)mode
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(disableVoiceChat:(RCTPromiseResolveBlock)resolve
@@ -81,5 +117,5 @@ const withIosVoiceChat = (config) => {
 module.exports = createRunOncePlugin(
   withIosVoiceChat,
   'with-ios-voice-chat',
-  '1.0.0',
+  '1.0.1',
 );

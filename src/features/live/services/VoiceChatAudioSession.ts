@@ -1,7 +1,9 @@
 import { NativeModules, Platform } from 'react-native';
+import type { IosAudioSessionMode } from '@/features/live/store/audioDebugStore';
 
 type VoiceChatModuleShape = {
   enableVoiceChat: () => Promise<void>;
+  setRecordingMode?: (mode: IosAudioSessionMode) => Promise<void>;
   disableVoiceChat: () => Promise<void>;
 };
 
@@ -28,15 +30,24 @@ class VoiceChatAudioSession {
   }
 
   async enable(): Promise<void> {
+    await this.setRecordingMode('voiceChat');
+  }
+
+  async setRecordingMode(mode: IosAudioSessionMode): Promise<void> {
     if (!this.isAvailable) {
       this.warnUnavailable();
       return;
     }
 
     try {
+      if (nativeVoiceChatModule?.setRecordingMode) {
+        await nativeVoiceChatModule.setRecordingMode(mode);
+        return;
+      }
+
       await nativeVoiceChatModule?.enableVoiceChat();
     } catch (error) {
-      console.warn('[VoiceChatAudioSession] Failed to enable voiceChat mode:', error);
+      console.warn('[VoiceChatAudioSession] Failed to set recording mode:', error);
     }
   }
 
