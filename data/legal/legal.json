@@ -32,7 +32,7 @@
       "The app requests microphone access to support live speaking sessions. Spoken audio may be processed by speech recognition, translation, and AI service providers only to deliver the requested real-time features.",
       "The app may process and store transcripts, generated suggestions, review results, and session metadata when needed to provide conversation history, account sync, customer support, security, or feature continuity.",
       "Private conversation content is not used for model training by default unless we clearly disclose otherwise and obtain any required consent.",
-      "Users can submit privacy or deletion requests through the in-app legal section or by email at lihao15510558202@gmail.com.",
+      "Users can initiate account deletion in-app at Settings > Account > Delete Account, and they can still send privacy requests by email at lihao15510558202@gmail.com.",
       "Restore Purchases is available on the paywall for users who previously subscribed with the same Apple ID.",
       "Subscription management is available through the in-app customer center and through Apple account subscription settings.",
       "A signed-in account is required before purchase so subscription access can sync correctly across sessions."
@@ -52,7 +52,7 @@
       },
       {
         "title": "3. Microphone, speech, and AI features",
-        "body": "TalkPilot requests microphone access so you can start live speaking sessions. When you choose to use speech, translation, or AI features, your audio, transcripts, and related prompts may be processed by TalkPilot and its service providers to recognize speech, translate content, generate suggestions, or return review results. If you do not want this processing, do not start those features."
+        "body": "TalkPilot requests microphone access so you can start live speaking sessions. Before these features begin, the app shows an in-app notice asking for your permission to send the required voice and text data. When you choose to use speech, translation, or AI features, your audio, transcripts, conversation text, and related prompts may be processed by TalkPilot and service providers such as Deepgram (speech recognition), Cerebras or Together AI (AI suggestions and review), Google Cloud Translation when enabled, and Supabase-hosted backend services that deliver the requested feature. If you do not want this processing, do not start those features."
       },
       {
         "title": "4. Conversation content and storage",
@@ -84,7 +84,7 @@
       },
       {
         "title": "11. Privacy and data requests",
-        "body": "If you want to access, correct, delete, or inquire about your personal data, contact us at lihao15510558202@gmail.com. We may need to verify your request before taking action."
+        "body": "If you want to access, correct, delete, or inquire about your personal data, you can use the in-app account deletion flow at Settings > Account > Delete Account, or contact us at lihao15510558202@gmail.com for other privacy requests. We may need to verify your request before taking action."
       },
       {
         "title": "12. Contact",
@@ -102,11 +102,11 @@
       },
       {
         "title": "2. Microphone permission and voice data",
-        "body": "TalkPilot requests microphone permission so you can join live speaking sessions. When you actively use those features, we may process spoken audio to perform speech recognition, translation, voice playback, and related AI assistance. If microphone permission is denied, those features will not work."
+        "body": "TalkPilot requests microphone permission so you can join live speaking sessions. When you actively use those features, we may process spoken audio to perform speech recognition, translation, voice playback, and related AI assistance. The app presents an in-app consent notice before these features start sending data for processing. If microphone permission is denied, those features will not work."
       },
       {
         "title": "3. Text, transcripts, and conversation content",
-        "body": "Your speech may be converted into text, translated, summarized, reviewed, or used to generate reply suggestions. We may process or store transcripts, generated suggestions, review output, and session records when needed to deliver real-time features, provide conversation history, sync your account, investigate problems, enforce our terms, or support customer requests."
+        "body": "Your speech may be converted into text, translated, summarized, reviewed, or used to generate reply suggestions. We may process or store transcripts, generated suggestions, review output, and session records when needed to deliver real-time features, provide conversation history, sync your account, investigate problems, enforce our terms, or support customer requests. Depending on the feature route in use, this processing may involve Deepgram, Cerebras, Together AI, Google Cloud Translation, and Supabase-hosted backend services."
       },
       {
         "title": "4. How we use information",
@@ -118,7 +118,7 @@
       },
       {
         "title": "6. Service providers",
-        "body": "We may use service providers to help run the app, such as the App Store for billing, RevenueCat for subscription management, Supabase and related backend infrastructure, analytics providers, and third-party speech recognition, translation, or AI providers that process content only as needed to deliver the feature you requested."
+        "body": "We may use service providers to help run the app, such as the App Store for billing, RevenueCat for subscription management, Supabase and related backend infrastructure, analytics providers, Deepgram for speech recognition, Cerebras and Together AI for AI-generated suggestions and review, and Google Cloud Translation when that translation route is enabled. These providers process content only as needed to deliver the feature you requested."
       },
       {
         "title": "7. Model training",
@@ -130,7 +130,7 @@
       },
       {
         "title": "9. Your choices and deletion requests",
-        "body": "You can manage subscriptions in your App Store account settings. You can also request access, correction, or deletion of your data by emailing lihao15510558202@gmail.com. We may need additional information to verify your request before we act on it."
+        "body": "You can manage subscriptions in your App Store account settings. You can also delete your TalkPilot account in-app at Settings > Account > Delete Account, or request access, correction, or other privacy support by emailing lihao15510558202@gmail.com. We may need additional information to verify your request before we act on it."
       },
       {
         "title": "10. Contact",

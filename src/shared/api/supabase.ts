@@ -274,6 +274,10 @@ async function signInGuest(): Promise<Session | null> {
   return anonData.session;
 }
 
+async function clearPersistedAuthSession() {
+  await supabaseStorage.removeItem(supabaseAuthStorageKey);
+}
+
 export async function signInAsGuestIfNeeded(): Promise<Session | null> {
   if (guestSessionPromise) {
     return guestSessionPromise;
@@ -441,6 +445,49 @@ export async function signOut() {
 
   const guestSession = await signInAsGuestIfNeeded();
   await applySession(guestSession);
+}
+
+export async function deleteAccount() {
+  const session = await recoverValidSession();
+
+  if (!session || session.user.is_anonymous) {
+    throw new Error('No authenticated account available to delete.');
+  }
+
+  await invokeEdgeFunction<{
+    ok: boolean;
+    deleted_user_id: string;
+  }>({
+    functionName: 'delete-account',
+    accessToken: session.access_token,
+    body: {},
+  });
+
+  await clearGoogleSignInSession();
+
+  guestFallbackSuppressed = true;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.warn('[Auth] Failed to sign out locally after account deletion:', error);
+    }
+  } catch (error) {
+    console.warn('[Auth] Local sign-out threw after account deletion:', error);
+  } finally {
+    guestFallbackSuppressed = false;
+  }
+
+  await clearPersistedAuthSession();
+  resetLiveAccessState();
+  useAuthStore.getState().signOut();
+
+  try {
+    const guestSession = await signInGuest();
+    await applySession(guestSession);
+  } catch (error) {
+    console.error('[Auth] Failed to restore guest mode after account deletion:', error);
+    await applySession(null);
+  }
 }
 
 export const initAuth = async () => {

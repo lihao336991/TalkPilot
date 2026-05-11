@@ -38,6 +38,7 @@ export const en = {
       manageSubscription: "Manage subscription",
       upgradeToPro: "Upgrade to Pro",
       viewPlans: "View plans",
+      deleteAccount: "Delete account",
     },
     labels: {
       native: "Native",
@@ -162,6 +163,36 @@ export const en = {
         improvedLabel: "More natural",
         improvedText: "I really like this movie.",
       },
+    },
+  },
+  privacyConsent: {
+    badge: "AI data use",
+    title: "Review how TalkPilot uses your voice and text",
+    subtitle:
+      "Before TalkPilot starts live transcription, translation, or AI reply features, we need your permission to send the required data to our service providers.",
+    sections: {
+      what: {
+        title: "What may be sent",
+        body:
+          "Voice audio, speech transcripts, conversation text, your suggested reply input, and related language settings for the current session.",
+      },
+      who: {
+        title: "Who may receive it",
+        body:
+          "Deepgram for speech recognition, Cerebras and Together AI for AI suggestions and review, Google Cloud Translation when that route is enabled, and Supabase-hosted backend services to deliver and store the requested features.",
+      },
+      why: {
+        title: "Why it is sent",
+        body:
+          "To transcribe speech, translate content, generate reply suggestions, review your phrasing, keep session history available, and return the feature result back to your device.",
+      },
+    },
+    note:
+      "TalkPilot only sends this data when you actively use Live or related AI assistance features. You can review the Privacy Policy and Terms of Service at any time in Settings.",
+    actions: {
+      agree: "Agree",
+      openPrivacy: "Privacy Policy",
+      openTerms: "Terms of Service",
     },
   },
   live: {
@@ -396,6 +427,7 @@ export const en = {
     title: "Settings",
     subtitle: "Choose your native language and the language you want to learn.",
     section: {
+      account: "Account",
       appLanguage: "Native language",
       learningLanguage: "Learning language",
       legal: "Legal and privacy",
@@ -443,9 +475,33 @@ export const en = {
       resetConfirmBody:
         "This removes the local enrollment sample. The next Live session will ask you to record a new one.",
     },
+    account: {
+      description:
+        "Manage your signed-in account, including permanent deletion from TalkPilot.",
+      deleteTitle: "Delete account",
+      deleteDescription:
+        "Permanently delete this TalkPilot account and its synced history.",
+      deleteConfirmTitle: "Delete your account?",
+      deleteConfirmMessage:
+        "This permanently deletes your TalkPilot account, synced sessions, and related profile data. This cannot be undone.",
+      deleteFinalTitle: "Final confirmation",
+      deleteFinalMessage:
+        "Deleting your account does not cancel an active App Store subscription automatically. If needed, manage or cancel it in Apple account settings first. Do you still want to continue?",
+      deleteSuccessTitle: "Account deleted",
+      deleteSuccessMessage:
+        "Your account was deleted successfully. TalkPilot has returned to guest mode on this device.",
+      deleteFailedTitle: "Couldn't delete account",
+      deleteFailedMessage:
+        "TalkPilot couldn't delete your account right now. Please try again.",
+    },
     legal: {
       description:
         "Review how TalkPilot handles microphone access, speech data, transcripts, subscriptions, and privacy requests.",
+      aiConsentTitle: "AI data use consent",
+      aiConsentAcceptedDescription:
+        "You already agreed to the in-app notice for Live transcription, translation, and AI replies. Open to review it again.",
+      aiConsentPendingDescription:
+        "Review the in-app notice that appears before Live sends voice or transcript data to Deepgram, Cerebras, Together AI, Google Cloud Translation, and Supabase services.",
       privacyTitle: "Privacy Policy",
       privacyDescription:
         "Read how microphone, speech, transcript, and analytics data are processed.",

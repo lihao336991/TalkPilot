@@ -1,30 +1,38 @@
-import {
-  Audio,
-} from "expo-av";
-import {
-  type LearningLanguage,
-  type UiLocale,
-  SUPPORTED_LEARNING_LANGUAGES,
-  SUPPORTED_UI_LOCALES,
-  getLanguageSelfName,
-  languageTagsMatch,
-  useAppLanguage,
-} from "@/shared/i18n";
-import { useAlert } from "@/shared/components";
 import { voiceEnrollmentService } from "@/features/live/services/VoiceEnrollmentService";
 import { useOnboardingState } from "@/features/onboarding/hooks/useOnboardingState";
-import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
+import { AiDataConsentModal } from "@/features/privacy/components/AiDataConsentModal";
+import { useAiConsentState } from "@/features/privacy/useAiConsentState";
+import { deleteAccount } from "@/shared/api/supabase";
+import { useAlert } from "@/shared/components";
+import {
+    type LearningLanguage,
+    type UiLocale,
+    SUPPORTED_LEARNING_LANGUAGES,
+    SUPPORTED_UI_LOCALES,
+    getLanguageSelfName,
+    languageTagsMatch,
+    useAppLanguage,
+} from "@/shared/i18n";
+import { useAuthStore } from "@/shared/store/authStore";
+import {
+    palette,
+    radii,
+    shadows,
+    spacing,
+    typography,
+} from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -49,10 +57,14 @@ function LanguageOption({
         disabled && styles.optionRowDisabled,
       ]}
     >
-      <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
+      <Text
+        style={[styles.optionLabel, selected && styles.optionLabelSelected]}
+      >
         {label}
       </Text>
-      {selected ? <Feather name="check" size={16} color={palette.textAccent} /> : null}
+      {selected ? (
+        <Feather name="check" size={16} color={palette.textAccent} />
+      ) : null}
     </Pressable>
   );
 }
@@ -95,18 +107,57 @@ function NavigationRow({
   title,
   description,
   onPress,
+  destructive = false,
+  disabled = false,
+  loading = false,
 }: {
   title: string;
   description: string;
   onPress: () => void;
+  destructive?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.navigationRow}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={[
+        styles.navigationRow,
+        destructive && styles.navigationRowDestructive,
+        disabled && styles.navigationRowDisabled,
+      ]}
+    >
       <View style={styles.navigationCopy}>
-        <Text style={styles.navigationTitle}>{title}</Text>
-        <Text style={styles.navigationDescription}>{description}</Text>
+        <Text
+          style={[
+            styles.navigationTitle,
+            destructive && styles.navigationTitleDestructive,
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.navigationDescription,
+            destructive && styles.navigationDescriptionDestructive,
+          ]}
+        >
+          {description}
+        </Text>
       </View>
-      <Feather name="chevron-right" size={18} color={palette.textSecondary} />
+      {loading ? (
+        <ActivityIndicator
+          size="small"
+          color={destructive ? palette.danger : palette.textAccent}
+        />
+      ) : (
+        <Feather
+          name={destructive ? "trash-2" : "chevron-right"}
+          size={18}
+          color={destructive ? palette.danger : palette.textSecondary}
+        />
+      )}
     </Pressable>
   );
 }
@@ -115,6 +166,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
+  const authMode = useAuthStore((s) => s.authMode);
   const {
     t,
     uiLocale,
@@ -129,6 +181,8 @@ export default function SettingsScreen() {
     forceShowOnboarding,
     setForceShowOnboarding,
   } = useOnboardingState();
+  const { hasAccepted: hasAcceptedAiConsent, accept: acceptAiConsent } =
+    useAiConsentState();
   const soundRef = React.useRef<Audio.Sound | null>(null);
   const [hasEnrollment, setHasEnrollment] = React.useState(false);
   const [enrollmentAvailability, setEnrollmentAvailability] = React.useState<
@@ -137,8 +191,23 @@ export default function SettingsScreen() {
   const [isEnrollmentLoading, setIsEnrollmentLoading] = React.useState(true);
   const [isPlayingEnrollment, setIsPlayingEnrollment] = React.useState(false);
   const [isEnrollmentBusy, setIsEnrollmentBusy] = React.useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = React.useState(false);
+  const [showAiConsentModal, setShowAiConsentModal] = React.useState(false);
+  const [isSavingAiConsent, setIsSavingAiConsent] = React.useState(false);
 
   const currentAppLanguageName = getLanguageSelfName(uiLocale);
+  const isAuthenticated = authMode === "authenticated";
+
+  const openLegalFromConsent = React.useCallback(
+    (path: "/privacy" | "/terms") => {
+      setShowAiConsentModal(false);
+      setIsSavingAiConsent(false);
+      setTimeout(() => {
+        router.push(path);
+      }, 0);
+    },
+    [router],
+  );
 
   const stopEnrollmentPlayback = React.useCallback(async () => {
     const sound = soundRef.current;
@@ -159,7 +228,8 @@ export default function SettingsScreen() {
   const refreshEnrollmentStatus = React.useCallback(async () => {
     setIsEnrollmentLoading(true);
     try {
-      const availability = await voiceEnrollmentService.getEnrollmentAvailability();
+      const availability =
+        await voiceEnrollmentService.getEnrollmentAvailability();
       setEnrollmentAvailability(availability);
       setHasEnrollment(availability !== "missing");
     } finally {
@@ -214,12 +284,7 @@ export default function SettingsScreen() {
     } finally {
       setIsEnrollmentBusy(false);
     }
-  }, [
-    hasEnrollment,
-    isEnrollmentBusy,
-    stopEnrollmentPlayback,
-    t,
-  ]);
+  }, [hasEnrollment, isEnrollmentBusy, stopEnrollmentPlayback, t]);
 
   const handleResetEnrollment = React.useCallback(() => {
     if (isEnrollmentBusy) {
@@ -254,6 +319,86 @@ export default function SettingsScreen() {
     });
   }, [isEnrollmentBusy, stopEnrollmentPlayback, t]);
 
+  const performDeleteAccount = React.useCallback(async () => {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      await deleteAccount();
+      showAlert({
+        title: t("settings.account.deleteSuccessTitle"),
+        message: t("settings.account.deleteSuccessMessage"),
+        buttons: [
+          {
+            text: t("common.actions.gotIt"),
+            onPress: () => {
+              router.replace("/(tabs)/profile");
+            },
+          },
+        ],
+      });
+    } catch (error) {
+      console.error("[Settings] Failed to delete account:", error);
+      showAlert({
+        title: t("settings.account.deleteFailedTitle"),
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : t("settings.account.deleteFailedMessage"),
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [isDeletingAccount, router, showAlert, t]);
+
+  const showFinalDeleteConfirmation = React.useCallback(() => {
+    // Defer the second confirmation until the current alert finishes dismissing.
+    setTimeout(() => {
+      showAlert({
+        title: t("settings.account.deleteFinalTitle"),
+        message: t("settings.account.deleteFinalMessage"),
+        buttons: [
+          {
+            text: t("common.actions.cancel"),
+            variant: "cancel",
+          },
+          {
+            text: t("common.actions.deleteAccount"),
+            variant: "destructive",
+            onPress: () => {
+              void performDeleteAccount();
+            },
+          },
+        ],
+      });
+    }, 0);
+  }, [performDeleteAccount, showAlert, t]);
+
+  const handleDeleteAccount = React.useCallback(() => {
+    if (!isAuthenticated || isDeletingAccount) {
+      return;
+    }
+
+    showAlert({
+      title: t("settings.account.deleteConfirmTitle"),
+      message: t("settings.account.deleteConfirmMessage"),
+      buttons: [
+        {
+          text: t("common.actions.cancel"),
+          variant: "cancel",
+        },
+        {
+          text: t("common.actions.continue"),
+          onPress: () => {
+            showFinalDeleteConfirmation();
+          },
+        },
+      ],
+    });
+  }, [isAuthenticated, isDeletingAccount, showAlert, showFinalDeleteConfirmation, t]);
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -279,7 +424,9 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t("settings.section.appLanguage")}</Text>
+          <Text style={styles.sectionTitle}>
+            {t("settings.section.appLanguage")}
+          </Text>
           <Text style={styles.sectionDescription}>
             {t("settings.appLanguage.description")}
           </Text>
@@ -318,7 +465,9 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t("settings.section.learningLanguage")}</Text>
+          <Text style={styles.sectionTitle}>
+            {t("settings.section.learningLanguage")}
+          </Text>
           <Text style={styles.sectionDescription}>
             {t("settings.learningLanguage.description")}
           </Text>
@@ -351,7 +500,9 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t("settings.voiceEnrollment.title")}</Text>
+          <Text style={styles.sectionTitle}>
+            {t("settings.voiceEnrollment.title")}
+          </Text>
           <Text style={styles.sectionDescription}>
             {t("settings.voiceEnrollment.description")}
           </Text>
@@ -392,18 +543,24 @@ export default function SettingsScreen() {
               disabled={!hasEnrollment || isEnrollmentBusy}
               style={[
                 styles.secondaryActionButton,
-                (!hasEnrollment || isEnrollmentBusy) && styles.actionButtonDisabled,
+                (!hasEnrollment || isEnrollmentBusy) &&
+                  styles.actionButtonDisabled,
               ]}
             >
               <Feather
                 name={isPlayingEnrollment ? "volume-2" : "play"}
                 size={16}
-                color={hasEnrollment && !isEnrollmentBusy ? palette.textAccent : palette.textTertiary}
+                color={
+                  hasEnrollment && !isEnrollmentBusy
+                    ? palette.textAccent
+                    : palette.textTertiary
+                }
               />
               <Text
                 style={[
                   styles.secondaryActionText,
-                  (!hasEnrollment || isEnrollmentBusy) && styles.actionTextDisabled,
+                  (!hasEnrollment || isEnrollmentBusy) &&
+                    styles.actionTextDisabled,
                 ]}
               >
                 {isPlayingEnrollment
@@ -417,18 +574,24 @@ export default function SettingsScreen() {
               disabled={!hasEnrollment || isEnrollmentBusy}
               style={[
                 styles.dangerActionButton,
-                (!hasEnrollment || isEnrollmentBusy) && styles.actionButtonDisabled,
+                (!hasEnrollment || isEnrollmentBusy) &&
+                  styles.actionButtonDisabled,
               ]}
             >
               <Feather
                 name="rotate-ccw"
                 size={16}
-                color={hasEnrollment && !isEnrollmentBusy ? palette.danger : palette.textTertiary}
+                color={
+                  hasEnrollment && !isEnrollmentBusy
+                    ? palette.danger
+                    : palette.textTertiary
+                }
               />
               <Text
                 style={[
                   styles.dangerActionText,
-                  (!hasEnrollment || isEnrollmentBusy) && styles.actionTextDisabled,
+                  (!hasEnrollment || isEnrollmentBusy) &&
+                    styles.actionTextDisabled,
                 ]}
               >
                 {t("settings.voiceEnrollment.resetAction")}
@@ -437,9 +600,43 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {isAuthenticated ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>
+              {t("settings.section.account")}
+            </Text>
+            <Text style={styles.sectionDescription}>
+              {t("settings.account.description")}
+            </Text>
+
+            <NavigationRow
+              title={t("settings.account.deleteTitle")}
+              description={t("settings.account.deleteDescription")}
+              onPress={handleDeleteAccount}
+              destructive
+              disabled={isDeletingAccount}
+              loading={isDeletingAccount}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("settings.section.legal")}</Text>
-          <Text style={styles.sectionDescription}>{t("settings.legal.description")}</Text>
+          <Text style={styles.sectionDescription}>
+            {t("settings.legal.description")}
+          </Text>
+
+          <NavigationRow
+            title={t("settings.legal.aiConsentTitle")}
+            description={t(
+              hasAcceptedAiConsent
+                ? "settings.legal.aiConsentAcceptedDescription"
+                : "settings.legal.aiConsentPendingDescription",
+            )}
+            onPress={() => {
+              setShowAiConsentModal(true);
+            }}
+          />
 
           <NavigationRow
             title={t("settings.legal.privacyTitle")}
@@ -460,7 +657,9 @@ export default function SettingsScreen() {
 
         {__DEV__ ? (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>{t("settings.section.debug")}</Text>
+            <Text style={styles.sectionTitle}>
+              {t("settings.section.debug")}
+            </Text>
             <Text style={styles.sectionDescription}>
               {t("settings.debug.description")}
             </Text>
@@ -493,6 +692,37 @@ export default function SettingsScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <AiDataConsentModal
+        visible={showAiConsentModal}
+        hasAccepted={hasAcceptedAiConsent}
+        isSaving={isSavingAiConsent}
+        onAgree={() => {
+          void (async () => {
+            if (isSavingAiConsent) {
+              return;
+            }
+
+            setIsSavingAiConsent(true);
+            try {
+              await acceptAiConsent();
+              setShowAiConsentModal(false);
+            } finally {
+              setIsSavingAiConsent(false);
+            }
+          })();
+        }}
+        onClose={() => {
+          setShowAiConsentModal(false);
+          setIsSavingAiConsent(false);
+        }}
+        onOpenPrivacy={() => {
+          openLegalFromConsent("/privacy");
+        }}
+        onOpenTerms={() => {
+          openLegalFromConsent("/terms");
+        }}
+      />
     </View>
   );
 }
@@ -602,6 +832,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
+  navigationRowDestructive: {
+    borderColor: palette.dangerBorder,
+    backgroundColor: palette.dangerLight,
+  },
+  navigationRowDisabled: {
+    opacity: 0.6,
+  },
   navigationCopy: {
     flex: 1,
     gap: 4,
@@ -611,10 +848,17 @@ const styles = StyleSheet.create({
     color: palette.textPrimary,
     fontWeight: "700",
   },
+  navigationTitleDestructive: {
+    color: palette.danger,
+  },
   navigationDescription: {
     ...typography.caption,
     color: palette.textSecondary,
     lineHeight: 18,
+  },
+  navigationDescriptionDestructive: {
+    color: palette.danger,
+    opacity: 0.9,
   },
   optionRow: {
     minHeight: 44,
