@@ -1,5 +1,6 @@
 import { palette, radii, shadows, spacing, typography } from "@/shared/theme/tokens";
 import { Feather } from "@expo/vector-icons";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Modal,
@@ -25,21 +26,32 @@ function BulletRow({
   icon,
   title,
   body,
+  expanded,
+  onPress,
 }: {
   icon: keyof typeof Feather.glyphMap;
   title: string;
   body: string;
+  expanded: boolean;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.bulletRow}>
+    <Pressable onPress={onPress} style={styles.bulletRow}>
       <View style={styles.bulletIconWrap}>
         <Feather name={icon} size={16} color={palette.textAccent} />
       </View>
       <View style={styles.bulletCopy}>
-        <Text style={styles.bulletTitle}>{title}</Text>
-        <Text style={styles.bulletBody}>{body}</Text>
+        <View style={styles.bulletTitleRow}>
+          <Text style={styles.bulletTitle}>{title}</Text>
+          <Feather
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={palette.textSecondary}
+          />
+        </View>
+        {expanded ? <Text style={styles.bulletBody}>{body}</Text> : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -53,6 +65,13 @@ export function AiDataConsentModal({
   onOpenTerms,
 }: AiDataConsentModalProps) {
   const { t } = useTranslation();
+  const [expandedSection, setExpandedSection] = useState<
+    "what" | "who" | "why" | null
+  >(null);
+
+  const toggleSection = (section: "what" | "who" | "why") => {
+    setExpandedSection((current) => (current === section ? null : section));
+  };
 
   return (
     <Modal
@@ -86,16 +105,28 @@ export function AiDataConsentModal({
               icon="mic"
               title={t("privacyConsent.sections.what.title")}
               body={t("privacyConsent.sections.what.body")}
+              expanded={expandedSection === "what"}
+              onPress={() => {
+                toggleSection("what");
+              }}
             />
             <BulletRow
               icon="server"
               title={t("privacyConsent.sections.who.title")}
               body={t("privacyConsent.sections.who.body")}
+              expanded={expandedSection === "who"}
+              onPress={() => {
+                toggleSection("who");
+              }}
             />
             <BulletRow
               icon="zap"
               title={t("privacyConsent.sections.why.title")}
               body={t("privacyConsent.sections.why.body")}
+              expanded={expandedSection === "why"}
+              onPress={() => {
+                toggleSection("why");
+              }}
             />
 
             <View style={styles.noteCard}>
@@ -156,7 +187,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   card: {
-    maxHeight: "84%",
+    maxHeight: "76%",
     borderRadius: radii.xl,
     backgroundColor: palette.bgCardSolid,
     borderWidth: 1,
@@ -221,6 +252,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  bulletTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
   bulletTitle: {
     ...typography.bodyMd,
     fontWeight: "700",
@@ -265,6 +302,7 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     gap: spacing.sm,
+    alignItems: "center",
   },
   secondaryButton: {
     flex: 1,

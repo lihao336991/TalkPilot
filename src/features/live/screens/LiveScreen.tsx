@@ -164,6 +164,13 @@ export default function LiveScreen() {
     setIsAcceptingConsent(false);
   };
 
+  const openLegalFromConsent = (path: "/privacy" | "/terms") => {
+    handleCloseConsentModal();
+    setTimeout(() => {
+      router.push(path);
+    }, 0);
+  };
+
   const handleAcceptConsent = async () => {
     if (isAcceptingConsent) {
       return;
@@ -843,10 +850,10 @@ export default function LiveScreen() {
         }}
         onClose={handleCloseConsentModal}
         onOpenPrivacy={() => {
-          router.push("/privacy");
+          openLegalFromConsent("/privacy");
         }}
         onOpenTerms={() => {
-          router.push("/terms");
+          openLegalFromConsent("/terms");
         }}
       />
     </SafeAreaView>

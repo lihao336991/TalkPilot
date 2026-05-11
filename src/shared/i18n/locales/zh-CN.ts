@@ -189,7 +189,7 @@ export const zhCN: TranslationSchema = {
     note:
       "只有当你主动使用实时对话或相关 AI 辅助功能时，TalkPilot 才会发送这些数据。你也可以随时在设置中查看隐私政策和用户协议。",
     actions: {
-      agree: "同意并继续",
+      agree: "同意",
       openPrivacy: "查看隐私政策",
       openTerms: "查看用户协议",
     },

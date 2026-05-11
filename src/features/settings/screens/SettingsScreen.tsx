@@ -198,6 +198,17 @@ export default function SettingsScreen() {
   const currentAppLanguageName = getLanguageSelfName(uiLocale);
   const isAuthenticated = authMode === "authenticated";
 
+  const openLegalFromConsent = React.useCallback(
+    (path: "/privacy" | "/terms") => {
+      setShowAiConsentModal(false);
+      setIsSavingAiConsent(false);
+      setTimeout(() => {
+        router.push(path);
+      }, 0);
+    },
+    [router],
+  );
+
   const stopEnrollmentPlayback = React.useCallback(async () => {
     const sound = soundRef.current;
     soundRef.current = null;
@@ -699,10 +710,10 @@ export default function SettingsScreen() {
           setIsSavingAiConsent(false);
         }}
         onOpenPrivacy={() => {
-          router.push("/privacy");
+          openLegalFromConsent("/privacy");
         }}
         onOpenTerms={() => {
-          router.push("/terms");
+          openLegalFromConsent("/terms");
         }}
       />
     </View>

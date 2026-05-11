@@ -119,7 +119,7 @@ export const de = createLocale({
     note:
       "TalkPilot only sends this data when you actively use Live or related AI assistance features. You can review the Privacy Policy and Terms of Service at any time in Settings.",
     actions: {
-      agree: "Agree and Continue",
+      agree: "Agree",
       openPrivacy: "Privacy Policy",
       openTerms: "Terms of Service",
     },
