@@ -353,6 +353,29 @@ export default function SettingsScreen() {
     }
   }, [isDeletingAccount, router, showAlert, t]);
 
+  const showFinalDeleteConfirmation = React.useCallback(() => {
+    // Defer the second confirmation until the current alert finishes dismissing.
+    setTimeout(() => {
+      showAlert({
+        title: t("settings.account.deleteFinalTitle"),
+        message: t("settings.account.deleteFinalMessage"),
+        buttons: [
+          {
+            text: t("common.actions.cancel"),
+            variant: "cancel",
+          },
+          {
+            text: t("common.actions.deleteAccount"),
+            variant: "destructive",
+            onPress: () => {
+              void performDeleteAccount();
+            },
+          },
+        ],
+      });
+    }, 0);
+  }, [performDeleteAccount, showAlert, t]);
+
   const handleDeleteAccount = React.useCallback(() => {
     if (!isAuthenticated || isDeletingAccount) {
       return;
@@ -369,28 +392,12 @@ export default function SettingsScreen() {
         {
           text: t("common.actions.continue"),
           onPress: () => {
-            showAlert({
-              title: t("settings.account.deleteFinalTitle"),
-              message: t("settings.account.deleteFinalMessage"),
-              buttons: [
-                {
-                  text: t("common.actions.cancel"),
-                  variant: "cancel",
-                },
-                {
-                  text: t("common.actions.deleteAccount"),
-                  variant: "destructive",
-                  onPress: () => {
-                    void performDeleteAccount();
-                  },
-                },
-              ],
-            });
+            showFinalDeleteConfirmation();
           },
         },
       ],
     });
-  }, [isAuthenticated, isDeletingAccount, performDeleteAccount, showAlert, t]);
+  }, [isAuthenticated, isDeletingAccount, showAlert, showFinalDeleteConfirmation, t]);
 
   return (
     <View style={styles.root}>
