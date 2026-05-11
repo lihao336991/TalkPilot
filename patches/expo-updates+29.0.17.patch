@@ -1,0 +1,29 @@
+diff --git a/node_modules/expo-updates/ios/EXUpdates/Database/UpdatesDatabase.swift b/node_modules/expo-updates/ios/EXUpdates/Database/UpdatesDatabase.swift
+index 9949b91..b83a92f 100644
+--- a/node_modules/expo-updates/ios/EXUpdates/Database/UpdatesDatabase.swift
++++ b/node_modules/expo-updates/ios/EXUpdates/Database/UpdatesDatabase.swift
+@@ -433,7 +433,8 @@ public final class UpdatesDatabase: NSObject {
+     // if an update has successfully launched at least once, we treat it as launchable
+     // even if it has also failed to launch at least once
+     let sql = String(
+-      format: "SELECT * FROM updates WHERE scope_key = ?1 AND (successful_launch_count > 0 OR failed_launch_count < 1) AND status IN (%li, %li, %li);",
++      format: "SELECT * FROM updates WHERE scope_key = ?1 AND (successful_launch_count > 0 OR failed_launch_count < 1 OR status = %li) AND status IN (%li, %li, %li);",
++      UpdateStatus.StatusEmbedded.rawValue,
+       UpdateStatus.StatusReady.rawValue,
+       UpdateStatus.StatusEmbedded.rawValue,
+       UpdateStatus.StatusDevelopment.rawValue
+diff --git a/node_modules/expo-updates/ios/EXUpdates/ErrorRecovery.swift b/node_modules/expo-updates/ios/EXUpdates/ErrorRecovery.swift
+index 14a9ce5..4d54f1b 100644
+--- a/node_modules/expo-updates/ios/EXUpdates/ErrorRecovery.swift
++++ b/node_modules/expo-updates/ios/EXUpdates/ErrorRecovery.swift
+@@ -160,7 +160,9 @@ public final class ErrorRecovery: NSObject {
+         launchedUpdate.successfulLaunchCount > 0 {
+         self.pipeline.remove(.launchCached)
+       } else if !self.rctContentHasAppeared {
+-        self.delegate?.markFailedLaunchForLaunchedUpdate()
++        if self.delegate?.launchedUpdate()?.status != UpdateStatus.StatusEmbedded {
++          self.delegate?.markFailedLaunchForLaunchedUpdate()
++        }
+       }
+ 
+       if !self.isRunning {

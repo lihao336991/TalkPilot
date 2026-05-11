@@ -12,7 +12,10 @@
       "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme ExpoSQLite -sdk iphoneos -configuration Debug -showBuildSettings)",
       "Bash(xcodebuild -workspace /Users/bytedance/Desktop/money/TalkPilot/ios/TalkPilot.xcworkspace -scheme ExpoSQLite -sdk iphoneos -configuration Debug build)",
       "Bash(npx tsc *)",
-      "Read(//Users/bytedance/**)"
+      "Read(//Users/bytedance/**)",
+      "Bash(npm install *)",
+      "Bash(npx patch-package *)",
+      "Bash(git show *)"
     ]
   }
 }

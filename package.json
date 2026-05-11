@@ -24,7 +24,8 @@
     "eas:build": "bash scripts/eas-build.sh",
     "eas:update": "bash scripts/eas-update.sh",
     "auth:apple-secret": "node scripts/generate-apple-client-secret.mjs",
-    "sentry:upload-sourcemaps": "sentry-expo-upload-sourcemaps dist"
+    "sentry:upload-sourcemaps": "sentry-expo-upload-sourcemaps dist",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -83,6 +84,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "patch-package": "^8.0.1",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },

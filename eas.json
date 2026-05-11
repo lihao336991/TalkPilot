@@ -10,7 +10,21 @@
       "channel": "development",
       "env": {
         "APP_ENV": "development",
-        "EXPO_PUBLIC_APP_ENV": "development"
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ufaphufpewxpeizoewpn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmYXBodWZwZXd4cGVpem9ld3BuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NTgwNDcsImV4cCI6MjA5MjQzNDA0N30.M4m-1M3VXG-W0CjSzjTFK-LHbpJfZwPsq4ZihZCYZPM",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "693375351446-t07qmvi9c01b440hj87k5b6ru7kspkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://33bd515b8daf71a40142dc7d472367d2@o4511240859484160.ingest.us.sentry.io/4511240874950656",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "development",
+        "EXPO_PUBLIC_DEEPGRAM_WS_URL": "wss://api.deepgram.com/v1/listen",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS": "appl_lCtWHeYoJrsjDiNXslSYUJMPOXA",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID": "",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_rtPPcFFStkLLdE2kxsj9z9zmtYCSY73JqjRYdSDPbSNG",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://app.posthog.com",
+        "EXPO_PUBLIC_POSTHOG_DEV_ENABLED": "true",
+        "EXPO_PUBLIC_POSTHOG_DISABLED": "false"
       }
     },
     "preview": {
@@ -18,7 +32,21 @@
       "channel": "production",
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://joweqhgtueqfeasweigh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impvd2VxaGd0dWVxZmVhc3dlaWdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjMxODcsImV4cCI6MjA5MTI5OTE4N30.M4QI438PW3vmTFY-pVfK2jhm_K8htovqOFtYznv9hsQ",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "693375351446-t07qmvi9c01b440hj87k5b6ru7kspkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://33bd515b8daf71a40142dc7d472367d2@o4511240859484160.ingest.us.sentry.io/4511240874950656",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_DEEPGRAM_WS_URL": "wss://api.deepgram.com/v1/listen",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS": "appl_lCtWHeYoJrsjDiNXslSYUJMPOXA",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID": "",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_rtPPcFFStkLLdE2kxsj9z9zmtYCSY73JqjRYdSDPbSNG",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://app.posthog.com",
+        "EXPO_PUBLIC_POSTHOG_DEV_ENABLED": "false",
+        "EXPO_PUBLIC_POSTHOG_DISABLED": "false"
       }
     },
     "preview-devtools": {
@@ -27,7 +55,21 @@
       "channel": "preview-devtools",
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://joweqhgtueqfeasweigh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impvd2VxaGd0dWVxZmVhc3dlaWdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjMxODcsImV4cCI6MjA5MTI5OTE4N30.M4QI438PW3vmTFY-pVfK2jhm_K8htovqOFtYznv9hsQ",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "693375351446-t07qmvi9c01b440hj87k5b6ru7kspkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://33bd515b8daf71a40142dc7d472367d2@o4511240859484160.ingest.us.sentry.io/4511240874950656",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_DEEPGRAM_WS_URL": "wss://api.deepgram.com/v1/listen",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS": "appl_lCtWHeYoJrsjDiNXslSYUJMPOXA",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID": "",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_rtPPcFFStkLLdE2kxsj9z9zmtYCSY73JqjRYdSDPbSNG",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://app.posthog.com",
+        "EXPO_PUBLIC_POSTHOG_DEV_ENABLED": "false",
+        "EXPO_PUBLIC_POSTHOG_DISABLED": "false"
       }
     },
     "production": {
@@ -35,7 +77,21 @@
       "channel": "production",
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://joweqhgtueqfeasweigh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impvd2VxaGd0dWVxZmVhc3dlaWdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MjMxODcsImV4cCI6MjA5MTI5OTE4N30.M4QI438PW3vmTFY-pVfK2jhm_K8htovqOFtYznv9hsQ",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "693375351446-t07qmvi9c01b440hj87k5b6ru7kspkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.693375351446-9lm1ltmj0k38e18blabtihipvvf0rqld",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://33bd515b8daf71a40142dc7d472367d2@o4511240859484160.ingest.us.sentry.io/4511240874950656",
+        "EXPO_PUBLIC_SENTRY_ENVIRONMENT": "production",
+        "EXPO_PUBLIC_DEEPGRAM_WS_URL": "wss://api.deepgram.com/v1/listen",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_IOS": "appl_lCtWHeYoJrsjDiNXslSYUJMPOXA",
+        "EXPO_PUBLIC_REVENUECAT_PUBLIC_SDK_KEY_ANDROID": "",
+        "EXPO_PUBLIC_POSTHOG_API_KEY": "phc_rtPPcFFStkLLdE2kxsj9z9zmtYCSY73JqjRYdSDPbSNG",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://app.posthog.com",
+        "EXPO_PUBLIC_POSTHOG_DEV_ENABLED": "false",
+        "EXPO_PUBLIC_POSTHOG_DISABLED": "false"
       }
     }
   },
