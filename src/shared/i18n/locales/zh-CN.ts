@@ -40,6 +40,7 @@ export const zhCN: TranslationSchema = {
       manageSubscription: "管理订阅",
       upgradeToPro: "升级到 Pro",
       viewPlans: "查看方案",
+      deleteAccount: "删除账号",
     },
     labels: {
       native: "母语",
@@ -161,6 +162,36 @@ export const zhCN: TranslationSchema = {
         improvedLabel: "更自然",
         improvedText: "I really like this movie.",
       },
+    },
+  },
+  privacyConsent: {
+    badge: "AI 数据使用",
+    title: "开始前，请先确认 TalkPilot 如何使用你的语音和文本",
+    subtitle:
+      "在 TalkPilot 启动实时转写、翻译和 AI 回复建议前，我们需要征得你的同意，才能把这些功能所需的数据发送给对应服务商处理。",
+    sections: {
+      what: {
+        title: "可能发送哪些数据",
+        body:
+          "当前会话中的语音音频、语音转写文本、对话内容、你输入或发送的建议回复，以及相关语言设置。",
+      },
+      who: {
+        title: "可能发送给谁",
+        body:
+          "Deepgram 用于语音识别，Cerebras 和 Together AI 用于回复建议与表达复盘，启用对应路由时 Google Cloud Translation 用于翻译，Supabase 托管的后端服务用于请求转发和会话存储。",
+      },
+      why: {
+        title: "为什么要发送",
+        body:
+          "用于完成语音转写、内容翻译、生成回复建议、复盘表达问题、保留会话记录，并把处理结果返回到你的设备。",
+      },
+    },
+    note:
+      "只有当你主动使用实时对话或相关 AI 辅助功能时，TalkPilot 才会发送这些数据。你也可以随时在设置中查看隐私政策和用户协议。",
+    actions: {
+      agree: "同意并继续",
+      openPrivacy: "查看隐私政策",
+      openTerms: "查看用户协议",
     },
   },
   live: {
@@ -386,6 +417,7 @@ export const zhCN: TranslationSchema = {
     title: "设置",
     subtitle: "选择你的母语，以及你想学习的目标语言。",
     section: {
+      account: "账号",
       appLanguage: "母语",
       learningLanguage: "学习语言",
       legal: "法律与隐私",
@@ -427,9 +459,30 @@ export const zhCN: TranslationSchema = {
       resetConfirmBody:
         "这会删除当前设备上的声音样本。下次开始实时对话时，系统会提示你重新录制。",
     },
+    account: {
+      description: "管理当前已登录账号，包括从 TalkPilot 中永久删除账号。",
+      deleteTitle: "删除账号",
+      deleteDescription: "永久删除当前 TalkPilot 账号及其已同步的历史记录。",
+      deleteConfirmTitle: "删除这个账号？",
+      deleteConfirmMessage:
+        "这会永久删除你的 TalkPilot 账号、已同步会话和相关资料，且无法恢复。",
+      deleteFinalTitle: "最后确认",
+      deleteFinalMessage:
+        "删除账号不会自动取消你在 App Store 的有效订阅。如有需要，请先前往 Apple 账号订阅设置里管理或取消。仍要继续吗？",
+      deleteSuccessTitle: "账号已删除",
+      deleteSuccessMessage:
+        "你的账号已成功删除，TalkPilot 已在这台设备上恢复为游客模式。",
+      deleteFailedTitle: "暂时无法删除账号",
+      deleteFailedMessage: "TalkPilot 现在无法删除你的账号，请稍后再试。",
+    },
     legal: {
       description:
         "查看 TalkPilot 如何处理麦克风权限、语音数据、对话转写、订阅以及隐私请求。",
+      aiConsentTitle: "AI 数据使用同意",
+      aiConsentAcceptedDescription:
+        "你已经同意过实时转写、翻译和 AI 回复的 App 内提示。点开可再次查看。",
+      aiConsentPendingDescription:
+        "查看实时对话开始前的 App 内提示，里面会说明哪些语音或文本会发送到 Deepgram、Cerebras、Together AI、Google Cloud Translation 和 Supabase 服务。",
       privacyTitle: "隐私政策",
       privacyDescription:
         "查看麦克风、语音、转写内容和分析数据如何被处理。",

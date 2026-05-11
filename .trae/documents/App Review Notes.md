@@ -11,7 +11,7 @@ TalkPilot is a real-time language practice app with speech recognition, translat
 - The app requests microphone access to support live speaking sessions. Spoken audio may be processed by speech recognition, translation, and AI service providers only to deliver the requested real-time features.
 - The app may process and store transcripts, generated suggestions, review results, and session metadata when needed to provide conversation history, account sync, customer support, security, or feature continuity.
 - Private conversation content is not used for model training by default unless we clearly disclose otherwise and obtain any required consent.
-- Users can submit privacy or deletion requests through the in-app legal section or by email at lihao15510558202@gmail.com.
+- Users can initiate account deletion in-app at Settings > Account > Delete Account, and they can still send privacy requests by email at lihao15510558202@gmail.com.
 - Restore Purchases is available on the paywall for users who previously subscribed with the same Apple ID.
 - Subscription management is available through the in-app customer center and through Apple account subscription settings.
 - A signed-in account is required before purchase so subscription access can sync correctly across sessions.

@@ -140,6 +140,12 @@
   - `guest` 态页内固定显示 `Log in` 主按钮
   - 已登录态右上角固定显示 `Log out` 文字按钮
   - `Log out` 必须带二次确认，确认后再清理本地登录态并回落游客态
+- App 内既然支持正式账号登录，就必须提供可审核通过的删号入口；当前约定入口位于 `Settings -> Account -> Delete Account`
+- 删号流程约定：
+  - 只对 `authenticated` 账号展示，不对匿名游客展示
+  - 前端必须二次确认，并明确提示“删除账号不会自动取消 App Store 订阅”
+  - 实际删除通过 `supabase/functions/delete-account` 完成，由登录用户 JWT 鉴权后再用 service role 删除 `auth.users`
+  - 删除成功后客户端应立即清理本地登录态并回落游客 session，避免把 App 卡在已删除账号的脏 session 上
 - `src/shared/api/supabase.ts` 是认证单一入口，负责：
   - session 恢复
   - 匿名登录兜底

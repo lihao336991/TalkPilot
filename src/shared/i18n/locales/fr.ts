@@ -94,6 +94,36 @@ export const fr = createLocale({
       },
     },
   },
+  privacyConsent: {
+    badge: "AI data use",
+    title: "Review how TalkPilot uses your voice and text",
+    subtitle:
+      "Before TalkPilot starts live transcription, translation, or AI reply features, we need your permission to send the required data to our service providers.",
+    sections: {
+      what: {
+        title: "What may be sent",
+        body:
+          "Voice audio, speech transcripts, conversation text, your suggested reply input, and related language settings for the current session.",
+      },
+      who: {
+        title: "Who may receive it",
+        body:
+          "Deepgram for speech recognition, Cerebras and Together AI for AI suggestions and review, Google Cloud Translation when that route is enabled, and Supabase-hosted backend services to deliver and store the requested features.",
+      },
+      why: {
+        title: "Why it is sent",
+        body:
+          "To transcribe speech, translate content, generate reply suggestions, review your phrasing, keep session history available, and return the feature result back to your device.",
+      },
+    },
+    note:
+      "TalkPilot only sends this data when you actively use Live or related AI assistance features. You can review the Privacy Policy and Terms of Service at any time in Settings.",
+    actions: {
+      agree: "Agree and Continue",
+      openPrivacy: "Privacy Policy",
+      openTerms: "Terms of Service",
+    },
+  },
   settings: {
     title: "Réglages",
     subtitle:
@@ -117,6 +147,11 @@ export const fr = createLocale({
         "La langue maternelle et la langue d'apprentissage ne peuvent pas être identiques.",
     },
     legal: {
+      aiConsentTitle: "AI data use consent",
+      aiConsentAcceptedDescription:
+        "You already agreed to the in-app notice for Live transcription, translation, and AI replies. Open to review it again.",
+      aiConsentPendingDescription:
+        "Review the in-app notice that appears before Live sends voice or transcript data to Deepgram, Cerebras, Together AI, Google Cloud Translation, and Supabase services.",
       termsDescription:
         "Consultez les conditions du produit, les abonnements et l'utilisation acceptable.",
     },

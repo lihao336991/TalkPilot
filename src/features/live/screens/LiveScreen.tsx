@@ -32,6 +32,9 @@ import { useLiveSessionController } from "../hooks/useLiveSessionController";
 import { useAudioInputStore } from "../store/audioInputStore";
 
 import { getTabBarHeight } from "@/features/navigation/components/CustomTabBar";
+import { AiDataConsentModal } from "@/features/privacy/components/AiDataConsentModal";
+import { useAiConsentState } from "@/features/privacy/useAiConsentState";
+import { useRouter } from "expo-router";
 
 const DECOR_GRID_LINES = [0, 1, 2, 3, 4, 5];
 const DECOR_GRID_COLUMNS = [0, 1, 2, 3];
@@ -86,9 +89,14 @@ function formatCountdown(totalSeconds: number) {
 
 export default function LiveScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { t } = useTranslation();
   const hasMainInput = useAudioInputStore((s) => s.hasMainInput);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [isAcceptingConsent, setIsAcceptingConsent] = useState(false);
+  const [shouldResumeStartAfterConsent, setShouldResumeStartAfterConsent] =
+    useState(false);
   const topWashShift = useSharedValue(0);
   const bubbleLeftShift = useSharedValue(0);
   const bubbleHaloShift = useSharedValue(0);
@@ -129,11 +137,50 @@ export default function LiveScreen() {
     handleRestartMainMicrophone,
     handleEnd,
   } = useLiveSessionController();
+  const { checked: aiConsentChecked, hasAccepted, accept } = useAiConsentState();
 
   const bottomPadding =
     isActive || startSessionUiState !== "idle"
       ? 0
       : getTabBarHeight(insets.bottom);
+
+  const handleStartPress = async () => {
+    if (!aiConsentChecked) {
+      return;
+    }
+
+    if (hasAccepted) {
+      await handleStartSession();
+      return;
+    }
+
+    setShouldResumeStartAfterConsent(true);
+    setShowConsentModal(true);
+  };
+
+  const handleCloseConsentModal = () => {
+    setShowConsentModal(false);
+    setShouldResumeStartAfterConsent(false);
+    setIsAcceptingConsent(false);
+  };
+
+  const handleAcceptConsent = async () => {
+    if (isAcceptingConsent) {
+      return;
+    }
+
+    setIsAcceptingConsent(true);
+    try {
+      await accept();
+      setShowConsentModal(false);
+      if (shouldResumeStartAfterConsent) {
+        setShouldResumeStartAfterConsent(false);
+        await handleStartSession();
+      }
+    } finally {
+      setIsAcceptingConsent(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -398,7 +445,9 @@ export default function LiveScreen() {
       {isIdle && (
         <>
           <StartSessionCard
-            onStart={handleStartSession}
+            onStart={() => {
+              void handleStartPress();
+            }}
             onCancelStart={handleCancelStartSession}
             dailyMinutesUsed={dailyMinutesUsed}
             dailyMinutesLimit={dailyMinutesLimit}
@@ -783,6 +832,22 @@ export default function LiveScreen() {
         visible={showCalibration}
         onComplete={handleCalibrationComplete}
         onSkip={handleCalibrationSkip}
+      />
+
+      <AiDataConsentModal
+        visible={showConsentModal}
+        hasAccepted={hasAccepted}
+        isSaving={isAcceptingConsent}
+        onAgree={() => {
+          void handleAcceptConsent();
+        }}
+        onClose={handleCloseConsentModal}
+        onOpenPrivacy={() => {
+          router.push("/privacy");
+        }}
+        onOpenTerms={() => {
+          router.push("/terms");
+        }}
       />
     </SafeAreaView>
   );
