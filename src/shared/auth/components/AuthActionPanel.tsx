@@ -1,10 +1,18 @@
-import React, { useMemo, useState } from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { signInWithApple, signInWithGoogle } from '@/shared/api/supabase';
-import { AuthFlowError } from '@/shared/auth/authErrors';
-import { palette, radii, spacing, typography } from '@/shared/theme/tokens';
+import { signInWithApple, signInWithGoogle } from "@/shared/api/supabase";
+import { AuthFlowError } from "@/shared/auth/authErrors";
+import { palette, radii, spacing, typography } from "@/shared/theme/tokens";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import * as AppleAuthentication from "expo-apple-authentication";
+import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+    ActivityIndicator,
+    Platform,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 type AuthActionPanelProps = {
   onSuccess?: () => void | Promise<void>;
@@ -13,16 +21,18 @@ type AuthActionPanelProps = {
 export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
   const { t } = useTranslation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pendingProvider, setPendingProvider] = useState<'apple' | 'google' | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<
+    "apple" | "google" | null
+  >(null);
 
-  const isSupportedPlatform = useMemo(() => Platform.OS === 'ios', []);
+  const isSupportedPlatform = useMemo(() => Platform.OS === "ios", []);
 
-  async function handleSignIn(provider: 'apple' | 'google') {
+  async function handleSignIn(provider: "apple" | "google") {
     setErrorMessage(null);
     setPendingProvider(provider);
 
     try {
-      if (provider === 'apple') {
+      if (provider === "apple") {
         await signInWithApple();
       } else {
         await signInWithGoogle();
@@ -35,7 +45,7 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
           ? t(`auth.login.errors.${error.code}`)
           : error instanceof Error
             ? error.message
-            : t('auth.login.fallbackError'),
+            : t("auth.login.fallbackError"),
       );
     } finally {
       setPendingProvider(null);
@@ -45,9 +55,11 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
   if (!isSupportedPlatform) {
     return (
       <View style={styles.unsupportedCard}>
-        <Text style={styles.unsupportedTitle}>{t('auth.login.unsupportedTitle')}</Text>
+        <Text style={styles.unsupportedTitle}>
+          {t("auth.login.unsupportedTitle")}
+        </Text>
         <Text style={styles.unsupportedBody}>
-          {t('auth.login.unsupportedBody')}
+          {t("auth.login.unsupportedBody")}
         </Text>
       </View>
     );
@@ -55,47 +67,59 @@ export function AuthActionPanel({ onSuccess }: AuthActionPanelProps) {
 
   return (
     <View style={styles.container}>
-      <Pressable
-        disabled={pendingProvider !== null}
-        onPress={() => void handleSignIn('apple')}
-        style={({ pressed }) => [
-          styles.appleButton,
-          pressed && pendingProvider === null ? styles.appleButtonPressed : null,
+      <View
+        style={[
+          styles.appleButtonWrap,
           pendingProvider !== null ? styles.buttonDisabled : null,
-        ]}>
-        {pendingProvider === 'apple' ? (
-          <ActivityIndicator color={palette.textPrimary} />
-        ) : (
-          <View style={styles.authButtonContent}>
-            <FontAwesome name="apple" size={20} color={palette.textPrimary} />
-            <Text style={styles.appleButtonText}>{t('auth.login.appleButton')}</Text>
+        ]}
+      >
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={
+            AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
+          }
+          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+          cornerRadius={radii.md}
+          onPress={() => void handleSignIn("apple")}
+          style={styles.appleButton}
+        />
+        {pendingProvider === "apple" ? (
+          <View pointerEvents="none" style={styles.appleLoadingOverlay}>
+            <ActivityIndicator color={palette.textOnAccent} />
           </View>
-        )}
-      </Pressable>
+        ) : null}
+        {pendingProvider === "google" ? (
+          <View pointerEvents="auto" style={styles.appleInteractionBlocker} />
+        ) : null}
+      </View>
 
       <Pressable
         disabled={pendingProvider !== null}
-        onPress={() => void handleSignIn('google')}
+        onPress={() => void handleSignIn("google")}
         style={({ pressed }) => [
           styles.googleButton,
-          pressed && pendingProvider === null ? styles.googleButtonPressed : null,
+          pressed && pendingProvider === null
+            ? styles.googleButtonPressed
+            : null,
           pendingProvider !== null ? styles.buttonDisabled : null,
-        ]}>
-        {pendingProvider === 'google' ? (
+        ]}
+      >
+        {pendingProvider === "google" ? (
           <ActivityIndicator color={palette.textOnAccent} />
         ) : (
           <View style={styles.authButtonContent}>
             <FontAwesome name="google" size={18} color={palette.textOnAccent} />
-            <Text style={styles.googleButtonText}>{t('auth.login.googleButton')}</Text>
+            <Text style={styles.googleButtonText}>
+              {t("auth.login.googleButton")}
+            </Text>
           </View>
         )}
       </Pressable>
 
-      <Text style={styles.legalHint}>
-        {t('auth.login.legalHint')}
-      </Text>
+      <Text style={styles.legalHint}>{t("auth.login.legalHint")}</Text>
 
-      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+      {errorMessage ? (
+        <Text style={styles.errorText}>{errorMessage}</Text>
+      ) : null}
     </View>
   );
 }
@@ -104,31 +128,32 @@ const styles = StyleSheet.create({
   container: {
     gap: spacing.md + 2,
   },
-  appleButton: {
-    width: '100%',
+  appleButtonWrap: {
+    width: "100%",
     height: 54,
     minHeight: 54,
+  },
+  appleButton: {
+    width: "100%",
+    height: 54,
+    minHeight: 54,
+  },
+  appleLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.bgCardSolid,
-    borderWidth: 1,
-    borderColor: palette.neutralBorder,
-    zIndex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.28)",
   },
-  appleButtonPressed: {
-    opacity: 0.78,
-  },
-  appleButtonText: {
-    ...typography.bodyMd,
-    fontWeight: '700',
-    color: palette.textPrimary,
+  appleInteractionBlocker: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radii.md,
   },
   googleButton: {
     height: 54,
     borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: palette.accent,
     borderWidth: 1,
     borderColor: palette.accentBorderStrong,
@@ -137,14 +162,14 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   authButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.md,
   },
   googleButtonText: {
     ...typography.bodyMd,
-    fontWeight: '700',
+    fontWeight: "700",
     color: palette.textOnAccent,
   },
   buttonDisabled: {
@@ -154,7 +179,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     ...typography.caption,
     lineHeight: 16,
-    textAlign: 'center',
+    textAlign: "center",
     color: palette.textTertiary,
   },
   errorText: {
@@ -172,7 +197,7 @@ const styles = StyleSheet.create({
   },
   unsupportedTitle: {
     ...typography.bodyMd,
-    fontWeight: '700',
+    fontWeight: "700",
     color: palette.textPrimary,
   },
   unsupportedBody: {

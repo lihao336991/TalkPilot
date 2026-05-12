@@ -46,11 +46,21 @@ function getDevAtsExceptionDomains() {
 module.exports = () => {
   const config = JSON.parse(JSON.stringify(baseConfig));
   const appEnv = process.env.APP_ENV ?? "development";
+  const appVariant =
+    process.env.APP_VARIANT ?? (appEnv === "development" ? "dev" : "prod");
   const appVersion = config.expo.version;
   const infoPlist = (config.expo.ios.infoPlist ??= {});
+  const isDevVariant = appVariant === "dev";
 
   // Bare workflow does not support runtimeVersion policies, so emit a string.
   config.expo.runtimeVersion = appVersion;
+  config.expo.name = isDevVariant ? "TalkPilot Dev" : "TalkPilot";
+  config.expo.ios.bundleIdentifier = isDevVariant
+    ? "com.talkpilot.app.dev"
+    : "com.talkpilot.app";
+  config.expo.android.package = isDevVariant
+    ? "com.talkpilot.app.dev"
+    : "com.talkpilot.app";
 
   if (appEnv === "development") {
     const exceptionDomains = getDevAtsExceptionDomains();
