@@ -255,7 +255,7 @@ export const zhCN: TranslationSchema = {
     suggestionPanel: {
       title: "回复建议",
       subtitle: "已为你整理出一句更自然的回答",
-      actionSendAndPlay: "发送并播放建议",
+      actionSendAndPlay: "发送建议",
       sending: "发送中…",
     },
     suggestionStyle: {

@@ -259,7 +259,7 @@ export const en = {
     suggestionPanel: {
       title: "Reply Suggestion",
       subtitle: "AI has prepared a more natural reply for you",
-      actionSendAndPlay: "Send and play suggestion",
+      actionSendAndPlay: "Send suggestion",
       sending: "Sending...",
     },
     suggestionStyle: {
