@@ -235,9 +235,10 @@ export const zhCN: TranslationSchema = {
       title: "声音设置",
       introBody:
         "请连续说 {{seconds}} 秒，让 App 识别你的声音，并与对话对象区分开来。",
+      readAloudLabel: "请跟读",
       introHint: "这一步只需要做一次，你的声音样本会保存在本地。",
       skipForNow: "暂时跳过",
-      recordingBody: "自然说话就可以，内容不限。",
+      recordingBody: "请用你的学习语言读出下面的句子。",
       countdown: "{{count}} 秒",
       saving: "正在保存声音样本并生成本地声纹…",
       doneBody: "声音样本已保存，后续每场会话都会自动识别你的声音。",

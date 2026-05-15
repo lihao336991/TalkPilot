@@ -19,6 +19,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { voiceEnrollmentService } from '../services/VoiceEnrollmentService';
 import { voiceprintService } from '../services/VoiceprintService';
+import type { LearningLanguage } from '@/shared/i18n/config';
+import { useLocaleStore } from '@/shared/store/localeStore';
 
 type Phase = 'intro' | 'recording' | 'saving' | 'error' | 'done';
 
@@ -30,8 +32,45 @@ type Props = {
 
 const RECORD_DURATION_MS = voiceEnrollmentService.getRecordingDurationMs();
 
+const READ_ALOUD_PROMPTS: Record<LearningLanguage, string[]> = {
+  en: [
+    'Hi, I am practicing English with TalkPilot today.',
+    'I would like to speak clearly and keep improving.',
+  ],
+  'zh-CN': [
+    '你好，我今天正在用 TalkPilot 练习中文。',
+    '我想说得更清楚，也想每天进步一点。',
+  ],
+  es: [
+    'Hola, hoy estoy practicando español con TalkPilot.',
+    'Quiero hablar con claridad y mejorar cada día.',
+  ],
+  ja: [
+    'こんにちは、今日は TalkPilot で日本語を練習しています。',
+    'はっきり話して、毎日少しずつ上達したいです。',
+  ],
+  ko: [
+    '안녕하세요, 오늘 TalkPilot으로 한국어를 연습하고 있어요.',
+    '또렷하게 말하고 매일 조금씩 나아지고 싶어요.',
+  ],
+  fr: [
+    "Bonjour, aujourd'hui je pratique le français avec TalkPilot.",
+    "Je veux parler clairement et m'améliorer chaque jour.",
+  ],
+  de: [
+    'Hallo, ich übe heute Deutsch mit TalkPilot.',
+    'Ich möchte klar sprechen und jeden Tag besser werden.',
+  ],
+  'pt-BR': [
+    'Olá, hoje estou praticando português com o TalkPilot.',
+    'Quero falar com clareza e melhorar um pouco todos os dias.',
+  ],
+};
+
 export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
   const { t } = useTranslation();
+  const learningLanguage = useLocaleStore((s) => s.learningLanguage);
+  const readAloudPrompts = READ_ALOUD_PROMPTS[learningLanguage];
   const [phase, setPhase] = useState<Phase>('intro');
   const [countdown, setCountdown] = useState(Math.ceil(RECORD_DURATION_MS / 1000));
   const chunksRef = useRef<string[]>([]);
@@ -153,6 +192,16 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
                   seconds: Math.ceil(RECORD_DURATION_MS / 1000),
                 })}
               </Text>
+              <View style={styles.promptCard}>
+                <Text style={styles.promptLabel}>
+                  {t('live.voiceEnrollment.readAloudLabel')}
+                </Text>
+                {readAloudPrompts.map((line) => (
+                  <Text key={line} style={styles.promptText}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
               <Text style={styles.hint}>
                 {t('live.voiceEnrollment.introHint')}
               </Text>
@@ -173,6 +222,13 @@ export function VoiceEnrollmentCard({ visible, onComplete, onSkip }: Props) {
               <Text style={styles.body}>
                 {t('live.voiceEnrollment.recordingBody')}
               </Text>
+              <View style={styles.promptCardCompact}>
+                {readAloudPrompts.map((line) => (
+                  <Text key={line} style={styles.promptTextCompact}>
+                    {line}
+                  </Text>
+                ))}
+              </View>
               <Animated.View style={[styles.recordingOrb, pulseStyle]}>
                 <Feather name="mic" size={32} color="#FFF" />
               </Animated.View>
@@ -260,6 +316,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#9CA3AF',
+  },
+  promptCard: {
+    borderRadius: 16,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  promptCardCompact: {
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  promptLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+  },
+  promptText: {
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  promptTextCompact: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '600',
+    color: '#111827',
   },
   primaryButton: {
     flexDirection: 'row',
