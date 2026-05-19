@@ -71,9 +71,6 @@ export default function SuggestionCard({
         end={{ x: 0.5, y: 1 }}
         style={styles.accentRail}
       />
-      <View style={styles.leadingIconWrap}>
-        <Feather name="zap" size={14} color="#FFFFFF" />
-      </View>
       <View style={styles.content}>
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>{styleLabel}</Text>
@@ -101,7 +98,7 @@ export default function SuggestionCard({
           <ActivityIndicator size="small" color={palette.textTertiary} />
         ) : (
           <View style={styles.actionIconInner}>
-            <Feather name="volume-2" size={20} color={palette.textOnAccent} />
+            <Feather name="send" size={19} color={palette.textOnAccent} />
           </View>
         )}
       </Pressable>
@@ -114,10 +111,10 @@ const styles = StyleSheet.create({
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
     minHeight: 94,
     borderRadius: radii.xxl,
-    paddingLeft: spacing.lg,
+    paddingLeft: spacing.xl,
     paddingRight: spacing.md,
     paddingVertical: spacing.md,
     overflow: "hidden",
@@ -154,20 +151,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 6,
   },
-  leadingIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.circle,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.24)",
-  },
   content: {
     flex: 1,
     gap: spacing.xs,
-    paddingRight: spacing.xs,
+    paddingRight: spacing.sm,
   },
   metaRow: {
     flexDirection: "row",

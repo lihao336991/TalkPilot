@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   publicAppEnv,
   publicPosthogApiKey,
@@ -7,6 +8,8 @@ import {
   publicPosthogDisabled,
   publicPosthogHost,
 } from "@/shared/config/publicEnv";
+
+const FIRST_OPEN_KEY = "talkpilot.first_open_captured";
 
 let posthog: any | null = null;
 let initialized = false;
@@ -91,6 +94,8 @@ export const analytics = {
 
       posthog.register?.(getAppContext());
       analytics.capture("app_boot", {});
+      captureFirstOpen();
+      captureAppOpen();
     } catch (error) {
       posthog = null;
       console.warn("[Analytics] Failed to initialize PostHog:", error);
@@ -166,3 +171,37 @@ export const analytics = {
     analytics.capture(event, { ...props, error_name: err.name, error_message: err.message });
   },
 };
+
+async function captureFirstOpen(): Promise<void> {
+  try {
+    const captured = await AsyncStorage.getItem(FIRST_OPEN_KEY);
+    if (captured !== null) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    await AsyncStorage.setItem(FIRST_OPEN_KEY, now);
+
+    analytics.capture("first_open", {
+      first_open_time: now,
+      app_version: Constants.expoConfig?.version ?? null,
+      platform: Platform.OS,
+      app_env: publicAppEnv,
+    });
+  } catch (error) {
+    console.warn("[Analytics] first_open capture failed:", error);
+  }
+}
+
+async function captureAppOpen(): Promise<void> {
+  try {
+    analytics.capture("app_open", {
+      open_time: new Date().toISOString(),
+      app_version: Constants.expoConfig?.version ?? null,
+      platform: Platform.OS,
+      app_env: publicAppEnv,
+    });
+  } catch (error) {
+    console.warn("[Analytics] app_open capture failed:", error);
+  }
+}

@@ -450,7 +450,6 @@ export function useLiveSessionController() {
 
   const handleFinalTranscriptUpdated = useCallback(
     ({
-      speaker,
       text,
       turnId,
       detectedLanguage,
@@ -460,10 +459,6 @@ export function useLiveSessionController() {
       turnId: string;
       detectedLanguage?: string;
     }) => {
-      if (speaker !== "other") {
-        return;
-      }
-
       const trimmed = text.trim();
       if (!trimmed) {
         return;

@@ -266,8 +266,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
+    maxWidth: "100%",
   },
   translationTextWrap: {
+    flex: 1,
     minWidth: 88,
     flexShrink: 1,
   },

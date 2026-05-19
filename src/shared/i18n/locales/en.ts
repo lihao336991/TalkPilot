@@ -237,10 +237,11 @@ export const en = {
       title: "Voice Setup",
       introBody:
         "Speak for {{seconds}} seconds so the app can recognise your voice and separate it from your conversation partner's.",
+      readAloudLabel: "Read aloud",
       introHint:
         "You only need to do this once. Your sample is stored locally.",
       skipForNow: "Skip for now",
-      recordingBody: "Keep talking naturally - anything works.",
+      recordingBody: "Read the lines below in your learning language.",
       countdown: "{{count}}s",
       saving: "Saving voice sample and generating local voiceprint…",
       doneBody:
@@ -258,7 +259,7 @@ export const en = {
     suggestionPanel: {
       title: "Reply Suggestion",
       subtitle: "AI has prepared a more natural reply for you",
-      actionSendAndPlay: "Send and play suggestion",
+      actionSendAndPlay: "Send suggestion",
       sending: "Sending...",
     },
     suggestionStyle: {
