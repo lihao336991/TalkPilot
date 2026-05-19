@@ -2,7 +2,7 @@
   "expo": {
     "name": "TalkPilot",
     "slug": "talkpilot",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "updates": {
       "url": "https://u.expo.dev/dcd57691-fa34-47f5-812b-a4267526e963",
       "enabled": true,

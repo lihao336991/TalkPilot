@@ -2,7 +2,7 @@
   "name": "talkpilot",
   "main": "expo-router/entry",
   "description": "Real Talk. Real Time. Real Confidence.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "start": "bash scripts/run-with-env.sh development expo start",
     "start:dev": "bash scripts/run-with-env.sh development expo start",
